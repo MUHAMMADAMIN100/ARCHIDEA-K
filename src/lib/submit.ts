@@ -59,29 +59,47 @@ async function sendToTelegram(text: string): Promise<SubmitResult> {
 }
 
 /**
- * Отправка заявки в CRM «Archidea Sistem» (NestJS-бэкенд).
- * Эндпоинт защищён API-ключом (заголовок x-api-key).
- *   VITE_CRM_API_URL    — базовый URL API, напр. https://crm-api.up.railway.app/api
- *   VITE_CRM_INTAKE_KEY — ключ приёма заявок (должен совпадать с LEADS_INTAKE_API_KEY на бэке)
+ * Отправка заявки в CRM «Archidea Sistem».
+ *
+ * БЕЗОПАСНОСТЬ: браузер обращается к своему же домену (/api/lead), а ключ
+ * приёма заявок хранится на сервере (переменные окружения Vercel) и в код
+ * страницы не попадает. Раньше ключ лежал прямо в бандле — его мог прочитать
+ * любой посетитель и слать поддельные заявки.
+ *
+ * Локальная разработка: если задан VITE_CRM_API_URL, шлём напрямую
+ * (серверных функций у vite dev нет).
  */
 /** @returns true — успех, false — ошибка, null — CRM не настроена */
 async function sendToCrm(
   order: OrderPayload,
   honeypot: string,
 ): Promise<boolean | null> {
-  const apiUrl = import.meta.env.VITE_CRM_API_URL as string | undefined;
-  const apiKey = import.meta.env.VITE_CRM_INTAKE_KEY as string | undefined;
-  if (!apiUrl || !apiKey) return null; // CRM не подключена
+  const payload = JSON.stringify({ ...order, company: honeypot });
 
+  // dev: прямой вызов бэкенда с локальным ключом
+  const devUrl = import.meta.env.VITE_CRM_API_URL as string | undefined;
+  const devKey = import.meta.env.VITE_CRM_INTAKE_KEY as string | undefined;
+  if (import.meta.env.DEV && devUrl && devKey) {
+    try {
+      const res = await fetch(`${devUrl}/leads/intake`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': devKey },
+        body: payload,
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // прод: свой домен, без секретов в браузере
   try {
-    const res = await fetch(`${apiUrl}/leads/intake`, {
+    const res = await fetch('/api/lead', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-      body: JSON.stringify({ ...order, company: honeypot }),
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
     });
+    if (res.status === 503) return null; // CRM не подключена на сервере
     return res.ok;
   } catch (e) {
     console.warn('[CRM] Не удалось отправить заявку в CRM:', e);
@@ -101,26 +119,65 @@ async function trySend(order: OrderPayload, honeypot: string): Promise<boolean> 
 }
 
 // ── Очередь повторной отправки (чтобы НЕ терять заявки при сбое сети) ──
+//
+// ВАЖНО ПРО ПЕРСОНАЛЬНЫЕ ДАННЫЕ: в заявке есть имя, телефон и адрес клиента.
+// Поэтому очередь живёт в sessionStorage (стирается при закрытии вкладки), а
+// не в localStorage — иначе на общем/чужом устройстве данные клиента остались
+// бы навсегда. Дополнительно: срок жизни 2 часа и лимит записей.
 const QUEUE_KEY = 'arhydeya_pending_orders';
-type QueuedOrder = { order: OrderPayload; honeypot: string };
+const QUEUE_TTL_MS = 2 * 60 * 60 * 1000;
+const QUEUE_MAX = 5;
 
-function saveToQueue(item: QueuedOrder) {
+type QueuedOrder = { order: OrderPayload; honeypot: string; at: number };
+
+/** Хранилище очереди: только на время вкладки */
+function store(): Storage | null {
   try {
-    const q: QueuedOrder[] = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-    q.push(item);
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+    return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function readQueue(): QueuedOrder[] {
+  const s = store();
+  if (!s) return [];
+  try {
+    const raw: QueuedOrder[] = JSON.parse(s.getItem(QUEUE_KEY) || '[]');
+    const fresh = raw.filter((i) => Date.now() - (i.at ?? 0) < QUEUE_TTL_MS);
+    if (fresh.length !== raw.length) writeQueue(fresh);
+    return fresh;
+  } catch {
+    return [];
+  }
+}
+
+function writeQueue(q: QueuedOrder[]) {
+  const s = store();
+  if (!s) return;
+  try {
+    if (q.length === 0) s.removeItem(QUEUE_KEY);
+    else s.setItem(QUEUE_KEY, JSON.stringify(q.slice(-QUEUE_MAX)));
   } catch {
     /* ignore */
   }
 }
 
-/** Повторная отправка отложенных заявок (вызывается при загрузке страницы). */
+function saveToQueue(item: Omit<QueuedOrder, 'at'>) {
+  writeQueue([...readQueue(), { ...item, at: Date.now() }]);
+}
+
+/**
+ * Повторная отправка отложенных заявок (вызывается при загрузке страницы).
+ * Успешно отправленные удаляются сразу — данные клиента не задерживаются.
+ */
 export async function flushPendingOrders(): Promise<void> {
-  let q: QueuedOrder[] = [];
+  const q = readQueue();
+  // на всякий случай подчищаем старое хранилище с ПДн от прежних версий
   try {
-    q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    localStorage.removeItem(QUEUE_KEY);
   } catch {
-    return;
+    /* ignore */
   }
   if (!q.length) return;
 
@@ -133,7 +190,7 @@ export async function flushPendingOrders(): Promise<void> {
       remaining.push(item);
     }
   }
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
+  writeQueue(remaining);
 }
 
 /**

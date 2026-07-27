@@ -25,12 +25,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string }): Promise<AuthUser> {
+  async validate(payload: { sub: string; ep?: number }): Promise<AuthUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Пользователь не найден или отключён');
+    }
+    // версия сессии: при смене пароля и «выйти со всех устройств» она растёт,
+    // и все ранее выданные токены (в т.ч. украденные) перестают действовать
+    if ((payload.ep ?? -1) !== user.sessionEpoch) {
+      throw new UnauthorizedException('Сессия устарела, войдите заново');
     }
     return {
       id: user.id,

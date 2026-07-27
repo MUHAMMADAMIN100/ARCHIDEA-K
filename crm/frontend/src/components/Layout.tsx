@@ -14,7 +14,9 @@ import {
   BarChart3,
   Tags,
   UserCog,
+  ShieldCheck,
   LogOut,
+  ShieldOff,
   Menu,
   X,
   UserCircle,
@@ -47,10 +49,11 @@ const NAV: NavItem[] = [
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
   { to: '/tariffs', label: 'Тарифы', icon: Tags, roles: ['DIRECTOR'] },
   { to: '/users', label: 'Сотрудники', icon: UserCog, roles: ['DIRECTOR'] },
+  { to: '/security', label: 'Безопасность', icon: ShieldCheck, roles: ['DIRECTOR'] },
 ];
 
 export function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, logoutEverywhere } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -124,6 +127,12 @@ export function Layout() {
 
   const handleLogout = async () => {
     await logout();
+    navigate('/login');
+  };
+
+  const handleLogoutAll = async () => {
+    setProfileOpen(false);
+    await logoutEverywhere();
     navigate('/login');
   };
 
@@ -244,6 +253,19 @@ export function Layout() {
                   >
                     <LogOut className="h-[18px] w-[18px]" />
                     Выйти
+                  </button>
+                  <button
+                    onClick={handleLogoutAll}
+                    className="flex w-full items-start gap-2.5 border-t border-navy-50 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+                    title="Погасит сессии на всех устройствах, включая украденные"
+                  >
+                    <ShieldOff className="mt-0.5 h-[18px] w-[18px] shrink-0" />
+                    <span>
+                      Выйти со всех устройств
+                      <span className="mt-0.5 block text-xs text-navy-400">
+                        Если доступ мог попасть к чужим
+                      </span>
+                    </span>
                   </button>
                 </div>
               )}

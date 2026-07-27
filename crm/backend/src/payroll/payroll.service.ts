@@ -56,7 +56,10 @@ export class PayrollService {
   }) {
     const date = dayUTC(dto.date);
     const ids = Array.from(new Set(dto.cleanerIds ?? []));
-    const baseline = dto.baseline ? new Set(dto.baseline) : null;
+    // baseline — кого клиент ВИДЕЛ при загрузке; удаляем ТОЛЬКО их снятые
+    // отметки. Если baseline не передан — не удаляем ничего (иначе запрос
+    // {cleanerIds:[]} без baseline стёр бы все смены дня — порча выплат).
+    const baseline = new Set(dto.baseline ?? []);
 
     const cleaners = await this.prisma.cleaner.findMany({
       where: { id: { in: ids } },
@@ -72,9 +75,7 @@ export class PayrollService {
     });
     const existingIds = new Set(existing.map((s) => s.cleanerId));
     const toDelete = existing.filter(
-      (s) =>
-        !ids.includes(s.cleanerId) &&
-        (!baseline || baseline.has(s.cleanerId)),
+      (s) => !ids.includes(s.cleanerId) && baseline.has(s.cleanerId),
     );
     const toCreate = cleaners.filter((c) => !existingIds.has(c.id));
 

@@ -129,6 +129,15 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // ── Безопасность входа ──
+  /// Неудачных попыток подряд (сбрасывается при успешном входе)
+  failedLogins Int       @default(0)
+  /// Аккаунт заблокирован до этого момента (защита от подбора пароля)
+  lockedUntil  DateTime?
+  /// Версия сессий. Растёт при смене пароля и «выйти со всех устройств» —
+  /// все ранее выданные токены с меньшей версией перестают действовать.
+  sessionEpoch Int       @default(0)
+
   // связи
   clients       Client[]        @relation("ManagerClients")
   orders        Order[]         @relation("ManagerOrders")
@@ -317,6 +326,21 @@ model ScheduleEvent {
   createdAt DateTime     @default(now())
 
   @@index([managerId, date])
+}
+
+/// Журнал попыток входа — видно, кто и когда заходил и были ли атаки
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  login     String // введённый логин (даже если такого пользователя нет)
+  userId    String? // заполняется, если логин существует
+  success   Boolean
+  reason    String? // причина отказа: BAD_PASSWORD / NO_USER / LOCKED / INACTIVE
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([login, createdAt])
+  @@index([createdAt])
 }
 
 /// Уведомление внутри CRM (колокольчик)

@@ -28,6 +28,7 @@ const Analytics = lazyWithRetry(() => import('./pages/Analytics').then((m) => ({
 const Tariffs = lazyWithRetry(() => import('./pages/Tariffs').then((m) => ({ default: m.Tariffs })));
 const UsersPage = lazyWithRetry(() => import('./pages/Users').then((m) => ({ default: m.UsersPage })));
 const UserDetail = lazyWithRetry(() => import('./pages/UserDetail').then((m) => ({ default: m.UserDetail })));
+const Security = lazyWithRetry(() => import('./pages/Security').then((m) => ({ default: m.Security })));
 
 function Protected({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -125,6 +126,14 @@ export default function App() {
             element={
               <RoleOnly roles={['DIRECTOR']}>
                 <UsersPage />
+              </RoleOnly>
+            }
+          />
+          <Route
+            path="/security"
+            element={
+              <RoleOnly roles={['DIRECTOR']}>
+                <Security />
               </RoleOnly>
             }
           />

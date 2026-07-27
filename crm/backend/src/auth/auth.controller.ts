@@ -3,48 +3,71 @@ import {
   Controller,
   Get,
   Post,
+  Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
+import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Public } from '../common/decorators/public.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
 
 const COOKIE_NAME = 'access_token';
 
-// Жёсткие флаги cookie: httpOnly (JS не читает) + Secure + SameSite=None
-// (кросс-доменная связка Vercel ↔ Railway по HTTPS).
+/**
+ * Флаги cookie:
+ * - httpOnly — JS её не читает (недоступна для XSS)
+ * - secure — только по HTTPS
+ * - sameSite=lax — браузер НЕ шлёт её при запросах со сторонних сайтов,
+ *   это и закрывает CSRF. Работает, потому что CRM обращается к API через
+ *   свой же домен (/api проксируется на Railway), т.е. запрос first-party.
+ */
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: true,
-  sameSite: 'none' as const,
+  sameSite: 'lax' as const,
   path: '/',
 };
+
+/**
+ * IP клиента для журнала входов. Берём req.ip (вычислен Express с учётом
+ * trust proxy) — его нельзя подделать заголовком. Левый элемент
+ * X-Forwarded-For использовать НЕЛЬЗЯ: атакующий им управляет и отравил бы
+ * журнал подставными адресами.
+ */
+function clientIp(req: Request): string | undefined {
+  return req.ip ?? undefined;
+}
 
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
 
-  // Защита от брутфорса: не более 8 попыток входа за минуту с одного IP
+  // Защита от подбора: не более 8 попыток входа за минуту с одного IP.
+  // Плюс блокировка конкретного аккаунта на 15 минут после 5 неудач.
   @Throttle({ default: { limit: 8, ttl: 60_000 } })
   @Public()
   @Post('login')
   async login(
     @Body() dto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { token, user } = await this.auth.login(dto);
-    res.cookie(COOKIE_NAME, token, {
-      ...COOKIE_OPTS,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+    const { token, user, maxAge } = await this.auth.login(dto, {
+      ip: clientIp(req),
+      userAgent: req.headers['user-agent'],
     });
+    res.cookie(COOKIE_NAME, token, { ...COOKIE_OPTS, maxAge });
     // токен НЕ возвращаем в теле — авторизация только через httpOnly-cookie
     return { user };
   }
@@ -55,9 +78,29 @@ export class AuthController {
     return { ok: true };
   }
 
+  /** Выйти со всех устройств — гасит все ранее выданные токены */
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  async logoutAll(
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.auth.revokeAllSessions(user.id);
+    res.clearCookie(COOKIE_NAME, COOKIE_OPTS);
+    return { ok: true };
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return user;
+  }
+
+  /** Журнал входов и попыток подбора — только руководителю */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DIRECTOR)
+  @Get('login-attempts')
+  attempts(@Query('limit') limit?: string) {
+    return this.auth.loginAttempts(Number(limit) || 100);
   }
 }

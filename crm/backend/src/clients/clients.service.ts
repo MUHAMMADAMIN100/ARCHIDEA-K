@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -128,6 +129,24 @@ export class ClientsService {
 
   async create(user: AuthUser, dto: CreateClientDto) {
     const managerId = seesAll(user) ? dto.managerId ?? null : user.id;
+
+    // Защита от IDOR через дедупликацию по телефону: если клиент с таким
+    // номером уже закреплён за ДРУГИМ сотрудником, обычный менеджер не должен
+    // получить его карточку (ФИО, e-mail, заметки). Раньше findOrCreateByPhone
+    // возвращал существующего клиента любому — утечка чужих данных по номеру.
+    const phone = normalizePhone(dto.phone || '');
+    if (phone.length >= 5 && !seesAll(user)) {
+      const existing = await this.prisma.client.findUnique({
+        where: { phone },
+        select: { managerId: true },
+      });
+      if (existing && existing.managerId !== user.id) {
+        throw new ConflictException(
+          'Клиент с таким телефоном уже закреплён за другим сотрудником',
+        );
+      }
+    }
+
     const res = await this.findOrCreateByPhone({
       ...dto,
       managerId: managerId ?? undefined,

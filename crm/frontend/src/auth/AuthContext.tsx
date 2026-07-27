@@ -12,8 +12,10 @@ import type { AuthUser } from '../types';
 interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
-  login: (login: string, password: string) => Promise<void>;
+  login: (login: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => Promise<void>;
+  /** Выйти со всех устройств — гасит все выданные сессии */
+  logoutEverywhere: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx>(null as any);
@@ -30,10 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (login: string, password: string) => {
+  const login = async (login: string, password: string, remember = false) => {
     const res = await api.post<{ user: AuthUser }>('/auth/login', {
       login,
       password,
+      remember,
     });
     clearFetchCache(); // чистим возможный кэш прошлой сессии
     setUser(res.data.user);
@@ -46,8 +49,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.post('/auth/logout').catch(() => {});
   };
 
+  /** Выход со всех устройств: ждём сервер — важно, чтобы сессии реально погасли */
+  const logoutEverywhere = async () => {
+    try {
+      await api.post('/auth/logout-all');
+    } finally {
+      clearFetchCache();
+      setUser(null);
+    }
+  };
+
   return (
-    <Ctx.Provider value={{ user, loading, login, logout }}>
+    <Ctx.Provider
+      value={{ user, loading, login, logout, logoutEverywhere }}
+    >
       {children}
     </Ctx.Provider>
   );

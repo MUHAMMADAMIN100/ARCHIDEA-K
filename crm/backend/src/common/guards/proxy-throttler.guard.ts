@@ -2,20 +2,20 @@ import { Injectable } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 /**
- * ThrottlerGuard за прокси Railway. За несколькими хопами req.ip нестабилен,
- * поэтому ключом берём реальный IP клиента — левый элемент X-Forwarded-For.
- * Иначе счётчик rate-limit не накапливается и лимит не срабатывает.
+ * ThrottlerGuard за прокси Railway/Vercel.
+ *
+ * Ключ лимита — req.ip. Express вычисляет его с учётом `trust proxy` (main.ts)
+ * как первый НЕдоверенный адрес справа в X-Forwarded-For, и клиент подделать
+ * его не может.
+ *
+ * РАНЬШЕ здесь брался ЛЕВЫЙ элемент X-Forwarded-For — а он полностью
+ * подконтролен клиенту (прокси дописывает реальный адрес справа). Из-за этого
+ * атакующий менял заголовок на каждый запрос и получал новый счётчик — лимиты
+ * на /auth/login и глобальный лимит не срабатывали вовсе (обход брутфорса/DoS).
  */
 @Injectable()
 export class ProxyThrottlerGuard extends ThrottlerGuard {
   protected async getTracker(req: Record<string, any>): Promise<string> {
-    const xff = req.headers?.['x-forwarded-for'];
-    if (typeof xff === 'string' && xff.trim()) {
-      return xff.split(',')[0].trim(); // исходный клиентский IP
-    }
-    if (Array.isArray(xff) && xff.length) {
-      return String(xff[0]).split(',')[0].trim();
-    }
     return req.ip ?? 'unknown';
   }
 }

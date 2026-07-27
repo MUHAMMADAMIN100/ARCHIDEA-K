@@ -84,7 +84,7 @@ export class LeadsService {
     // или переполняющую int32 цену/площадь (иначе ошибка БД).
     const clamp = (v: unknown) =>
       Math.min(Math.max(0, Math.round(Number(v) || 0)), 2_000_000_000);
-    const cleaningType = TYPE_MAP[dto.calculator?.cleaningTypeId] ?? CleaningType.GENERAL;
+    const cleaningType = TYPE_MAP[dto.calculator?.cleaningTypeId ?? ''] ?? CleaningType.GENERAL;
     const preferred =
       dto.quiz?.date && dto.quiz?.time
         ? new Date(`${dto.quiz.date}T${dto.quiz.time}`)

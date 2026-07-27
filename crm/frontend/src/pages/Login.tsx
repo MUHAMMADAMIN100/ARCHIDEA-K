@@ -7,6 +7,7 @@ export function Login() {
   const { login } = useAuth();
   const [loginValue, setLoginValue] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -16,7 +17,7 @@ export function Login() {
     setLoading(true);
     try {
       // обрезаем случайные пробелы по краям (частая причина «неверный пароль»)
-      await login(loginValue.trim(), password.trim());
+      await login(loginValue.trim(), password.trim(), remember);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Неверный логин или пароль');
     } finally {
@@ -49,7 +50,7 @@ export function Login() {
               autoFocus
             />
           </div>
-          <div className="mb-5">
+          <div className="mb-4">
             <label className="label">Пароль</label>
             <PasswordInput
               value={password}
@@ -57,6 +58,21 @@ export function Login() {
               placeholder="••••••••"
             />
           </div>
+          <label className="mb-5 flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-navy-500"
+            />
+            <span className="text-sm text-navy-700">
+              Запомнить меня
+              <span className="mt-0.5 block text-xs text-navy-400">
+                Не спрашивать пароль 30 дней. Только на личном устройстве —
+                на чужом или общем компьютере не отмечайте.
+              </span>
+            </span>
+          </label>
 
           {error && (
             <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">

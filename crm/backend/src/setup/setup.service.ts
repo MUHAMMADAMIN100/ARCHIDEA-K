@@ -226,8 +226,12 @@ export class SetupService implements OnApplicationBootstrap {
         });
         this.logger.log(`Сотрудник создан: ${t.fullName} (@${t.login})`);
         if (generated) {
+          // ПАРОЛЬ В ЛОГ НЕ ПИШЕМ: логи Railway доступны всем, у кого есть
+          // доступ к панели, и хранятся долго. Задавайте пароль через env.
           this.logger.warn(
-            `Пароль для @${t.login} сгенерирован: ${password} — смените после первого входа (задайте SEED_PW_${t.login.toUpperCase()}, чтобы управлять паролем).`,
+            `Пароль для @${t.login} сгенерирован случайно и НЕ выводится в лог. ` +
+              `Задайте SEED_PW_${t.login.toUpperCase()} и пересоздайте сотрудника, ` +
+              `либо назначьте пароль вручную в разделе «Сотрудники».`,
           );
         }
       } else if (!existing.position) {

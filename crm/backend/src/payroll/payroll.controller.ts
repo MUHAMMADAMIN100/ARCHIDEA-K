@@ -10,13 +10,14 @@ import {
 } from '@nestjs/common';
 import { PayrollService } from './payroll.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { NoOpsFinanceGuard } from '../common/guards/no-ops-finance.guard';
 import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
 
 /** Смены, штрафы и выплаты. Доступ: руководитель и управляющий (менеджер). */
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, NoOpsFinanceGuard)
 @Controller('payroll')
 export class PayrollController {
   constructor(private service: PayrollService) {}

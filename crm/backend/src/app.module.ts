@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ProxyThrottlerGuard } from './common/guards/proxy-throttler.guard';
+import { CsrfGuard } from './common/guards/csrf.guard';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -28,9 +29,11 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    // Глобальный rate-limit: 300 запросов за 60 сек с одного IP
-    // (CRM активно поллит; жёстче — точечно на /auth/login и /leads/intake)
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
+    // Глобальный rate-limit за 60 сек с одного IP. Лимит высокий, потому что
+    // весь трафик CRM идёт через общий egress-адрес Vercel (rewrite /api →
+    // Railway) и делит один ключ; жёсткие лимиты — точечно на /auth/login
+    // (8/мин) и /leads/intake (6/мин). Это защита от лавины, а не от поллинга.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 1200 }]),
     PrismaModule,
     NotificationsModule,
     AuthModule,
@@ -52,6 +55,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
   providers: [
     // Rate-limit применяется первым (до аутентификации); ключ — реальный IP за прокси
     { provide: APP_GUARD, useClass: ProxyThrottlerGuard },
+    // CSRF: изменяющие запросы со сторонних сайтов отклоняются
+    { provide: APP_GUARD, useClass: CsrfGuard },
     // Глобальная JWT-защита: все роуты требуют авторизации, кроме @Public
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],

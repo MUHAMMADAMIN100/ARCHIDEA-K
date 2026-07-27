@@ -469,6 +469,15 @@ function EditUserModal({
             onChange={setPassword}
             placeholder="оставьте пустым, чтобы не менять"
           />
+          <p className="mt-1 text-xs text-navy-400">
+            Минимум 8 символов. После смены сотрудник будет разлогинен на всех
+            устройствах — старые сессии перестанут действовать.
+          </p>
+          {password.length > 0 && password.length < 8 && (
+            <p className="mt-1 text-xs font-medium text-red-600">
+              Пароль слишком короткий: минимум 8 символов
+            </p>
+          )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="btn-ghost">
@@ -476,7 +485,9 @@ function EditUserModal({
           </button>
           <button
             onClick={submit}
-            disabled={!fullName || !login}
+            disabled={
+              !fullName || !login || (password.length > 0 && password.length < 8)
+            }
             className="btn-primary"
           >
             Сохранить

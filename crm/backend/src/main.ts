@@ -1,12 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { json } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import compression = require('compression');
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // bodyParser отключаем, чтобы подключить ТОЛЬКО json: форменные тела
+  // (urlencoded/multipart) — это «простые» кросс-сайтовые запросы без
+  // preflight, то есть готовый вектор CSRF. Нам они не нужны.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
 
   // За прокси Railway — чтобы Secure-cookie и protocol определялись верно
   const expressApp = app.getHttpAdapter().getInstance();
@@ -19,10 +23,25 @@ async function bootstrap() {
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      contentSecurityPolicy: false,
+      // API отдаёт только JSON — запрещаем всё, чтобы ответ нельзя было
+      // превратить в исполняемую страницу, и запрещаем встраивание во фрейм
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          'default-src': ["'none'"],
+          'frame-ancestors': ["'none'"],
+          'base-uri': ["'none'"],
+          'form-action': ["'none'"],
+        },
+      },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts: { maxAge: 63072000, includeSubDomains: true, preload: true },
     }),
   );
   app.use(compression()); // сжатие ответов
+
+  // только JSON и с ограничением размера — защита от «раздутых» тел
+  app.use(json({ limit: '256kb' }));
 
   app.use(cookieParser());
   app.setGlobalPrefix('api');

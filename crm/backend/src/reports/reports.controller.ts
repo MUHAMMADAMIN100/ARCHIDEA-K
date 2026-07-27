@@ -10,13 +10,14 @@ import {
 } from '@nestjs/common';
 import { ReportsService, ReportInput } from './reports.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { NoOpsFinanceGuard } from '../common/guards/no-ops-finance.guard';
 import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
 
 /** Платёжные ведомости (отчёты менеджеров основателю) */
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, NoOpsFinanceGuard)
 @Controller('reports')
 export class ReportsController {
   constructor(private service: ReportsService) {}

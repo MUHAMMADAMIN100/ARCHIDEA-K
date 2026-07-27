@@ -5,8 +5,9 @@ export class CreateUserDto {
   @IsString()
   login: string;
 
+  // политика паролей: минимум 8 символов
   @IsString()
-  @MinLength(4)
+  @MinLength(8, { message: 'Пароль должен быть не короче 8 символов' })
   password: string;
 
   @IsString()

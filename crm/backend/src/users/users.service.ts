@@ -237,8 +237,13 @@ export class UsersService {
       }
       data.login = login;
     }
-    if (dto.password && dto.password.length >= 4) {
+    if (dto.password) {
+      if (dto.password.length < 8) {
+        throw new BadRequestException('Пароль должен быть не короче 8 символов');
+      }
       data.passwordHash = await AuthService.hashPassword(dto.password);
+      // смена пароля гасит все ранее выданные токены (в т.ч. украденные)
+      data.sessionEpoch = { increment: 1 };
     }
 
     return this.prisma.user.update({

@@ -200,7 +200,7 @@ function AddUserModal({
           <input className="input" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="например, manager3" />
         </div>
         <div>
-          <label className="label">Пароль * (мин. 4 символа)</label>
+          <label className="label">Пароль * (мин. 8 символов)</label>
           <PasswordInput value={password} onChange={setPassword} placeholder="••••••••" />
         </div>
         <div>
@@ -214,7 +214,7 @@ function AddUserModal({
           <button onClick={onClose} className="btn-ghost">Отмена</button>
           <button
             onClick={submit}
-            disabled={!fullName || !login || password.length < 4}
+            disabled={!fullName || !login || password.length < 8}
             className="btn-primary"
           >
             Создать
