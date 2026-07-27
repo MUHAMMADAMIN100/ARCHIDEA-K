@@ -12,30 +12,36 @@
  */
 
 /**
- * Разрешаем обращения ТОЛЬКО со своего сайта. В отличие от прежней версии,
- * запрос без Origin/Referer отклоняется: браузер со страницы лендинга всегда
- * шлёт хотя бы Referer, а «голый» POST (curl-спам) — нет.
+ * Разрешаем обращения ТОЛЬКО со своего сайта.
+ *
+ * Проверка «тот же домен»: host из Origin/Referer должен совпадать с Host,
+ * на который пришёл запрос (страница и функция всегда на одном домене). Это
+ * не зависит от конкретного адреса (кастомный домен, *.vercel.app, превью) и
+ * не ломает реальные заявки. Запрос без Origin/Referer (curl-спам) — отклоняем.
  */
+function hostOf(value) {
+  try {
+    return new URL(value.startsWith('http') ? value : `https://${value}`).host;
+  } catch {
+    return null;
+  }
+}
+
 function originAllowed(req) {
   const source = req.headers.origin || req.headers.referer;
   if (!source) return false; // нет источника — не браузерная форма, отклоняем
-  const allowed = [process.env.LANDING_URL, process.env.VERCEL_URL]
+  const srcHost = hostOf(source);
+  if (!srcHost) return false;
+
+  // тот же домен, что и сам сайт
+  if (req.headers.host && srcHost === req.headers.host) return true;
+
+  // плюс явно заданные адреса (кастомный домен/алиасы), если настроены
+  const extra = [process.env.LANDING_URL, process.env.VERCEL_URL]
     .filter(Boolean)
-    .map((h) => (h.startsWith('http') ? h : `https://${h}`));
-  // подстраховка на превью-деплоях, где переменные не заданы
-  if (allowed.length === 0) allowed.push('https://cleaning-khaki-kappa.vercel.app');
-  try {
-    const origin = new URL(source).origin;
-    return allowed.some((a) => {
-      try {
-        return new URL(a).origin === origin;
-      } catch {
-        return false;
-      }
-    });
-  } catch {
-    return false;
-  }
+    .map(hostOf)
+    .filter(Boolean);
+  return extra.includes(srcHost);
 }
 
 /** IP посетителя (Vercel кладёт реальный адрес в x-forwarded-for) */
