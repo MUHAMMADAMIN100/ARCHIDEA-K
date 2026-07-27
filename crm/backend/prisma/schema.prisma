@@ -248,7 +248,9 @@ model Order {
   seats          Int? // посадочные места (для мойки мягкой мебели)
   address        String?
   estimatedPrice Int          @default(0) // расчёт с сайта
+  pricePerSqm    Int? // цена за м² (за место для мебели) — из чего сложилась цена
   finalPrice     Int? // итог после осмотра/КП
+  preferences    String? // предпочтения клиента (заполняет менеджер)
 
   // данные анкеты с сайта
   preferredDate DateTime?

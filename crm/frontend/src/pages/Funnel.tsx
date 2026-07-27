@@ -12,6 +12,7 @@ import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Spinner, PageHeader, Badge, ErrorState } from '../components/ui';
 import { OrderModal } from '../components/OrderModal';
+import { useAuth } from '../auth/AuthContext';
 import {
   STAGE_COLOR,
   STAGE_LABEL,
@@ -20,10 +21,21 @@ import {
   formatPrice,
   formatVolume,
 } from '../lib/labels';
+import { userSeesAll } from '../types';
 import type { BoardColumn, FunnelStage, Order } from '../types';
 
 // основной конвейер этапов (без «Отказа» — он отдельной кнопкой на мобильном)
 const PIPELINE: FunnelStage[] = STAGE_ORDER.filter((s) => s !== 'REJECTED');
+
+/** Короткая дата для карточки: «27 июл» */
+function cardDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+  });
+}
+
+const NO_MANAGER = '__none__';
 
 // Тело карточки заказа. Вынесено на уровень модуля (а не внутрь Funnel),
 // чтобы при поллинге/оптимистичных обновлениях карточки НЕ пересоздавались
@@ -61,6 +73,14 @@ function OrderCardBody({
         {o.cleaners && o.cleaners.length > 0 && (
           <span className="text-xs text-navy-400">👥 {o.cleaners.length}</span>
         )}
+      </div>
+
+      {/* Менеджер и дата заявки */}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-navy-100 pt-1.5 text-[11px] text-navy-400">
+        <span className="truncate">
+          {o.manager?.fullName ?? 'без менеджера'}
+        </span>
+        <span className="shrink-0">{cardDate(o.createdAt)}</span>
       </div>
 
       {/* Мобильные контролы смены этапа — только на тач-устройствах */}
@@ -114,6 +134,10 @@ function OrderCardBody({
 export function Funnel() {
   const toast = useToast();
   const dialog = useDialog();
+  const { user } = useAuth();
+  // фильтр по менеджеру — только для тех, кто видит всю компанию
+  const canFilter = userSeesAll(user);
+  const [managerFilter, setManagerFilter] = useState<string>('ALL');
   // на тач-устройствах (телефон/планшет) перетаскивание неудобно —
   // отключаем drag и показываем стрелки для смены этапа
   const isTouch = useMemo(
@@ -213,6 +237,33 @@ export function Funnel() {
     return <Spinner />;
   }
 
+  // менеджеры, у которых есть заказы (для выпадающего фильтра)
+  const managerOptions = (() => {
+    const map = new Map<string, string>();
+    let hasNone = false;
+    for (const col of data) {
+      for (const o of col.orders) {
+        if (o.manager) map.set(o.manager.id, o.manager.fullName);
+        else hasNone = true;
+      }
+    }
+    const list = [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    return { list, hasNone };
+  })();
+
+  // доска с учётом фильтра по менеджеру
+  const board =
+    !canFilter || managerFilter === 'ALL'
+      ? data
+      : data.map((col) => ({
+          ...col,
+          orders: col.orders.filter((o) =>
+            managerFilter === NO_MANAGER
+              ? !o.manager
+              : o.manager?.id === managerFilter,
+          ),
+        }));
+
   return (
     <div>
       <PageHeader
@@ -224,9 +275,38 @@ export function Funnel() {
         }
       />
 
+      {canFilter && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-navy-400">Менеджер:</span>
+          <select
+            className="input max-w-[240px]"
+            value={managerFilter}
+            onChange={(e) => setManagerFilter(e.target.value)}
+          >
+            <option value="ALL">Все менеджеры</option>
+            {managerOptions.list.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+            {managerOptions.hasNone && (
+              <option value={NO_MANAGER}>Без менеджера</option>
+            )}
+          </select>
+          {managerFilter !== 'ALL' && (
+            <button
+              onClick={() => setManagerFilter('ALL')}
+              className="text-xs font-medium text-navy-400 underline-offset-2 hover:text-navy-600 hover:underline"
+            >
+              Сбросить
+            </button>
+          )}
+        </div>
+      )}
+
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {data.map((col) => (
+          {board.map((col) => (
             <div key={col.stage} className="flex w-72 shrink-0 flex-col">
               <div className="mb-3 flex items-center justify-between">
                 <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>

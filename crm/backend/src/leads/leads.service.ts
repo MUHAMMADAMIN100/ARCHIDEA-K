@@ -112,6 +112,15 @@ export class LeadsService {
             ? clamp(dto.calculator?.seats)
             : null,
         estimatedPrice: clamp(dto.total),
+        // цена за единицу (м² или место) — чтобы было видно, из чего сложилась цена
+        pricePerSqm: (() => {
+          const total = clamp(dto.total);
+          const units =
+            cleaningType === CleaningType.FURNITURE
+              ? clamp(dto.calculator?.seats)
+              : clamp(dto.calculator?.area);
+          return units > 0 ? Math.round(total / units) : null;
+        })(),
         address: dto.contact.address,
         preferredDate: preferred,
         preferredTime: dto.quiz?.time,

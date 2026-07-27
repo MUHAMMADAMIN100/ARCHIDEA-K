@@ -53,7 +53,9 @@ export function OrderModal({
   const [stage, setStage] = useState<FunnelStage>('NEW');
   const [rejectionReason, setRejectionReason] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [pricePerSqm, setPricePerSqm] = useState<string>('');
   const [finalPrice, setFinalPrice] = useState<string>('');
+  const [preferences, setPreferences] = useState('');
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [editType, setEditType] = useState<CleaningType>('GENERAL');
   const [editDirt, setEditDirt] = useState<DirtLevel | ''>('');
@@ -63,18 +65,46 @@ export function OrderModal({
   const [error, setError] = useState('');
   const seededRef = useRef(false);
 
+  // сколько единиц тарифицируется: площадь (м²) или посадочные места (мебель)
+  const unitsNow = Number((editType === 'FURNITURE' ? editSeats : editArea) || 0);
+  const perSqmLabel = editType === 'FURNITURE' ? 'Цена за место' : 'Цена за м²';
+
+  // ввели цену за единицу → пересчитываем итоговую (её можно потом поправить)
+  const onPricePerSqm = (v: string) => {
+    setPricePerSqm(v);
+    const p = Number(v);
+    if (v !== '' && p >= 0 && unitsNow > 0) {
+      setFinalPrice(String(Math.round(p * unitsNow)));
+    }
+  };
+  // изменили площадь/места → если задана цена за единицу, обновляем итоговую
+  const recalcFinal = (units: number) => {
+    const p = Number(pricePerSqm);
+    if (pricePerSqm !== '' && p >= 0 && units > 0) {
+      setFinalPrice(String(Math.round(p * units)));
+    }
+  };
+
   // заполняем редактируемые поля из заказа
   const seedEditable = (o: Order) => {
     setStage(o.stage);
     setRejectionReason(o.rejectionReason ?? '');
     setScheduledDate(o.scheduledDate?.slice(0, 10) ?? '');
     setFinalPrice(o.finalPrice != null ? String(o.finalPrice) : '');
+    setPreferences(o.preferences ?? '');
     setSelectedCleaners((o.cleaners ?? []).map((x) => x.id));
     setEditType(o.cleaningType);
     setEditDirt(o.dirtLevel ?? '');
     setEditArea(String(o.area ?? ''));
     setEditSeats(o.seats != null ? String(o.seats) : '');
     setEditAddress(o.address ?? '');
+    // цена за единицу: сохранённая, иначе вычислим из итоговой/расчёта ÷ единицы
+    const units = o.cleaningType === 'FURNITURE' ? o.seats ?? 0 : o.area ?? 0;
+    const basePrice = o.finalPrice ?? o.estimatedPrice;
+    const perSqm =
+      o.pricePerSqm ??
+      (units > 0 && basePrice ? Math.round(basePrice / units) : null);
+    setPricePerSqm(perSqm != null ? String(perSqm) : '');
   };
 
   useEffect(() => {
@@ -85,6 +115,10 @@ export function OrderModal({
     }
     setError('');
     seededRef.current = false;
+    // защита от гонки: если заказ в модалке сменился, поздний detail-ответ
+    // старого заказа НЕ применяем — иначе order стал бы чужим, а «Сохранить»
+    // (использует order.id) ушёл бы правками в другой заказ
+    let active = true;
 
     // 1) мгновенно показываем то, что уже знаем из списка/доски
     if (initial) {
@@ -101,6 +135,7 @@ export function OrderModal({
       api.get<Cleaner[]>('/cleaners'),
     ])
       .then(([o, c]) => {
+        if (!active) return; // заказ уже сменился — игнорируем поздний ответ
         setOrder(o.data);
         // редактируемые поля не перетираем, если уже заполнили из initial
         if (!seededRef.current) {
@@ -110,6 +145,10 @@ export function OrderModal({
         setCleaners(c.data);
       })
       .catch(() => {});
+
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
@@ -123,12 +162,16 @@ export function OrderModal({
     // 1) Оптимистично обновляем карточку/доску и закрываем окно — без ожидания
     const toInt = (s: string) => Math.round(Number(s)); // бэкенд принимает только целые
     const newFinal = finalPrice !== '' ? toInt(finalPrice) : order.finalPrice;
+    const newPerSqm = pricePerSqm !== '' ? toInt(pricePerSqm) : order.pricePerSqm;
     const newArea = editArea !== '' ? toInt(editArea) : order.area;
     const newSeats = editSeats !== '' ? toInt(editSeats) : order.seats;
     const newDirt = editType === 'FURNITURE' ? null : editDirt || null;
+    const newPrefs = preferences.trim();
     onOptimistic?.(order.id, {
       stage,
+      pricePerSqm: newPerSqm,
       finalPrice: newFinal,
+      preferences: newPrefs || null,
       area: newArea,
       seats: newSeats,
       dirtLevel: newDirt,
@@ -153,7 +196,9 @@ export function OrderModal({
           ? { seats: toInt(editSeats) }
           : {}),
         address: editAddress || undefined,
+        ...(pricePerSqm !== '' ? { pricePerSqm: toInt(pricePerSqm) } : {}),
         ...(finalPrice !== '' ? { finalPrice: toInt(finalPrice) } : {}),
+        preferences: newPrefs,
       });
       await api.patch(`/orders/${order.id}/cleaners`, {
         cleanerIds: selectedCleaners,
@@ -214,11 +259,13 @@ export function OrderModal({
           <div className="grid grid-cols-2 gap-3 rounded-xl bg-navy-50 p-4 text-sm">
             <Info label="Телефон" value={order.client?.phone} />
             <Info label="Источник" value={SOURCE_LABEL[order.source]} />
+            <Info label="Оформлена" value={formatDate(order.createdAt)} />
+            <Info label="Менеджер" value={order.manager?.fullName ?? 'не назначен'} />
             <Info label="Расчёт с сайта" value={formatPrice(order.estimatedPrice)} />
             {order.preferredDate && (
               <Info label="Желаемая дата" value={formatDate(order.preferredDate)} />
             )}
-            {order.comment && <Info label="Комментарий" value={order.comment} />}
+            {order.comment && <Info label="Комментарий с сайта" value={order.comment} />}
           </div>
 
           {/* Параметры заявки (редактирование) */}
@@ -248,7 +295,10 @@ export function OrderModal({
                   type="number"
                   className="input"
                   value={editSeats}
-                  onChange={(e) => setEditSeats(e.target.value)}
+                  onChange={(e) => {
+                    setEditSeats(e.target.value);
+                    recalcFinal(Number(e.target.value || 0));
+                  }}
                 />
               </div>
             ) : (
@@ -258,7 +308,10 @@ export function OrderModal({
                   type="number"
                   className="input"
                   value={editArea}
-                  onChange={(e) => setEditArea(e.target.value)}
+                  onChange={(e) => {
+                    setEditArea(e.target.value);
+                    recalcFinal(Number(e.target.value || 0));
+                  }}
                 />
               </div>
             )}
@@ -327,7 +380,17 @@ export function OrderModal({
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="label">{perSqmLabel}</label>
+              <input
+                type="number"
+                className="input"
+                value={pricePerSqm}
+                onChange={(e) => onPricePerSqm(e.target.value)}
+                placeholder="сомони"
+              />
+            </div>
             <div>
               <label className="label">Итоговая стоимость (после КП)</label>
               <input
@@ -337,11 +400,29 @@ export function OrderModal({
                 onChange={(e) => setFinalPrice(e.target.value)}
                 placeholder={String(order.estimatedPrice)}
               />
+              {pricePerSqm !== '' && unitsNow > 0 && (
+                <p className="mt-1 text-xs text-navy-400">
+                  {unitsNow} {editType === 'FURNITURE' ? 'мест' : 'м²'} ×{' '}
+                  {pricePerSqm} = {formatPrice(Math.round(Number(pricePerSqm) * unitsNow))}
+                </p>
+              )}
             </div>
             <div>
               <label className="label">Дата уборки</label>
               <DatePicker value={scheduledDate} onChange={setScheduledDate} />
             </div>
+          </div>
+
+          {/* Предпочтения клиента (заполняет менеджер) */}
+          <div>
+            <label className="label">Предпочтения / описание клиента</label>
+            <textarea
+              className="input min-h-[70px] resize-none"
+              value={preferences}
+              onChange={(e) => setPreferences(e.target.value)}
+              maxLength={2000}
+              placeholder="Например: аллергия на хлор, есть кот, ключи у консьержа, просит эко-средства…"
+            />
           </div>
 
           {/* Команда */}

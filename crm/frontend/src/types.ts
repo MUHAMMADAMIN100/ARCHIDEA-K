@@ -146,7 +146,9 @@ export interface Order {
   seats?: number | null;
   address?: string;
   estimatedPrice: number;
+  pricePerSqm?: number | null;
   finalPrice?: number | null;
+  preferences?: string | null;
   preferredDate?: string | null;
   preferredTime?: string | null;
   hasUtilities?: boolean | null;

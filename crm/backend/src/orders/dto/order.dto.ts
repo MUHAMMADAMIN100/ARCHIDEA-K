@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import {
@@ -40,7 +41,9 @@ export class UpdateOrderDto {
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) seats?: number;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) estimatedPrice?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) pricePerSqm?: number;
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) finalPrice?: number;
+  @IsOptional() @IsString() @MaxLength(2000) preferences?: string;
   @IsOptional() @IsString() inspectionDate?: string;
   @IsOptional() @IsString() scheduledDate?: string;
   @IsOptional() @IsString() comment?: string;
