@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { lazyWithRetry } from './lib/lazyWithRetry';
+import { userSeesAll } from './types';
 import type { Role } from './types';
 
 // Разделы грузятся по требованию (code-splitting) — тяжёлые библиотеки
@@ -16,6 +17,7 @@ const Funnel = lazyWithRetry(() => import('./pages/Funnel').then((m) => ({ defau
 const Clients = lazyWithRetry(() => import('./pages/Clients').then((m) => ({ default: m.Clients })));
 const ClientCard = lazyWithRetry(() => import('./pages/ClientCard').then((m) => ({ default: m.ClientCard })));
 const Tasks = lazyWithRetry(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })));
+const Calendar = lazyWithRetry(() => import('./pages/Calendar').then((m) => ({ default: m.Calendar })));
 const Schedule = lazyWithRetry(() => import('./pages/Schedule').then((m) => ({ default: m.Schedule })));
 const Team = lazyWithRetry(() => import('./pages/Team').then((m) => ({ default: m.Team })));
 const Shifts = lazyWithRetry(() => import('./pages/Shifts').then((m) => ({ default: m.Shifts })));
@@ -55,6 +57,13 @@ function NoOpsFinance({ children }: { children: JSX.Element }) {
   return children;
 }
 
+/** Разделы для расширенного доступа: директор + ops-менеджер */
+function SeesAllOnly({ children }: { children: JSX.Element }) {
+  const { user } = useAuth();
+  if (user && !userSeesAll(user)) return <Navigate to="/" replace />;
+  return children;
+}
+
 export default function App() {
   const { user, loading } = useAuth();
 
@@ -87,6 +96,14 @@ export default function App() {
           <Route path="/clients" element={<Clients />} />
           <Route path="/clients/:id" element={<ClientCard />} />
           <Route path="/tasks" element={<Tasks />} />
+          <Route
+            path="/calendar"
+            element={
+              <SeesAllOnly>
+                <Calendar />
+              </SeesAllOnly>
+            }
+          />
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/team" element={<Team />} />
           <Route path="/shifts" element={<NoOpsFinance><Shifts /></NoOpsFinance>} />

@@ -9,6 +9,7 @@ import type {
   ScheduleType,
   TaskPriority,
   TaskStatus,
+  TaskType,
 } from '../types';
 
 export const STAGE_LABEL: Record<FunnelStage, string> = {
@@ -115,6 +116,47 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN: 'Открыта',
   IN_PROGRESS: 'В работе',
   DONE: 'Выполнена',
+};
+
+export const TASK_STATUS_COLOR: Record<TaskStatus, string> = {
+  OPEN: 'bg-navy-100 text-navy-600',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  DONE: 'bg-green-100 text-green-700',
+};
+
+/** Типы задач календаря (порядок = порядок кнопок фильтра и легенды) */
+export const TASK_TYPE_ORDER: TaskType[] = [
+  'CALL',
+  'INSPECTION',
+  'VISIT',
+  'MEETING',
+  'PERSONAL',
+];
+
+export const TASK_TYPE_LABEL: Record<TaskType, string> = {
+  CALL: 'Звонок',
+  INSPECTION: 'Осмотр объекта',
+  VISIT: 'Выезд',
+  MEETING: 'Встреча',
+  PERSONAL: 'Личное',
+};
+
+/** Цвет карточки задачи в календаре (фон / текст / рамка) */
+export const TASK_TYPE_COLOR: Record<TaskType, string> = {
+  CALL: 'bg-sky-50 text-sky-800 border-sky-200',
+  INSPECTION: 'bg-violet-50 text-violet-800 border-violet-200',
+  VISIT: 'bg-amber-50 text-amber-800 border-amber-200',
+  MEETING: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  PERSONAL: 'bg-navy-50 text-navy-700 border-navy-200',
+};
+
+/** Цвет точки-маркера типа (легенда, компактные списки) */
+export const TASK_TYPE_DOT: Record<TaskType, string> = {
+  CALL: 'bg-sky-500',
+  INSPECTION: 'bg-violet-500',
+  VISIT: 'bg-amber-500',
+  MEETING: 'bg-emerald-500',
+  PERSONAL: 'bg-navy-400',
 };
 
 export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {

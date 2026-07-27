@@ -1,28 +1,32 @@
-import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Spinner, PageHeader, Badge, Modal, EmptyState } from '../components/ui';
+import { Spinner, PageHeader, Badge, EmptyState } from '../components/ui';
 import { useToast } from '../components/Toast';
-import { DatePicker } from '../components/DatePicker';
+import { TaskModal } from '../components/TaskModal';
 import {
   PRIORITY_LABEL,
   PRIORITY_COLOR,
+  TASK_STATUS_COLOR,
   TASK_STATUS_LABEL,
+  TASK_TYPE_DOT,
+  TASK_TYPE_LABEL,
   formatDate,
 } from '../lib/labels';
 import { tempId, nowISO, withRetry } from '../lib/util';
 import { userSeesAll } from '../types';
-import type { Task, TaskPriority, TaskStatus } from '../types';
+import type { Task, TaskPriority, TaskStatus, TaskType } from '../types';
 
 const STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'DONE'];
 
-/** Кому можно ставить задачи (все активные сотрудники) */
-interface Assignable {
-  id: string;
-  fullName: string;
-  position?: string | null;
+/** Сводный статус по статусам исполнителей */
+function aggregate(statuses: TaskStatus[]): TaskStatus {
+  if (statuses.length === 0) return 'OPEN';
+  if (statuses.every((s) => s === 'DONE')) return 'DONE';
+  if (statuses.every((s) => s === 'OPEN')) return 'OPEN';
+  return 'IN_PROGRESS';
 }
 
 export function Tasks() {
@@ -30,21 +34,50 @@ export function Tasks() {
   const toast = useToast();
   // задачи ставит директор ИЛИ ops-менеджер (расширенный доступ)
   const canAssign = userSeesAll(user);
+  const inFlightRef = useRef(0);
   const { data, loading, reload, setData } = useFetch<Task[]>('/tasks', {
     pollMs: 20000,
+    pollPaused: () => inFlightRef.current > 0,
   });
   const [showAdd, setShowAdd] = useState(false);
 
-  // оптимистично: меняем статус сразу, запрос в фоне
-  const setStatus = async (id: string, status: TaskStatus) => {
+  const patchTask = (id: string, patch: Partial<Task>) =>
     setData((tasks) =>
-      tasks ? tasks.map((t) => (t.id === id ? { ...t, status } : t)) : tasks,
+      tasks ? tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) : tasks,
     );
+
+  /** Смена статуса исполнителя — мгновенно, запрос в фоне */
+  const setStatus = async (task: Task, userId: string, status: TaskStatus) => {
+    const before = task.assignments.find((a) => a.userId === userId)?.status;
+    // точечное обновление: не трогаем статусы других исполнителей,
+    // чтобы параллельные изменения не затирали друг друга
+    const apply = (value: TaskStatus) =>
+      setData((tasks) =>
+        tasks
+          ? tasks.map((t) => {
+              if (t.id !== task.id) return t;
+              const assignments = t.assignments.map((a) =>
+                a.userId === userId ? { ...a, status: value } : a,
+              );
+              return {
+                ...t,
+                assignments,
+                status: aggregate(assignments.map((a) => a.status)),
+              };
+            })
+          : tasks,
+      );
+
+    apply(status);
+    inFlightRef.current += 1;
     try {
-      await api.patch(`/tasks/${id}/status`, { status });
+      await api.patch(`/tasks/${task.id}/status`, { status, userId });
     } catch {
       toast.error('Не удалось изменить статус задачи');
+      if (before) apply(before); // откат только своего исполнителя
       reload();
+    } finally {
+      inFlightRef.current -= 1;
     }
   };
 
@@ -64,24 +97,35 @@ export function Tasks() {
     payload: {
       title: string;
       description?: string;
-      assigneeId: string;
+      type: TaskType;
       priority: TaskPriority;
-      deadline?: string;
+      deadline: string | null;
+      assigneeIds: string[];
     },
-    assigneeName: string,
+    people: { id: string; fullName: string }[],
   ) => {
     const id = tempId();
     const optimistic: Task = {
       id,
       title: payload.title,
       description: payload.description,
+      type: payload.type,
       priority: payload.priority,
       status: 'OPEN',
-      deadline: payload.deadline || null,
-      assigneeId: payload.assigneeId,
+      deadline: payload.deadline ? `${payload.deadline}T12:00:00.000Z` : null,
+      assigneeId: payload.assigneeIds[0],
       creatorId: user?.id ?? '',
-      assignee: { id: payload.assigneeId, fullName: assigneeName },
+      assignee: {
+        id: payload.assigneeIds[0],
+        fullName: people[0]?.fullName ?? '',
+      },
       creator: { id: user?.id ?? '', fullName: user?.fullName ?? '' },
+      assignments: people.map((p) => ({
+        id: `${id}:${p.id}`,
+        userId: p.id,
+        status: 'OPEN' as const,
+        user: { id: p.id, fullName: p.fullName },
+      })),
       createdAt: nowISO(),
     };
     setData((t) => (t ? [optimistic, ...t] : [optimistic]));
@@ -115,141 +159,101 @@ export function Tasks() {
         <EmptyState text="Задач нет" />
       ) : (
         <div className="space-y-3">
-          {data.map((t) => (
-            <div key={t.id} className="card flex flex-wrap items-center gap-4 p-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-navy-900">{t.title}</span>
-                  <Badge className={PRIORITY_COLOR[t.priority]}>
-                    {PRIORITY_LABEL[t.priority]}
-                  </Badge>
+          {data.map((t) => {
+            // менеджер управляет только своим статусом, руководитель — любым
+            const visible = canAssign
+              ? t.assignments
+              : t.assignments.filter((a) => a.userId === user?.id);
+            return (
+              <div key={t.id} className="card p-4">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${TASK_TYPE_DOT[t.type]}`}
+                        title={TASK_TYPE_LABEL[t.type]}
+                      />
+                      <span className="font-semibold text-navy-900">{t.title}</span>
+                      <Badge className={PRIORITY_COLOR[t.priority]}>
+                        {PRIORITY_LABEL[t.priority]}
+                      </Badge>
+                      <Badge className={TASK_STATUS_COLOR[t.status]}>
+                        {TASK_STATUS_LABEL[t.status]}
+                      </Badge>
+                    </div>
+                    {t.description && (
+                      <p className="mt-1 text-sm text-navy-500">{t.description}</p>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-navy-400">
+                      <span>{TASK_TYPE_LABEL[t.type]}</span>
+                      {t.deadline && (
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {formatDate(t.deadline)}
+                        </span>
+                      )}
+                      {canAssign && <span>Поставил: {t.creator.fullName}</span>}
+                    </div>
+                  </div>
+
+                  {canAssign && (
+                    <button
+                      onClick={() => remove(t.id)}
+                      className="rounded-lg p-2 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                      title="Удалить задачу"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                {t.description && (
-                  <p className="mt-1 text-sm text-navy-500">{t.description}</p>
-                )}
-                <div className="mt-1 text-xs text-navy-400">
-                  Исполнитель: {t.assignee.fullName}
-                  {t.deadline && ` · дедлайн ${formatDate(t.deadline)}`}
+
+                {/* Исполнители и их статусы */}
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-navy-50 pt-3">
+                  {visible.map((a) => (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-2 rounded-xl border border-navy-100 px-2.5 py-1.5"
+                    >
+                      <span className="text-sm font-medium text-navy-800">
+                        {a.user.fullName}
+                      </span>
+                      <select
+                        value={a.status}
+                        onChange={(e) =>
+                          setStatus(t, a.userId, e.target.value as TaskStatus)
+                        }
+                        className={`rounded-lg border-0 px-2 py-1 text-xs font-semibold ${
+                          TASK_STATUS_COLOR[a.status]
+                        }`}
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {TASK_STATUS_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              <select
-                className="input max-w-[160px]"
-                value={t.status}
-                onChange={(e) => setStatus(t.id, e.target.value as TaskStatus)}
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>
-                ))}
-              </select>
-
-              {canAssign && (
-                <button
-                  onClick={() => remove(t.id)}
-                  className="rounded-lg p-2 text-navy-400 hover:bg-red-50 hover:text-red-600"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {showAdd && (
-        <AddTaskModal
+        <TaskModal
+          mode="create"
           onClose={() => setShowAdd(false)}
           onCreate={createTask}
+          onPatch={patchTask}
+          onDeleted={(id) =>
+            setData((tasks) => (tasks ? tasks.filter((t) => t.id !== id) : tasks))
+          }
+          onReload={reload}
+          inFlightRef={inFlightRef}
         />
       )}
     </div>
-  );
-}
-
-function AddTaskModal({
-  onClose,
-  onCreate,
-}: {
-  onClose: () => void;
-  onCreate: (
-    payload: {
-      title: string;
-      description?: string;
-      assigneeId: string;
-      priority: TaskPriority;
-      deadline?: string;
-    },
-    assigneeName: string,
-  ) => void;
-}) {
-  // все активные сотрудники — задачу можно поставить любому
-  const { data: people } = useFetch<Assignable[]>('/users/assignable');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('MEDIUM');
-  const [deadline, setDeadline] = useState('');
-
-  const submit = () => {
-    const assigneeName =
-      (people ?? []).find((m) => m.id === assigneeId)?.fullName ?? '';
-    onCreate(
-      {
-        title,
-        description: description || undefined,
-        assigneeId,
-        priority,
-        deadline: deadline || undefined,
-      },
-      assigneeName,
-    );
-    onClose();
-  };
-
-  return (
-    <Modal open onClose={onClose} title="Новая задача">
-      <div className="space-y-3">
-        <div>
-          <label className="label">Название *</label>
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Описание</label>
-          <textarea className="input min-h-[80px] resize-none" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Исполнитель *</label>
-          <select className="input" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-            <option value="">— выберите сотрудника —</option>
-            {(people ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.fullName}
-                {m.position ? ` · ${m.position}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Приоритет</label>
-            <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
-              <option value="LOW">Низкий</option>
-              <option value="MEDIUM">Средний</option>
-              <option value="HIGH">Высокий</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Дедлайн</label>
-            <DatePicker value={deadline} onChange={setDeadline} />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="btn-ghost">Отмена</button>
-          <button onClick={submit} disabled={!title || !assigneeId} className="btn-primary">
-            Поставить задачу
-          </button>
-        </div>
-      </div>
-    </Modal>
   );
 }

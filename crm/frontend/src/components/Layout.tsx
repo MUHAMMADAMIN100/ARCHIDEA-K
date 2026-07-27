@@ -7,6 +7,7 @@ import {
   Users,
   CheckSquare,
   CalendarDays,
+  CalendarRange,
   UsersRound,
   Wallet,
   FileText,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
+import { userSeesAll } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -29,6 +31,7 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   roles?: Role[]; // если не указано — доступно всем
   finance?: boolean; // финансовый раздел — скрыт от ops-менеджеров
+  seesAll?: boolean; // только расширенный доступ (директор + ops-менеджер)
 }
 
 const NAV: NavItem[] = [
@@ -36,6 +39,7 @@ const NAV: NavItem[] = [
   { to: '/funnel', label: 'Воронка', icon: Filter },
   { to: '/clients', label: 'Клиенты', icon: Users },
   { to: '/tasks', label: 'Задачи', icon: CheckSquare },
+  { to: '/calendar', label: 'Календарь', icon: CalendarRange, seesAll: true },
   { to: '/schedule', label: 'Расписание', icon: CalendarDays },
   { to: '/team', label: 'Команда', icon: UsersRound },
   { to: '/shifts', label: 'Смены и выплаты', icon: Wallet, finance: true },
@@ -67,6 +71,7 @@ export function Layout() {
   const items = NAV.filter((i) => {
     if (i.roles && !(user && i.roles.includes(user.role))) return false;
     if (i.finance && isOps) return false;
+    if (i.seesAll && !userSeesAll(user)) return false;
     return true;
   });
 

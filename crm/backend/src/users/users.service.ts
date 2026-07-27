@@ -13,6 +13,21 @@ import {
 } from '../common/decorators/current-user.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 
+/**
+ * Незакрытые задачи сотрудника: учитываются и мульти-исполнители
+ * (строки assignments), и старые задачи без них (по assigneeId).
+ */
+const openTasksOf = (id: string) => ({
+  OR: [
+    { assignments: { some: { userId: id, status: { not: 'DONE' as const } } } },
+    {
+      assignments: { none: {} },
+      assigneeId: id,
+      status: { not: 'DONE' as const },
+    },
+  ],
+});
+
 const SAFE_SELECT = {
   id: true,
   login: true,
@@ -107,9 +122,7 @@ export class UsersService {
           where: { managerId: id, stage: FunnelStage.PAID },
         }),
         this.prisma.cleaner.count({ where: { managerId: id } }),
-        this.prisma.task.count({
-          where: { assigneeId: id, status: { not: 'DONE' } },
-        }),
+        this.prisma.task.count({ where: openTasksOf(id) }),
       ]);
 
     return {
@@ -172,7 +185,7 @@ export class UsersService {
     }
     if (type === 'tasks') {
       const rows = await this.prisma.task.findMany({
-        where: { assigneeId: id, status: { not: 'DONE' } },
+        where: openTasksOf(id),
         orderBy: { deadline: 'asc' },
       });
       return rows.map((t) => ({
@@ -252,7 +265,34 @@ export class UsersService {
     }
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Сотрудник не найден');
-    // клиенты/заказы/клинеры отвяжутся (managerId → null), задачи/отчёты — каскад
+
+    // Задача каскадом привязана к основному исполнителю и к постановщику.
+    // С мульти-исполнителями это опасно: удаление одного сотрудника снесло бы
+    // общую задачу у ВСЕХ остальных. Поэтому сначала переводим такие задачи
+    // на другого участника, а поставленные им задачи — на того, кто удаляет.
+    const shared = await this.prisma.task.findMany({
+      where: { assigneeId: id, assignments: { some: { userId: { not: id } } } },
+      select: {
+        id: true,
+        assignments: {
+          where: { userId: { not: id } },
+          select: { userId: true },
+          take: 1,
+        },
+      },
+    });
+    for (const t of shared) {
+      await this.prisma.task.update({
+        where: { id: t.id },
+        data: { assigneeId: t.assignments[0].userId },
+      });
+    }
+    await this.prisma.task.updateMany({
+      where: { creatorId: id },
+      data: { creatorId: requester.id },
+    });
+
+    // клиенты/заказы/клинеры отвяжутся (managerId → null)
     await this.prisma.user.delete({ where: { id } });
     return { ok: true };
   }

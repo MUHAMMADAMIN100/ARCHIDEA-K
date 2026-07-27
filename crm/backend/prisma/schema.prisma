@@ -80,9 +80,19 @@ enum TaskStatus {
   DONE
 }
 
+/// Тип задачи в календаре (цвет карточки и фильтр «Тип»)
+enum TaskType {
+  CALL // звонок
+  INSPECTION // осмотр объекта
+  VISIT // выезд
+  MEETING // встреча
+  PERSONAL // личное
+}
+
 enum NotificationType {
   NEW_LEAD // новая заявка с сайта (менеджеру)
   NEW_TASK // новая задача от руководителя (менеджеру)
+  TASK_STATUS_CHANGED // исполнитель сменил статус задачи (постановщику)
   ORDER_STATUS_CHANGED // смена статуса крупного заказа (руководителю)
   REPORT_SENT // менеджер отправил платёжную ведомость (руководителю)
 }
@@ -123,8 +133,9 @@ model User {
   clients       Client[]        @relation("ManagerClients")
   orders        Order[]         @relation("ManagerOrders")
   cleaners      Cleaner[] // клинеры в команде менеджера
-  tasksAssigned Task[]          @relation("TaskAssignee")
-  tasksCreated  Task[]          @relation("TaskCreator")
+  tasksAssigned Task[]           @relation("TaskAssignee")
+  tasksCreated  Task[]           @relation("TaskCreator")
+  taskAssignments TaskAssignment[] @relation("TaskAssignments")
   schedule      ScheduleEvent[]
   notifications Notification[]
   reports       Report[]        @relation("ReportManager")
@@ -261,9 +272,11 @@ model Task {
   id          String       @id @default(cuid())
   title       String
   description String?
+  type        TaskType     @default(MEETING)
   priority    TaskPriority @default(MEDIUM)
-  status      TaskStatus   @default(OPEN)
+  status      TaskStatus   @default(OPEN) // сводный статус (считается по исполнителям)
   deadline    DateTime?
+  // основной исполнитель — оставлен для совместимости; полный список в assignments
   assignee    User         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
   assigneeId  String
   creator     User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
@@ -271,7 +284,24 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  assignments TaskAssignment[]
+
   @@index([assigneeId])
+}
+
+/// Исполнитель задачи со своим статусом (в одной задаче их может быть несколько)
+model TaskAssignment {
+  id        String     @id @default(cuid())
+  task      Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  user      User       @relation("TaskAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  status    TaskStatus @default(OPEN)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([taskId, userId])
+  @@index([userId, status])
 }
 
 /// Событие расписания менеджера (осмотры, выезды, встречи)

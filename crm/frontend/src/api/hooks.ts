@@ -105,9 +105,11 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
       const gen = dataGenRef.current;
       try {
         const res = await api.get<T>(url);
-        // отставший фоновый ответ: между стартом запроса и его завершением
-        // произошла оптимистичная мутация — не перетираем ни кэш, ни состояние
-        if (silent && dataGenRef.current !== gen) return;
+        // отставший ответ: между стартом запроса и его завершением произошла
+        // оптимистичная мутация — не перетираем ни кэш, ни состояние.
+        // Проверяем для ЛЮБОЙ загрузки (не только фоновой): первичная
+        // тоже может завершиться уже после действия пользователя.
+        if (dataGenRef.current !== gen) return;
         cache.set(url, res.data);
         if (urlRef.current !== url) return; // URL уже сменился — не трогаем состояние
         setData(res.data);

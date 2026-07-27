@@ -19,6 +19,12 @@ export type DirtLevel = 'LIGHT' | 'MEDIUM' | 'HEAVY';
 export type ClientTag = 'VIP' | 'REGULAR' | 'REFUSED' | 'POTENTIAL';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
+export type TaskType =
+  | 'CALL'
+  | 'INSPECTION'
+  | 'VISIT'
+  | 'MEETING'
+  | 'PERSONAL';
 export type ScheduleType = 'INSPECTION' | 'CLEANING_VISIT' | 'MEETING';
 export type AccessMethod = 'KEYS' | 'ONSITE';
 
@@ -163,17 +169,28 @@ export interface BoardColumn {
   orders: Order[];
 }
 
+/** Исполнитель задачи со своим статусом */
+export interface TaskAssignment {
+  id: string;
+  userId: string;
+  status: TaskStatus;
+  user: { id: string; fullName: string };
+}
+
 export interface Task {
   id: string;
   title: string;
   description?: string;
+  type: TaskType;
   priority: TaskPriority;
-  status: TaskStatus;
+  status: TaskStatus; // сводный статус (по всем исполнителям)
   deadline?: string | null;
   assigneeId: string;
   creatorId: string;
   assignee: { id: string; fullName: string };
   creator: { id: string; fullName: string };
+  /** Всегда непустой: для старых задач бэкенд подставляет основного исполнителя */
+  assignments: TaskAssignment[];
   createdAt: string;
 }
 
@@ -190,7 +207,12 @@ export interface ScheduleEvent {
 
 export interface NotificationItem {
   id: string;
-  type: 'NEW_LEAD' | 'NEW_TASK' | 'ORDER_STATUS_CHANGED' | 'REPORT_SENT';
+  type:
+    | 'NEW_LEAD'
+    | 'NEW_TASK'
+    | 'TASK_STATUS_CHANGED'
+    | 'ORDER_STATUS_CHANGED'
+    | 'REPORT_SENT';
   title: string;
   message: string;
   isRead: boolean;
