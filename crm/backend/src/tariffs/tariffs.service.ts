@@ -1,16 +1,37 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { CleaningType } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
+import { AuditAction, CleaningType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import {
+  CreateExtraDto,
+  CreateTariffDto,
+  UpdateExtraDto,
+  UpdateTariffDto,
+} from './dto/tariff.dto';
 
-/** Дефолтные цены услуг — применяются один раз при первичной инициализации */
+/**
+ * Базовые услуги компании. Заводятся один раз при первом запуске.
+ * Помечаются isSystem: ключ и единицу измерения у них менять нельзя, удалять нельзя —
+ * на них завязаны калькулятор лендинга и все ранее оформленные заказы.
+ */
 const TARIFF_DEFAULTS: {
-  key: CleaningType;
+  key: string;
   title: string;
   light: number;
   medium: number;
   heavy: number;
   hasLevels: boolean;
   unit: string;
+  sortOrder: number;
 }[] = [
   {
     key: CleaningType.GENERAL,
@@ -20,6 +41,7 @@ const TARIFF_DEFAULTS: {
     heavy: 29,
     hasLevels: true,
     unit: 'м²',
+    sortOrder: 0,
   },
   {
     key: CleaningType.POST_RENOVATION,
@@ -29,6 +51,7 @@ const TARIFF_DEFAULTS: {
     heavy: 35,
     hasLevels: true,
     unit: 'м²',
+    sortOrder: 1,
   },
   {
     key: CleaningType.FURNITURE,
@@ -38,28 +61,26 @@ const TARIFF_DEFAULTS: {
     heavy: 70,
     hasLevels: false,
     unit: 'место',
+    sortOrder: 2,
   },
 ];
 
-/** Порядок вывода услуг */
-const KEY_ORDER: CleaningType[] = [
-  CleaningType.GENERAL,
-  CleaningType.POST_RENOVATION,
-  CleaningType.FURNITURE,
-];
+const SYSTEM_KEYS = TARIFF_DEFAULTS.map((d) => d.key);
+const MAX_PRICE = 2_000_000_000;
 
 @Injectable()
 export class TariffsService implements OnModuleInit {
   private readonly logger = new Logger('Tariffs');
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   /**
-   * Первичная инициализация тарифов:
-   * - создаём отсутствующие услуги (в т.ч. новую «Мойка мягкой мебели»);
-   * - переносим старые тарифы на цены по степеням загрязнения;
-   * - удаляем закрытую услугу «Поддерживающая».
-   * Идемпотентно: цены, изменённые руководителем, не перезаписываются.
+   * Первичная инициализация: создаём отсутствующие базовые услуги и переносим
+   * старые тарифы на цены по степеням загрязнения.
+   * Идемпотентно — цены, изменённые директором, не перезаписываются.
    */
   async onModuleInit() {
     try {
@@ -67,6 +88,7 @@ export class TariffsService implements OnModuleInit {
         const existing = await this.prisma.tariff.findUnique({
           where: { key: d.key },
         });
+
         if (!existing) {
           await this.prisma.tariff.create({
             data: {
@@ -78,95 +100,359 @@ export class TariffsService implements OnModuleInit {
               priceHeavy: d.heavy,
               hasLevels: d.hasLevels,
               unit: d.unit,
+              sortOrder: d.sortOrder,
+              isSystem: true,
             },
           });
-          this.logger.log(`Тариф создан: ${d.title}`);
-        } else if (
+          this.logger.log(`Услуга создана: ${d.title}`);
+          continue;
+        }
+
+        // старая строка без цен по уровням — разовый перенос
+        const needsLevels =
           existing.priceLight === 0 &&
           existing.priceMedium === 0 &&
           existing.priceHeavy === 0 &&
-          existing.pricePerSqm > 0 // только настоящая legacy-строка (не «обнулённая» вручную)
-        ) {
-          // старый тариф без цен по уровням — первичная миграция
+          existing.pricePerSqm > 0;
+
+        if (needsLevels || !existing.isSystem) {
           await this.prisma.tariff.update({
             where: { key: d.key },
             data: {
-              title: d.title,
-              pricePerSqm: d.medium,
-              priceLight: d.light,
-              priceMedium: d.medium,
-              priceHeavy: d.heavy,
-              hasLevels: d.hasLevels,
-              unit: d.unit,
+              isSystem: true,
+              ...(needsLevels
+                ? {
+                    title: d.title,
+                    pricePerSqm: d.medium,
+                    priceLight: d.light,
+                    priceMedium: d.medium,
+                    priceHeavy: d.heavy,
+                    hasLevels: d.hasLevels,
+                    unit: d.unit,
+                  }
+                : {}),
             },
           });
-          this.logger.log(`Тариф обновлён на уровни цен: ${d.title}`);
         }
       }
-      // «Поддерживающая» закрыта — удаляем из тарифов (старые заказы не трогаем)
-      await this.prisma.tariff.deleteMany({
+
+      // «Поддерживающая» как услуга закрыта — прячем, но не удаляем:
+      // на неё ссылаются старые заказы, и их история должна читаться
+      await this.prisma.tariff.updateMany({
         where: { key: CleaningType.MAINTENANCE },
+        data: { isActive: false, isSystem: true },
       });
     } catch (e) {
-      this.logger.error('Инициализация тарифов не удалась', e as any);
+      this.logger.error('Инициализация услуг не удалась', e as any);
     }
   }
 
-  /** Текущие тарифы и доп. услуги (используется CRM и лендингом) */
+  private num(v: unknown): number {
+    return Math.min(Math.max(0, Math.round(Number(v) || 0)), MAX_PRICE);
+  }
+
+  // ─────────────────────── Чтение ───────────────────────
+
+  /**
+   * Действующие услуги и доп. услуги.
+   * Используется и CRM, и калькулятором лендинга (эндпоинт публичный),
+   * поэтому отдаём только активные и неудалённые.
+   */
   async getAll() {
     const [tariffs, extras] = await Promise.all([
-      this.prisma.tariff.findMany({ where: { key: { in: KEY_ORDER } } }),
-      this.prisma.extraService.findMany({ orderBy: { price: 'asc' } }),
+      this.prisma.tariff.findMany({
+        where: { ...NOT_DELETED, isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
+      }),
+      this.prisma.extraService.findMany({
+        where: { ...NOT_DELETED, isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { price: 'asc' }],
+      }),
     ]);
-    tariffs.sort((a, b) => KEY_ORDER.indexOf(a.key) - KEY_ORDER.indexOf(b.key));
     return { tariffs, extras };
   }
 
-  updateTariff(
-    key: CleaningType,
-    prices: {
-      priceLight?: number;
-      priceMedium?: number;
-      priceHeavy?: number;
-      /** legacy-формат старого фронтенда (на время деплоя) */
-      pricePerSqm?: number;
-    },
-  ) {
-    const num = (v: unknown) =>
-      Math.min(Math.max(0, Math.round(Number(v) || 0)), 2_000_000_000);
-    // ЧАСТИЧНОЕ обновление: трогаем только переданные поля, чтобы
-    // отсутствующие уровни цен НЕ обнулялись.
-    const data: {
-      priceLight?: number;
-      priceMedium?: number;
-      priceHeavy?: number;
-      pricePerSqm?: number;
-    } = {};
-    const anyLevel =
-      prices.priceLight !== undefined ||
-      prices.priceMedium !== undefined ||
-      prices.priceHeavy !== undefined;
-    if (prices.priceLight !== undefined) data.priceLight = num(prices.priceLight);
-    if (prices.priceMedium !== undefined) {
-      data.priceMedium = num(prices.priceMedium);
-      data.pricePerSqm = num(prices.priceMedium); // legacy-поле = средняя цена
+  /** Полный список для управления услугами — вместе со скрытыми */
+  async getAllForAdmin() {
+    const [tariffs, extras] = await Promise.all([
+      this.prisma.tariff.findMany({
+        where: NOT_DELETED,
+        orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
+      }),
+      this.prisma.extraService.findMany({
+        where: NOT_DELETED,
+        orderBy: [{ sortOrder: 'asc' }, { price: 'asc' }],
+      }),
+    ]);
+    return { tariffs, extras };
+  }
+
+  // ─────────────────────── Услуги ───────────────────────
+
+  async createTariff(user: AuthUser, dto: CreateTariffDto) {
+    const key = dto.key.trim().toUpperCase();
+
+    const clash = await this.prisma.tariff.findUnique({ where: { key } });
+    if (clash) {
+      throw new ConflictException(
+        clash.deletedAt
+          ? 'Услуга с таким ключом лежит в корзине — восстановите её или выберите другой ключ'
+          : 'Услуга с таким ключом уже есть',
+      );
     }
-    if (prices.priceHeavy !== undefined) data.priceHeavy = num(prices.priceHeavy);
-    // Старый клиент прислал только pricePerSqm — заполняем все уровни им.
-    if (!anyLevel && prices.pricePerSqm !== undefined) {
-      const v = num(prices.pricePerSqm);
+
+    const hasLevels = dto.hasLevels ?? true;
+    const medium = this.num(dto.priceMedium);
+    const light = hasLevels ? this.num(dto.priceLight ?? medium) : medium;
+    const heavy = hasLevels ? this.num(dto.priceHeavy ?? medium) : medium;
+
+    const created = await this.prisma.tariff.create({
+      data: {
+        key,
+        title: dto.title.trim(),
+        description: dto.description?.trim() || null,
+        unit: dto.unit?.trim() || 'м²',
+        hasLevels,
+        priceLight: light,
+        priceMedium: medium,
+        priceHeavy: heavy,
+        pricePerSqm: medium, // legacy-поле держим равным средней цене
+        sortOrder: dto.sortOrder ?? 100,
+        isActive: dto.isActive ?? true,
+        isSystem: false,
+      },
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SERVICE',
+      entityId: created.id,
+      entityTitle: created.title,
+      action: AuditAction.CREATE,
+      summary: `Добавлена услуга «${created.title}» (${created.priceMedium} с/${created.unit})`,
+    });
+    return created;
+  }
+
+  async updateTariff(user: AuthUser, key: string, dto: UpdateTariffDto) {
+    const before = await this.prisma.tariff.findFirst({
+      where: { key, ...NOT_DELETED },
+    });
+    if (!before) throw new NotFoundException('Услуга не найдена');
+
+    const data: Prisma.TariffUpdateInput = {};
+
+    if (dto.title !== undefined) data.title = dto.title.trim();
+    if (dto.description !== undefined) {
+      data.description = dto.description.trim() || null;
+    }
+    if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+
+    // У базовой услуги единицу измерения менять нельзя: на неё опирается
+    // калькулятор лендинга и расчёт всех прошлых заказов
+    if (dto.unit !== undefined) {
+      if (before.isSystem && dto.unit.trim() !== before.unit) {
+        throw new BadRequestException(
+          'У базовой услуги нельзя менять единицу измерения',
+        );
+      }
+      data.unit = dto.unit.trim() || before.unit;
+    }
+    if (dto.hasLevels !== undefined) data.hasLevels = dto.hasLevels;
+
+    // Частичное обновление цен: не переданные уровни НЕ обнуляем
+    const anyLevel =
+      dto.priceLight !== undefined ||
+      dto.priceMedium !== undefined ||
+      dto.priceHeavy !== undefined;
+
+    if (dto.priceLight !== undefined) data.priceLight = this.num(dto.priceLight);
+    if (dto.priceMedium !== undefined) {
+      data.priceMedium = this.num(dto.priceMedium);
+      data.pricePerSqm = this.num(dto.priceMedium);
+    }
+    if (dto.priceHeavy !== undefined) data.priceHeavy = this.num(dto.priceHeavy);
+
+    // Старый фронтенд шлёт одну цену — раскладываем её на все уровни
+    if (!anyLevel && dto.pricePerSqm !== undefined) {
+      const v = this.num(dto.pricePerSqm);
       data.priceLight = v;
       data.priceMedium = v;
       data.priceHeavy = v;
       data.pricePerSqm = v;
     }
-    return this.prisma.tariff.update({ where: { key }, data });
+
+    const after = await this.prisma.tariff.update({ where: { key }, data });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SERVICE',
+      entityId: after.id,
+      entityTitle: after.title,
+      action: AuditAction.UPDATE,
+      changes: this.audit.diff(before, after, [
+        'title',
+        'description',
+        'unit',
+        'hasLevels',
+        'priceLight',
+        'priceMedium',
+        'priceHeavy',
+        'sortOrder',
+        'isActive',
+      ]),
+    });
+    return after;
   }
 
-  updateExtra(key: string, price: number) {
-    return this.prisma.extraService.update({
-      where: { key },
-      data: { price: Math.max(0, Math.round(Number(price) || 0)) },
+  async removeTariff(user: AuthUser, key: string, reason?: string) {
+    const tariff = await this.prisma.tariff.findFirst({
+      where: { key, ...NOT_DELETED },
     });
+    if (!tariff) throw new NotFoundException('Услуга не найдена');
+    if (tariff.isSystem) {
+      throw new BadRequestException(
+        'Базовую услугу удалить нельзя — её можно только скрыть',
+      );
+    }
+
+    // Заказы на удалённую услугу остаются: услуга уходит в корзину,
+    // а история заказов продолжает читаться по снапшоту serviceKey
+    const used = await this.prisma.order.count({
+      where: { serviceKey: key, ...NOT_DELETED },
+    });
+
+    const removed = await this.prisma.tariff.update({
+      where: { key },
+      data: { ...softDeleteData(user, reason), isActive: false },
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SERVICE',
+      entityId: removed.id,
+      entityTitle: removed.title,
+      action: AuditAction.DELETE,
+      summary: used
+        ? `Услуга перенесена в корзину (использована в ${used} заказах)`
+        : 'Услуга перенесена в корзину',
+    });
+    return { ok: true, ordersAffected: used };
+  }
+
+  // ──────────────────── Доп. услуги ────────────────────
+
+  async createExtra(user: AuthUser, dto: CreateExtraDto) {
+    const key = dto.key.trim().toLowerCase();
+
+    const clash = await this.prisma.extraService.findUnique({ where: { key } });
+    if (clash) {
+      throw new ConflictException(
+        clash.deletedAt
+          ? 'Доп. услуга с таким ключом лежит в корзине — восстановите её или выберите другой ключ'
+          : 'Доп. услуга с таким ключом уже есть',
+      );
+    }
+
+    const created = await this.prisma.extraService.create({
+      data: {
+        key,
+        title: dto.title.trim(),
+        price: this.num(dto.price),
+        hasQty: dto.hasQty ?? false,
+        sortOrder: dto.sortOrder ?? 100,
+        isActive: dto.isActive ?? true,
+        isSystem: false,
+      },
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SERVICE',
+      entityId: created.id,
+      entityTitle: created.title,
+      action: AuditAction.CREATE,
+      summary: `Добавлена доп. услуга «${created.title}» (${created.price} с)`,
+    });
+    return created;
+  }
+
+  async updateExtra(user: AuthUser, key: string, dto: UpdateExtraDto) {
+    const before = await this.prisma.extraService.findFirst({
+      where: { key, ...NOT_DELETED },
+    });
+    if (!before) throw new NotFoundException('Доп. услуга не найдена');
+
+    const data: Prisma.ExtraServiceUpdateInput = {};
+    if (dto.title !== undefined) data.title = dto.title.trim();
+    if (dto.price !== undefined) data.price = this.num(dto.price);
+    if (dto.hasQty !== undefined) data.hasQty = dto.hasQty;
+    if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+
+    const after = await this.prisma.extraService.update({
+      where: { key },
+      data,
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SERVICE',
+      entityId: after.id,
+      entityTitle: after.title,
+      action: AuditAction.UPDATE,
+      changes: this.audit.diff(before, after, [
+        'title',
+        'price',
+        'hasQty',
+        'sortOrder',
+        'isActive',
+      ]),
+    });
+    return after;
+  }
+
+  async removeExtra(user: AuthUser, key: string, reason?: string) {
+    const extra = await this.prisma.extraService.findFirst({
+      where: { key, ...NOT_DELETED },
+    });
+    if (!extra) throw new NotFoundException('Доп. услуга не найдена');
+    if (extra.isSystem) {
+      throw new BadRequestException(
+        'Базовую доп. услугу удалить нельзя — её можно только скрыть',
+      );
+    }
+
+    const removed = await this.prisma.extraService.update({
+      where: { key },
+      data: { ...softDeleteData(user, reason), isActive: false },
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SERVICE',
+      entityId: removed.id,
+      entityTitle: removed.title,
+      action: AuditAction.DELETE,
+      summary: 'Доп. услуга перенесена в корзину',
+    });
+    return { ok: true };
+  }
+
+  /** История изменений услуги (ТЗ 2) */
+  async history(key: string) {
+    const tariff = await this.prisma.tariff.findUnique({ where: { key } });
+    const extra = tariff
+      ? null
+      : await this.prisma.extraService.findUnique({ where: { key } });
+    const id = tariff?.id ?? extra?.id;
+    if (!id) throw new NotFoundException('Услуга не найдена');
+    return this.audit.forEntity('SERVICE', id);
+  }
+
+  /** Список системных ключей — нужен другим модулям для проверок */
+  static get systemKeys(): string[] {
+    return SYSTEM_KEYS;
   }
 }

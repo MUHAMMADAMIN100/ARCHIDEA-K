@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -50,8 +50,12 @@ export class UsersController {
 
   @Roles(Role.DIRECTOR)
   @Patch(':id/active')
-  setActive(@Param('id') id: string, @Body('isActive') isActive: boolean) {
-    return this.service.setActive(id, isActive);
+  setActive(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body('isActive') isActive: boolean,
+  ) {
+    return this.service.setActive(id, isActive, user);
   }
 
   @Roles(Role.DIRECTOR)
@@ -63,23 +67,25 @@ export class UsersController {
   @Roles(Role.DIRECTOR)
   @Patch(':id')
   update(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body()
-    dto: {
-      fullName?: string;
-      login?: string;
-      phone?: string;
-      position?: string;
-      duties?: string;
-      mainTask?: string;
-      role?: Role;
-      canManageOps?: boolean;
-      acceptsLeads?: boolean;
-      isActive?: boolean;
-      password?: string;
-    },
+    @Body() dto: UpdateUserDto,
   ) {
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, user);
+  }
+
+  /** История изменений сотрудника (ТЗ 2) */
+  @Roles(Role.DIRECTOR)
+  @Get(':id/history')
+  history(@Param('id') id: string) {
+    return this.service.history(id);
+  }
+
+  /** Что этот сотрудник менял в системе (ТЗ 2) */
+  @Roles(Role.DIRECTOR)
+  @Get(':id/activity')
+  activity(@Param('id') id: string) {
+    return this.service.activity(id);
   }
 
   // Карточка сотрудника / профиль (руководитель — любой, сотрудник — себя)

@@ -26,8 +26,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: { sub: string; ep?: number }): Promise<AuthUser> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+    const user = await this.prisma.user.findFirst({
+      // deletedAt: null — сотрудник, отправленный в корзину, войти не может
+      where: { id: payload.sub, deletedAt: null },
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Пользователь не найден или отключён');
@@ -43,6 +44,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role,
       fullName: user.fullName,
       canManageOps: user.canManageOps,
+      canManageTasks: user.canManageTasks,
     };
   }
 }

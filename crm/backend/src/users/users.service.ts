@@ -4,13 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FunnelStage, Role } from '@prisma/client';
+import { AuditAction, FunnelStage, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
 import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
+import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { CreateUserDto } from './dto/create-user.dto';
 
 /**
@@ -38,16 +40,26 @@ const SAFE_SELECT = {
   duties: true,
   mainTask: true,
   canManageOps: true,
+  /** ТЗ 1.2 — полный доступ к модулю задач */
+  canManageTasks: true,
+  /** ТЗ 10 — личные уведомления в Telegram */
+  telegramChatId: true,
+  telegramEnabled: true,
+  acceptsLeads: true,
   isActive: true,
   createdAt: true,
 };
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   findAll() {
     return this.prisma.user.findMany({
+      where: NOT_DELETED,
       select: SAFE_SELECT,
       orderBy: { createdAt: 'asc' },
     });
@@ -55,7 +67,7 @@ export class UsersService {
 
   findManagers() {
     return this.prisma.user.findMany({
-      where: { role: Role.MANAGER },
+      where: { ...NOT_DELETED, role: Role.MANAGER },
       select: SAFE_SELECT,
       orderBy: { fullName: 'asc' },
     });
@@ -211,12 +223,18 @@ export class UsersService {
       mainTask?: string;
       role?: Role;
       canManageOps?: boolean;
+      canManageTasks?: boolean;
       acceptsLeads?: boolean;
       isActive?: boolean;
       password?: string;
+      telegramChatId?: string | null;
+      telegramEnabled?: boolean;
     },
+    actor?: AuthUser,
   ) {
-    const exists = await this.prisma.user.findUnique({ where: { id } });
+    const exists = await this.prisma.user.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
     if (!exists) throw new NotFoundException('Сотрудник не найден');
 
     const data: any = {};
@@ -226,7 +244,16 @@ export class UsersService {
     if (dto.duties !== undefined) data.duties = dto.duties || null;
     if (dto.mainTask !== undefined) data.mainTask = dto.mainTask || null;
     if (dto.canManageOps !== undefined) data.canManageOps = dto.canManageOps;
+    if (dto.canManageTasks !== undefined) {
+      data.canManageTasks = dto.canManageTasks;
+    }
     if (dto.acceptsLeads !== undefined) data.acceptsLeads = dto.acceptsLeads;
+    if (dto.telegramChatId !== undefined) {
+      data.telegramChatId = dto.telegramChatId?.trim() || null;
+    }
+    if (dto.telegramEnabled !== undefined) {
+      data.telegramEnabled = dto.telegramEnabled;
+    }
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.login) {
@@ -246,21 +273,57 @@ export class UsersService {
       data.sessionEpoch = { increment: 1 };
     }
 
-    return this.prisma.user.update({
+    const after = await this.prisma.user.update({
       where: { id },
       data,
       select: SAFE_SELECT,
     });
+
+    await this.audit.log(this.prisma, {
+      user: actor ?? null,
+      entity: 'USER',
+      entityId: id,
+      entityTitle: after.fullName,
+      action: AuditAction.UPDATE,
+      // значения паролей и служебных полей сессии маскируются самим журналом
+      changes: this.audit.diff(exists as any, { ...exists, ...data } as any, [
+        'fullName',
+        'login',
+        'phone',
+        'position',
+        'duties',
+        'mainTask',
+        'role',
+        'canManageOps',
+        'canManageTasks',
+        'acceptsLeads',
+        'isActive',
+        'passwordHash',
+        'telegramEnabled',
+      ]),
+    });
+    return after;
   }
 
-  async setActive(id: string, isActive: boolean) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+  async setActive(id: string, isActive: boolean, actor?: AuthUser) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
     if (!user) throw new NotFoundException('Пользователь не найден');
-    return this.prisma.user.update({
+    const after = await this.prisma.user.update({
       where: { id },
       data: { isActive },
       select: SAFE_SELECT,
     });
+    await this.audit.log(this.prisma, {
+      user: actor ?? null,
+      entity: 'USER',
+      entityId: id,
+      entityTitle: user.fullName,
+      action: AuditAction.UPDATE,
+      summary: isActive ? 'Доступ включён' : 'Доступ отключён',
+    });
+    return after;
   }
 
   /** Удаление сотрудника (директор). Нельзя удалить свой аккаунт. */
@@ -268,7 +331,9 @@ export class UsersService {
     if (requester.id === id) {
       throw new BadRequestException('Нельзя удалить свой аккаунт');
     }
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
     if (!user) throw new NotFoundException('Сотрудник не найден');
 
     // Задача каскадом привязана к основному исполнителю и к постановщику.
@@ -297,8 +362,39 @@ export class UsersService {
       data: { creatorId: requester.id },
     });
 
-    // клиенты/заказы/клинеры отвяжутся (managerId → null)
-    await this.prisma.user.delete({ where: { id } });
+    /*
+     * Сотрудник уходит в корзину, а не стирается: физическое удаление сносило
+     * каскадом его платёжные ведомости, включая уже принятые — то есть
+     * финансовый архив, по которому выплачены деньги.
+     * Заодно снимаем доступ и гасим все его сессии.
+     */
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...softDeleteData(requester),
+        isActive: false,
+        sessionEpoch: { increment: 1 },
+      },
+    });
+
+    await this.audit.log(this.prisma, {
+      user: requester,
+      entity: 'USER',
+      entityId: id,
+      entityTitle: user.fullName,
+      action: AuditAction.DELETE,
+      summary: 'Сотрудник перенесён в корзину, доступ отключён',
+    });
     return { ok: true };
+  }
+
+  /** История изменений по сотруднику (ТЗ 2) */
+  history(id: string) {
+    return this.audit.forEntity('USER', id);
+  }
+
+  /** Что этот сотрудник менял в системе (ТЗ 2) */
+  activity(id: string) {
+    return this.audit.byActor(id);
   }
 }

@@ -80,8 +80,19 @@ export class OrdersController {
     return this.service.assignCleaners(user, id, dto);
   }
 
+  /** Удаление переносит заказ в корзину (ТЗ 6), а не стирает его */
   @Delete(':id')
-  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.service.remove(user, id);
+  remove(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('reason') reason?: string,
+  ) {
+    return this.service.remove(user, id, reason);
+  }
+
+  /** История изменений заказа (ТЗ 2) */
+  @Get(':id/history')
+  history(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.service.history(user, id);
   }
 }

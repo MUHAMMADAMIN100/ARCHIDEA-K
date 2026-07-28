@@ -69,7 +69,7 @@ export class PayrollController {
   }
 
   @Delete('fines/:id')
-  removeFine(@Param('id') id: string) {
-    return this.service.removeFine(id);
+  removeFine(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.service.removeFine(user, id);
   }
 }

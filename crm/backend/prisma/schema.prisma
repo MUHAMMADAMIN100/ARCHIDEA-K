@@ -95,6 +95,92 @@ enum NotificationType {
   TASK_STATUS_CHANGED // исполнитель сменил статус задачи (постановщику)
   ORDER_STATUS_CHANGED // смена статуса крупного заказа (руководителю)
   REPORT_SENT // менеджер отправил платёжную ведомость (руководителю)
+  ORDER_PREFERENCES // заказ с учётом предпочтений клиента (ТЗ 10.2)
+  REMINDER_DUE // пора перезвонить клиенту (ТЗ 10.1)
+  PROPOSAL_SENT // коммерческое предложение отправлено (ТЗ 9.2)
+  CHECKLIST_DONE // чек-лист по заказу закрыт (ТЗ 8)
+  SHIFT_CLOSED // смена закрыта (ТЗ 4)
+  BONUS_ACCRUED // начислена премия (ТЗ 7.2)
+}
+
+/// Действие в журнале изменений (ТЗ 2)
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE // перенос в корзину
+  RESTORE // возврат из корзины
+  PURGE // безвозвратное удаление
+  STAGE_CHANGE // смена этапа воронки
+}
+
+/// Состояние выезда бригады на объект (ТЗ 4)
+enum ShiftGroupStatus {
+  PLANNED // запланирован
+  IN_PROGRESS // в работе
+  CLOSED // закрыт, данные заархивированы
+}
+
+/// Тип финансовой записи (ТЗ 7.1)
+enum FinanceKind {
+  INCOME // доход
+  EXPENSE // расход
+}
+
+/// Как появилась финансовая запись
+enum FinanceSource {
+  AUTO // создана системой (оплаченный заказ, принятая ведомость, премия)
+  MANUAL // внесена вручную
+}
+
+/// Статья доходов и расходов (ТЗ 7.1)
+enum FinanceCategory {
+  ORDER_PAYMENT // оплата заказа
+  OTHER_INCOME // прочий доход
+  SALARY // выплаты сотрудникам
+  BONUS // премии
+  SUPPLIES // расходные материалы и инвентарь
+  TRANSPORT // транспорт
+  RENT // аренда
+  MARKETING // реклама и продвижение
+  TAX // налоги и сборы
+  OTHER_EXPENSE // прочий расход
+}
+
+/// Состояние чек-листа по заказу (ТЗ 8)
+enum ChecklistStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+/// Состояние коммерческого предложения (ТЗ 9)
+enum ProposalStatus {
+  DRAFT // черновик
+  SENT // отправлено клиенту
+  ACCEPTED // принято
+  REJECTED // отклонено
+}
+
+/// Состояние напоминания о звонке (ТЗ 10.1)
+enum ReminderStatus {
+  PENDING // ждёт своего часа
+  SENT // уведомление отправлено
+  DONE // менеджер отметил, что позвонил
+  CANCELLED // отменено
+}
+
+/// Откуда взялось напоминание
+enum ReminderSource {
+  MANUAL // поставлено вручную
+  PREORDER // предзаказ («перезвонить через N времени»)
+}
+
+/// Состояние сообщения в очереди Telegram
+enum TelegramStatus {
+  PENDING // ждёт отправки
+  SENDING // отправляется
+  SENT // доставлено
+  FAILED // исчерпаны попытки
 }
 
 /// Статус платёжной ведомости (отчёта по объекту)
@@ -125,9 +211,22 @@ model User {
   mainTask     String? // основная задача сотрудника
   acceptsLeads Boolean  @default(true) // участвует в авто-распределении заявок с сайта
   canManageOps Boolean  @default(false) // расширенный доступ: как директор, но без финансов
+  /// ТЗ 1.2 — полный доступ к модулю задач: видит, создаёт, назначает и правит
+  /// ВСЕ задачи компании, а не только свои (у Ироды)
+  canManageTasks Boolean @default(false)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // ── Уведомления в Telegram (ТЗ 10) ──
+  /// Личный chat_id: сотрудник один раз пишет боту, директор вносит id в карточке
+  telegramChatId  String?
+  telegramEnabled Boolean @default(true)
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
 
   // ── Безопасность входа ──
   /// Неудачных попыток подряд (сбрасывается при успешном входе)
@@ -148,6 +247,8 @@ model User {
   schedule      ScheduleEvent[]
   notifications Notification[]
   reports       Report[]        @relation("ReportManager")
+
+  @@index([deletedAt])
 }
 
 /// Клинер — член бригады. НЕ имеет доступа в CRM.
@@ -167,9 +268,17 @@ model Cleaner {
   shifts     Shift[]
   fines      Fine[]
   reportRows ReportWorker[]
+  groupMemberships ShiftGroupMember[] // участие в выездах (ТЗ 4)
+  bonuses    Bonus[] // премии (ТЗ 7.2)
   createdAt  DateTime       @default(now())
 
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
   @@index([brigadeId])
+  @@index([deletedAt])
 }
 
 /// Бригада клинеров (у бригады есть бригадир с повышенной ставкой)
@@ -182,7 +291,10 @@ model Brigade {
   createdAt DateTime  @default(now())
 }
 
-/// Смена клинера (учёт по датам → расчёт выплат)
+/// Смена клинера — ЕДИНИЦА ОПЛАТЫ: один клинер, один оплаченный день.
+/// Ограничение @@unique([cleanerId, date]) сохранено намеренно: оно защищает от
+/// двойного начисления и на него опирается reports.service (skipDuplicates).
+/// Состав и адрес выезда живут в ShiftGroup — выездов за день может быть несколько.
 model Shift {
   id        String   @id @default(cuid())
   date      DateTime // день смены (00:00 UTC)
@@ -190,10 +302,77 @@ model Shift {
   cleanerId String
   rate      Int // ставка на момент смены (снапшот — не меняется задним числом)
   note      String? // объект/комментарий
+  /// Выезд, который породил эту оплачиваемую смену (ТЗ 4)
+  group     ShiftGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId   String?
   createdAt DateTime @default(now())
 
   @@unique([cleanerId, date])
   @@index([date])
+  @@index([groupId])
+}
+
+/// Выезд бригады на объект: адрес, время, состав группы, ответственный менеджер.
+/// Отвечает на вопрос ТЗ 4 «куда выезжали, когда и с кем».
+model ShiftGroup {
+  id      String           @id @default(cuid())
+  date    DateTime // календарный день выезда (00:00 UTC)
+  address String // точный адрес объекта — обязателен
+  order   Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId String?
+  startTime String? // «09:30» — местное время Душанбе
+  endTime   String?
+  status    ShiftGroupStatus @default(PLANNED)
+
+  // бригада и ответственные — снапшот-ссылки: состав может смениться, история нет
+  brigadeId     String?
+  brigadeName   String?
+  brigadierId   String?
+  brigadierName String?
+  managerId     String?
+  managerName   String?
+
+  note String?
+
+  // ── Архив при закрытии смены (ТЗ 4) ──
+  closedAt       DateTime?
+  closedById     String?
+  closedByName   String?
+  /// Неизменяемый слепок на момент закрытия: адрес, дата, время, состав, ставки
+  closedSnapshot Json?
+
+  members ShiftGroupMember[]
+  shifts  Shift[] // оплачиваемые смены, порождённые этим выездом
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([date])
+  @@index([orderId])
+  @@index([status, date])
+  @@index([deletedAt])
+}
+
+/// Участник выезда — «кто с кем поехал» (ТЗ 4)
+model ShiftGroupMember {
+  id        String     @id @default(cuid())
+  group     ShiftGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId   String
+  cleaner   Cleaner    @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  cleanerId String
+  fullName  String // снапшот ФИО
+  role      String     @default("Клинер") // «Бригадир» / «Клинер» на этом выезде
+  rate      Int // снапшот ставки
+  createdAt DateTime   @default(now())
+
+  @@unique([groupId, cleanerId])
+  @@index([cleanerId])
 }
 
 /// Штраф клинеру (сумма + причина, вычитается из выплат)
@@ -220,15 +399,35 @@ model Client {
   source        LeadSource  @default(SITE)
   tags          ClientTag[] @default([])
   notes         String? // комментарии и заметки менеджера
+  /// ТЗ 10.2 — постоянные предпочтения клиента (без запаха хлорки, есть кот, обувь снимать…)
+  preferences   String?
   lastContactAt DateTime    @default(now())
   manager       User?       @relation("ManagerClients", fields: [managerId], references: [id], onDelete: SetNull)
   managerId     String?
   orders        Order[]
+  proposals     Proposal[] // коммерческие предложения (ТЗ 9)
+  reminders     Reminder[] // напоминания перезвонить (ТЗ 10.1)
+
+  // ── Повторный клиент (ТЗ 9.4) ──
+  /// true со второго ОПЛАЧЕННОГО заказа
+  isRepeat        Boolean   @default(false)
+  paidOrdersCount Int       @default(0)
+  lastOrderAt     DateTime?
+
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
   @@index([managerId])
-  // @@index([phone]) убран: @unique на phone уже создаёт индекс
+  @@index([isRepeat])
+  @@index([deletedAt])
+  // @@index([phone]) убран: @unique на phone уже создаёт индекс.
+  // @unique СОХРАНЁН намеренно: клиент из корзины с тем же телефоном
+  // восстанавливается вместе со своей историей, а не дублируется.
 }
 
 /// Заказ / обращение — движется по воронке. История заказов клиента.
@@ -243,6 +442,9 @@ model Order {
 
   // параметры уборки (из калькулятора / анкеты)
   cleaningType   CleaningType @default(GENERAL)
+  /// ТЗ 1.1 — ключ услуги из Tariff.key. Позволяет заводить новые услуги, которых
+  /// нет в перечислении CleaningType. Для старых заказов = cleaningType.
+  serviceKey     String?
   dirtLevel      DirtLevel? // степень загрязнения (для уборки по м²)
   area           Int          @default(0)
   seats          Int? // посадочные места (для мойки мягкой мебели)
@@ -250,7 +452,9 @@ model Order {
   estimatedPrice Int          @default(0) // расчёт с сайта
   pricePerSqm    Int? // цена за м² (за место для мебели) — из чего сложилась цена
   finalPrice     Int? // итог после осмотра/КП
-  preferences    String? // предпочтения клиента (заполняет менеджер)
+  /// ТЗ 5 — сумму переписали руками, автоматический пересчёт её не трогает
+  isManualPrice  Boolean      @default(false)
+  preferences    String? // предпочтения клиента по этому заказу (заполняет менеджер)
 
   // данные анкеты с сайта
   preferredDate DateTime?
@@ -268,14 +472,26 @@ model Order {
 
   cleaners  Cleaner[] @relation("OrderCleaners") // назначенная команда
   reports   Report[]
+  shiftGroups    ShiftGroup[] // выезды по этому заказу (ТЗ 4)
+  checklist      OrderChecklist? // чек-лист качества (ТЗ 8)
+  proposals      Proposal[] // коммерческие предложения (ТЗ 9)
+  reminders      Reminder[] // напоминания (ТЗ 10.1)
+  financeEntries FinanceEntry[] // доходы и расходы по заказу (ТЗ 7.1)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   closedAt  DateTime?
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
 
   @@index([managerId])
   @@index([stage])
   @@index([clientId])
   @@index([stage, closedAt]) // выручка по периодам и подсчёт закрытых
+  @@index([serviceKey])
+  @@index([deletedAt])
 }
 
 /// Задача от руководителя менеджеру
@@ -297,7 +513,13 @@ model Task {
 
   assignments TaskAssignment[]
 
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
   @@index([assigneeId])
+  @@index([deletedAt])
 }
 
 /// Исполнитель задачи со своим статусом (в одной задаче их может быть несколько)
@@ -382,7 +604,9 @@ model Report {
   brigadierName String? // ответственный бригадир
   managerName   String? // ответственный менеджер (снапшот)
 
-  manager      User      @relation("ReportManager", fields: [managerId], references: [id], onDelete: Cascade)
+  /// Restrict, а не Cascade: удаление сотрудника не должно стирать ПРИНЯТЫЕ
+  /// платёжные ведомости — по ним уже выплачены деньги (финансовый архив)
+  manager      User      @relation("ReportManager", fields: [managerId], references: [id], onDelete: Restrict)
   managerId    String
   sentAt       DateTime?
   acceptedAt   DateTime?
@@ -394,8 +618,14 @@ model Report {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
   @@index([managerId, status])
   @@index([status])
+  @@index([deletedAt])
 }
 
 /// Строка таблицы работников ведомости
@@ -429,26 +659,356 @@ model ReportExpense {
   @@index([reportId])
 }
 
-/// Тариф — цены по типу уборки и степени загрязнения (управление руководителем)
+/// Услуга — цены по степени загрязнения (полное управление директором, ТЗ 1.1).
+/// key — строка, а не CleaningType: директор заводит НОВЫЕ услуги, которых нет
+/// в перечислении. Для трёх исходных услуг key совпадает со значением CleaningType.
 model Tariff {
-  id          String       @id @default(cuid())
-  key         CleaningType @unique
+  id          String   @id @default(cuid())
+  key         String   @unique
   title       String
+  description String?
   pricePerSqm Int // legacy: держим = priceMedium (старые клиенты API)
-  priceLight  Int          @default(0) // лёгкая степень загрязнения
-  priceMedium Int          @default(0) // средняя
-  priceHeavy  Int          @default(0) // тяжёлая
-  hasLevels   Boolean      @default(true) // false — одна цена (мягкая мебель: за место)
-  unit        String       @default("м²") // единица: «м²» или «место»
-  updatedAt   DateTime     @updatedAt
+  priceLight  Int      @default(0) // лёгкая степень загрязнения
+  priceMedium Int      @default(0) // средняя
+  priceHeavy  Int      @default(0) // тяжёлая
+  hasLevels   Boolean  @default(true) // false — одна цена (мягкая мебель: за место)
+  unit        String   @default("м²") // единица: «м²», «место», «шт»
+  /// Базовая услуга: ключ и единицу менять нельзя, удалять нельзя —
+  /// на них завязаны лендинг и старые заказы
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([isActive, sortOrder])
+  @@index([deletedAt])
 }
 
-/// Доп. услуга с фиксированной ценой (управление руководителем)
+/// Доп. услуга с фиксированной ценой (полное управление директором, ТЗ 1.1)
 model ExtraService {
   id        String   @id @default(cuid())
   key       String   @unique // windows / fridge / oven / ironing
   title     String
   price     Int
   hasQty    Boolean  @default(false)
+  isSystem  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
   updatedAt DateTime @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([isActive, sortOrder])
+  @@index([deletedAt])
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ТЗ 2 — Журнал изменений
+// ═══════════════════════════════════════════════════════════
+
+/// Кто, когда и что именно изменил. Пишется по всем ключевым сущностям.
+/// actorId — снапшот-ссылка без внешнего ключа (как LoginAttempt.userId и
+/// Fine.createdById): журнал переживает удаление сотрудника и не мешает ему.
+model AuditLog {
+  id          String      @id @default(cuid())
+  entity      String // ORDER | CLIENT | USER | SHIFT_GROUP | SERVICE | TASK | CLEANER | REPORT | FINANCE | BONUS | PROPOSAL | CHECKLIST | REMINDER
+  entityId    String
+  entityTitle String // снапшот названия объекта
+  action      AuditAction
+  summary     String? // человеческая фраза, напр. «Обработка → Оплачено»
+  /// [{ field, label, before, after }] — что именно поменялось
+  changes     Json?
+  actorId     String?
+  actorName   String // снапшот ФИО
+  ip          String?
+  createdAt   DateTime    @default(now())
+
+  @@index([entity, entityId, createdAt]) // история по объекту
+  @@index([actorId, createdAt]) // что делал сотрудник
+  @@index([createdAt]) // общая лента
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ТЗ 7 — Финансовый учёт
+// ═══════════════════════════════════════════════════════════
+
+/// Единая книга доходов и расходов компании (ТЗ 7.1)
+model FinanceEntry {
+  id       String          @id @default(cuid())
+  kind     FinanceKind
+  category FinanceCategory @default(OTHER_INCOME)
+  amount   Int // сомони, целое
+  date     DateTime // день операции (полночь по Душанбе, приведённая к UTC)
+  title    String
+  comment  String?
+  source   FinanceSource   @default(MANUAL)
+
+  /// Ключ идемпотентности автоматических записей, напр. order:<id>:income,
+  /// report:<id>:labor, bonus:<id>. У ручных записей NULL — в Postgres
+  /// NULL не конфликтует в UNIQUE, поэтому один индекс закрывает всё.
+  autoKey String? @unique
+
+  order        Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId      String?
+  clientId     String?
+  shiftGroupId String?
+  reportId     String?
+  bonusId      String?
+
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([kind, date])
+  @@index([category, date])
+  @@index([orderId])
+  @@index([deletedAt])
+}
+
+/// Премия сотруднику — только ручное начисление (ТЗ 7.2)
+model Bonus {
+  id            String    @id @default(cuid())
+  cleaner       Cleaner?  @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
+  cleanerId     String?
+  userId        String? // сотрудник CRM (снапшот-ссылка)
+  recipientName String // снапшот ФИО получателя
+  amount        Int
+  reason        String // за что начислена
+  periodFrom    DateTime?
+  periodTo      DateTime?
+  createdById   String // кто начислил
+  createdByName String
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([cleanerId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ТЗ 8 — Чек-листы контроля качества
+// ═══════════════════════════════════════════════════════════
+
+/// Шаблон чек-листа (обычно свой на каждый вид уборки)
+model ChecklistTemplate {
+  id           String                  @id @default(cuid())
+  name         String
+  cleaningType CleaningType? // null — подходит любому виду уборки
+  serviceKey   String? // ключ услуги из Tariff.key
+  isActive     Boolean                 @default(true)
+  items        ChecklistTemplateItem[]
+  createdById  String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([cleaningType])
+  @@index([deletedAt])
+}
+
+model ChecklistTemplateItem {
+  id         String            @id @default(cuid())
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  title      String
+  section    String? // «Кухня», «Санузел», «Комнаты»
+  required   Boolean           @default(false)
+  sortOrder  Int               @default(0)
+
+  @@index([templateId])
+}
+
+/// Чек-лист конкретного заказа — снапшот пунктов шаблона на момент применения.
+/// Правка шаблона задним числом не меняет уже выданные чек-листы.
+model OrderChecklist {
+  id           String               @id @default(cuid())
+  order        Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId      String               @unique
+  templateId   String?
+  templateName String
+  status       ChecklistStatus      @default(OPEN)
+  completedAt  DateTime?
+  items        OrderChecklistItem[]
+  createdById  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+}
+
+model OrderChecklistItem {
+  id          String         @id @default(cuid())
+  checklist   OrderChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  title       String
+  section     String?
+  required    Boolean        @default(false)
+  sortOrder   Int            @default(0)
+  isDone      Boolean        @default(false)
+  /// Отмечает менеджер или бригадир со своего аккаунта в CRM
+  doneById    String?
+  doneByName  String?
+  doneAt      DateTime?
+  comment     String?
+
+  @@index([checklistId])
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ТЗ 9 — Коммерческие предложения
+// ═══════════════════════════════════════════════════════════
+
+/// Шаблон КП. В тексте доступны подстановки вида {{client}}, {{phone}},
+/// {{address}}, {{area}}, {{pricePerSqm}}, {{total}}, {{manager}}, {{date}}, {{items}}
+model ProposalTemplate {
+  id         String     @id @default(cuid())
+  name       String
+  intro      String?
+  body       String
+  conditions String?
+  validDays  Int        @default(7)
+  isDefault  Boolean    @default(false)
+  isActive   Boolean    @default(true)
+  proposals  Proposal[]
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([deletedAt])
+}
+
+/// Отправленное КП. Данные клиента и заказа — снапшоты: предложение не должно
+/// меняться задним числом, если потом поправят клиента или заказ.
+model Proposal {
+  id     String         @id @default(cuid())
+  number Int            @default(autoincrement()) // человекочитаемый номер
+  status ProposalStatus @default(DRAFT)
+
+  client     Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId   String
+  order      Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId    String?
+  template   ProposalTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId String?
+
+  templateName String
+  clientName   String
+  clientPhone  String?
+  address      String?
+  area         Int?
+  pricePerSqm  Int?
+  total        Int     @default(0)
+  discount     Int     @default(0)
+  /// [{ title, volume, unitPrice, amount }]
+  items        Json?
+  bodySnapshot String
+
+  validUntil DateTime?
+
+  /// ТЗ 9.2 — кто отправил КП клиенту
+  sentById   String?
+  sentByName String?
+  sentAt     DateTime?
+
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([clientId, sentAt])
+  @@index([orderId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ТЗ 10 — Напоминания и Telegram
+// ═══════════════════════════════════════════════════════════
+
+/// Напоминание перезвонить клиенту, в том числе из предзаказа (ТЗ 10.1)
+model Reminder {
+  id       String  @id @default(cuid())
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+  order    Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId  String?
+
+  title    String
+  note     String?
+  remindAt DateTime
+
+  status ReminderStatus @default(PENDING)
+  source ReminderSource @default(MANUAL)
+
+  assigneeId   String // кому напомнить (User.id)
+  assigneeName String
+
+  createdById   String
+  createdByName String
+
+  sentAt    DateTime?
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([status, remindAt]) // что пора отправить
+  @@index([assigneeId, status]) // «мои напоминания»
+  @@index([clientId])
+  @@index([deletedAt])
+}
+
+/// Очередь исходящих сообщений Telegram.
+/// Отправка вынесена в очередь, чтобы таймаут Telegram не ронял бизнес-операцию,
+/// а перезапуск контейнера при деплое не терял уведомления.
+model TelegramMessage {
+  id        String         @id @default(cuid())
+  chatId    String
+  text      String
+  parseMode String?        @default("HTML")
+  status    TelegramStatus @default(PENDING)
+  attempts  Int            @default(0)
+  lastError String?
+  nextTryAt DateTime       @default(now())
+  sentAt    DateTime?
+  kind      String? // lead | order_preferences | reminder | proposal | shift_closed
+  refId     String?
+  createdAt DateTime       @default(now())
+
+  @@index([status, nextTryAt])
 }

@@ -34,8 +34,17 @@ export class ClientsController {
     @Query('source') source?: LeadSource,
     @Query('managerId') managerId?: string,
     @Query('sort') sort?: 'recent' | 'name',
+    @Query('repeat') repeat?: string,
   ) {
-    return this.service.list(user, { search, tag, source, managerId, sort });
+    return this.service.list(user, {
+      search,
+      tag,
+      source,
+      managerId,
+      sort,
+      // ТЗ 9.4 — фильтр «повторные клиенты»
+      repeat: repeat === 'true' || repeat === '1',
+    });
   }
 
   @Get('export')
@@ -66,8 +75,19 @@ export class ClientsController {
     return this.service.update(user, id, dto);
   }
 
+  /** Удаление переносит клиента и его заказы в корзину (ТЗ 6) */
   @Delete(':id')
-  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.service.remove(user, id);
+  remove(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('reason') reason?: string,
+  ) {
+    return this.service.remove(user, id, reason);
+  }
+
+  /** История изменений клиента (ТЗ 2) */
+  @Get(':id/history')
+  history(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.service.history(user, id);
   }
 }

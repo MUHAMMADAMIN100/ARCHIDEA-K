@@ -4,12 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ClientTag, LeadSource, Prisma, Role } from '@prisma/client';
+import { AuditAction, ClientTag, LeadSource, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
+import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto';
 
 /** Нормализуем телефон до цифр (для дедупликации) */
@@ -19,7 +21,10 @@ export function normalizePhone(phone: string): string {
 
 @Injectable()
 export class ClientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   /** Список с поиском/фильтром/сортировкой. Менеджер видит только своих. */
   async list(
@@ -30,14 +35,17 @@ export class ClientsService {
       source?: LeadSource;
       managerId?: string;
       sort?: 'recent' | 'name';
+      /** ТЗ 9.4 — только повторные клиенты */
+      repeat?: boolean;
     },
   ) {
-    const where: Prisma.ClientWhereInput = {};
+    const where: Prisma.ClientWhereInput = { ...NOT_DELETED };
     if (!seesAll(user)) where.managerId = user.id;
     else if (q.managerId) where.managerId = q.managerId;
 
     if (q.tag) where.tags = { has: q.tag };
     if (q.source) where.source = q.source;
+    if (q.repeat) where.isRepeat = true;
     if (q.search) {
       const term = q.search.trim();
       // по телефону ищем ТОЛЬКО если запрос похож на номер (цифры/+/-/()/пробел)
@@ -65,11 +73,12 @@ export class ClientsService {
   }
 
   async getOne(user: AuthUser, id: string) {
-    const client = await this.prisma.client.findUnique({
-      where: { id },
+    const client = await this.prisma.client.findFirst({
+      where: { id, ...NOT_DELETED },
       include: {
         manager: { select: { id: true, fullName: true } },
         orders: {
+          where: NOT_DELETED,
           orderBy: { createdAt: 'desc' },
           include: {
             cleaners: { select: { id: true, fullName: true } },
@@ -106,12 +115,18 @@ export class ClientsService {
     const fullName = (data.fullName || '').trim().slice(0, 120); // ограничение длины
     const existing = await this.prisma.client.findUnique({ where: { phone } });
     if (existing) {
-      // обновляем дату последнего контакта
-      await this.prisma.client.update({
+      // Клиент из корзины возвращается вместе со своей историей: телефон
+      // уникален, и заводить дубль на тот же номер нельзя.
+      const restored = await this.prisma.client.update({
         where: { id: existing.id },
-        data: { lastContactAt: new Date() },
+        data: {
+          lastContactAt: new Date(),
+          ...(existing.deletedAt
+            ? { deletedAt: null, deletedById: null, deleteReason: null }
+            : {}),
+        },
       });
-      return { client: existing, created: false };
+      return { client: restored, created: false };
     }
     const client = await this.prisma.client.create({
       data: {
@@ -156,12 +171,32 @@ export class ClientsService {
   }
 
   async update(user: AuthUser, id: string, dto: UpdateClientDto) {
-    await this.getOne(user, id); // проверка доступа
+    const before = await this.getOne(user, id); // проверка доступа
     const data: Prisma.ClientUpdateInput = { ...dto } as any;
     // переназначать менеджера может только тот, кто видит всю компанию
     if (!seesAll(user)) delete (data as any).managerId;
     if (dto.phone) (data as any).phone = normalizePhone(dto.phone);
-    return this.prisma.client.update({ where: { id }, data });
+
+    const after = await this.prisma.client.update({ where: { id }, data });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'CLIENT',
+      entityId: id,
+      entityTitle: after.fullName,
+      action: AuditAction.UPDATE,
+      changes: this.audit.diff(before as any, after as any, [
+        'fullName',
+        'phone',
+        'email',
+        'source',
+        'tags',
+        'notes',
+        'preferences',
+        'managerId',
+      ]),
+    });
+    return after;
   }
 
   async touch(id: string) {
@@ -171,17 +206,55 @@ export class ClientsService {
     });
   }
 
-  async remove(user: AuthUser, id: string) {
-    await this.getOne(user, id); // проверка доступа
-    await this.prisma.client.delete({ where: { id } }); // заказы — каскадно
+  /**
+   * Удаление переносит клиента в корзину (ТЗ 6) вместе с его заказами,
+   * коммерческими предложениями и напоминаниями. Физического удаления здесь
+   * больше нет: раньше каскад безвозвратно стирал всю историю заказов клиента,
+   * то есть и выручку по ним.
+   */
+  async remove(user: AuthUser, id: string, reason?: string) {
+    const client = await this.getOne(user, id); // проверка доступа
+
+    await this.prisma.$transaction(async (tx) => {
+      const stamp = softDeleteData(user, reason);
+      await tx.client.update({ where: { id }, data: stamp });
+      await tx.order.updateMany({
+        where: { clientId: id, ...NOT_DELETED },
+        data: stamp,
+      });
+      await tx.proposal.updateMany({
+        where: { clientId: id, ...NOT_DELETED },
+        data: stamp,
+      });
+      await tx.reminder.updateMany({
+        where: { clientId: id, ...NOT_DELETED },
+        data: stamp,
+      });
+
+      await this.audit.log(tx, {
+        user,
+        entity: 'CLIENT',
+        entityId: id,
+        entityTitle: client.fullName,
+        action: AuditAction.DELETE,
+        summary: `Перенесён в корзину вместе с заказами (${client.orders.length})`,
+      });
+    });
+
     return { ok: true };
+  }
+
+  /** История изменений клиента (ТЗ 2) */
+  async history(user: AuthUser, id: string) {
+    await this.getOne(user, id);
+    return this.audit.forEntity('CLIENT', id);
   }
 
   /** Экспорт в CSV */
   async exportCsv(user: AuthUser): Promise<string> {
     const where: Prisma.ClientWhereInput = seesAll(user)
-      ? {}
-      : { managerId: user.id };
+      ? { ...NOT_DELETED }
+      : { ...NOT_DELETED, managerId: user.id };
     const clients = await this.prisma.client.findMany({
       where,
       include: {

@@ -3,15 +3,27 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
+import { NOT_DELETED } from '../common/soft-delete';
+import {
+  dayUTC as toDayUTC,
+  formatDate,
+  todayDushanbe,
+} from '../common/time/dushanbe';
 
-/** «YYYY-MM-DD» → полночь UTC (одна смена = один календарный день) */
+/**
+ * «ГГГГ-ММ-ДД» → полночь UTC (одна смена = один календарный день).
+ * Расчёт живёт в common/time/dushanbe — здесь только проверка формата,
+ * чтобы кривая строка из формы не превращалась в Invalid Date.
+ */
 function dayUTC(dateStr: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw new BadRequestException('Неверный формат даты (ожидается YYYY-MM-DD)');
+    throw new BadRequestException('Неверный формат даты (ожидается ГГГГ-ММ-ДД)');
   }
-  return new Date(`${dateStr}T00:00:00.000Z`);
+  return toDayUTC(dateStr);
 }
 
 function rangeUTC(from?: string, to?: string) {
@@ -29,7 +41,10 @@ const cleanerSelect = {
 
 @Injectable()
 export class PayrollService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
   // ─────────────── СМЕНЫ ───────────────
 
@@ -62,7 +77,7 @@ export class PayrollService {
     const baseline = new Set(dto.baseline ?? []);
 
     const cleaners = await this.prisma.cleaner.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ...NOT_DELETED },
       select: { id: true, rate: true },
     });
     if (cleaners.length !== ids.length) {
@@ -130,32 +145,51 @@ export class PayrollService {
     if (!dto.reason?.trim()) {
       throw new BadRequestException('Укажите причину штрафа');
     }
-    const cleaner = await this.prisma.cleaner.findUnique({
-      where: { id: dto.cleanerId },
+    const cleaner = await this.prisma.cleaner.findFirst({
+      where: { id: dto.cleanerId, ...NOT_DELETED },
     });
     if (!cleaner) throw new NotFoundException('Клинер не найден');
 
-    // дата всегда нормализуется к календарному дню (полночь UTC),
-    // иначе штраф «сегодня» мог бы выпасть из выборок за день
-    const todayDushanbe = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Dushanbe',
-    }).format(new Date());
-    return this.prisma.fine.create({
+    // дата нормализуется к календарному дню по Душанбе, иначе штраф «сегодня»
+    // мог бы выпасть из выборок за день
+    const fine = await this.prisma.fine.create({
       data: {
         cleanerId: dto.cleanerId,
         amount,
         reason: dto.reason.trim(),
-        date: dayUTC(dto.date || todayDushanbe),
+        date: dayUTC(dto.date || todayDushanbe()),
         createdById: user.id,
       },
       include: { cleaner: { select: cleanerSelect } },
     });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'CLEANER',
+      entityId: dto.cleanerId,
+      entityTitle: cleaner.fullName,
+      action: AuditAction.UPDATE,
+      summary: `Штраф ${amount} сомони за ${formatDate(fine.date)}: ${fine.reason}`,
+    });
+    return fine;
   }
 
-  async removeFine(id: string) {
-    const fine = await this.prisma.fine.findUnique({ where: { id } });
+  async removeFine(user: AuthUser, id: string) {
+    const fine = await this.prisma.fine.findUnique({
+      where: { id },
+      include: { cleaner: { select: { id: true, fullName: true } } },
+    });
     if (!fine) throw new NotFoundException('Штраф не найден');
     await this.prisma.fine.delete({ where: { id } });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'CLEANER',
+      entityId: fine.cleanerId,
+      entityTitle: fine.cleaner.fullName,
+      action: AuditAction.UPDATE,
+      summary: `Штраф ${fine.amount} сомони отменён`,
+    });
     return { ok: true };
   }
 
@@ -169,6 +203,7 @@ export class PayrollService {
     const dateRange = rangeUTC(from, to);
     const [cleaners, shifts, fines] = await Promise.all([
       this.prisma.cleaner.findMany({
+        where: NOT_DELETED,
         select: { ...cleanerSelect, brigadeId: true, isActive: true },
         orderBy: { fullName: 'asc' },
       }),

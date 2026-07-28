@@ -14,6 +14,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ClientsService } from '../clients/clients.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOT_DELETED } from '../common/soft-delete';
+import { parseDate } from '../common/time/dushanbe';
 import { LeadIntakeDto } from './dto/intake.dto';
 
 const TYPE_MAP: Record<string, CleaningType> = {
@@ -85,12 +87,16 @@ export class LeadsService {
     const clamp = (v: unknown) =>
       Math.min(Math.max(0, Math.round(Number(v) || 0)), 2_000_000_000);
     const cleaningType = TYPE_MAP[dto.calculator?.cleaningTypeId ?? ''] ?? CleaningType.GENERAL;
+    /*
+     * Дата и время из квиза приходят строками от постороннего сайта. Раньше они
+     * шли в new Date() без проверки: «31.02» или мусор превращались в Invalid Date,
+     * Prisma падала — и заявка клиента терялась целиком. Теперь неразобранная
+     * дата просто не заполняется, а заявка сохраняется.
+     */
     const preferred =
-      dto.quiz?.date && dto.quiz?.time
-        ? new Date(`${dto.quiz.date}T${dto.quiz.time}`)
-        : dto.quiz?.date
-          ? new Date(dto.quiz.date)
-          : null;
+      (dto.quiz?.date && dto.quiz?.time
+        ? parseDate(`${dto.quiz.date}T${dto.quiz.time}`)
+        : null) ?? parseDate(dto.quiz?.date);
 
     const order = await this.prisma.order.create({
       data: {
@@ -99,6 +105,7 @@ export class LeadsService {
         stage: 'NEW',
         source: LeadSource.SITE,
         cleaningType,
+        serviceKey: cleaningType,
         dirtLevel:
           cleaningType === CleaningType.FURNITURE
             ? null
@@ -176,12 +183,21 @@ export class LeadsService {
     // 2 запроса вместо 1+N: менеджеры + групповой count активных заказов
     const [managers, groups] = await Promise.all([
       this.prisma.user.findMany({
-        where: { role: Role.MANAGER, isActive: true, acceptsLeads: true },
+        where: {
+          ...NOT_DELETED,
+          role: Role.MANAGER,
+          isActive: true,
+          acceptsLeads: true,
+        },
         select: { id: true },
       }),
       this.prisma.order.groupBy({
         by: ['managerId'],
-        where: { stage: { notIn: ['PAID', 'REJECTED'] }, managerId: { not: null } },
+        where: {
+          ...NOT_DELETED,
+          stage: { notIn: ['PAID', 'REJECTED'] },
+          managerId: { not: null },
+        },
         _count: { _all: true },
       }),
     ]);

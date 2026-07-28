@@ -3,11 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
+import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { dayKey, dayUTC } from '../common/time/dushanbe';
 
 const brigadeInclude = {
   leader: { select: { id: true, fullName: true } },
@@ -27,11 +31,21 @@ const brigadeInclude = {
 
 @Injectable()
 export class CleanersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+  ) {}
 
-  /** Все клинеры компании (бригады общие — видят обе роли) */
-  list(_user: AuthUser) {
+  /**
+   * Все клинеры компании (бригады общие — видят обе роли).
+   *
+   * activeOnly используется формой назначения на заказ: уволенных клинеров
+   * там быть не должно, иначе их снова назначают на выезд. «Удаление» клинера
+   * с историей смен — это как раз перевод в isActive: false.
+   */
+  list(_user: AuthUser, activeOnly = false) {
     return this.prisma.cleaner.findMany({
+      where: { ...NOT_DELETED, ...(activeOnly ? { isActive: true } : {}) },
       orderBy: { fullName: 'asc' },
       include: {
         manager: { select: { id: true, fullName: true } },
@@ -70,7 +84,8 @@ export class CleanersService {
     });
   }
 
-  update(
+  async update(
+    user: AuthUser,
     id: string,
     data: {
       fullName?: string;
@@ -78,13 +93,20 @@ export class CleanersService {
       rate?: number;
       brigadeId?: string | null;
       isActive?: boolean;
+      duties?: string;
     },
   ) {
+    const before = await this.prisma.cleaner.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
+    if (!before) throw new NotFoundException('Клинер не найден');
+
     const patch: any = {};
-    if (data.fullName !== undefined) patch.fullName = data.fullName;
+    if (data.fullName !== undefined) patch.fullName = data.fullName.trim();
     if (data.phone !== undefined) patch.phone = data.phone || null;
     if (data.isActive !== undefined) patch.isActive = data.isActive;
     if (data.brigadeId !== undefined) patch.brigadeId = data.brigadeId || null;
+    if (data.duties !== undefined) patch.duties = data.duties || null;
     if (data.rate !== undefined) {
       const rate = Math.round(Number(data.rate));
       if (!Number.isFinite(rate) || rate <= 0 || rate > 2_000_000_000) {
@@ -92,30 +114,65 @@ export class CleanersService {
       }
       patch.rate = rate;
     }
-    return this.prisma.cleaner.update({
+
+    const after = await this.prisma.cleaner.update({
       where: { id },
       data: patch,
       include: { brigade: { select: { id: true, name: true } } },
     });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'CLEANER',
+      entityId: after.id,
+      entityTitle: after.fullName,
+      action: AuditAction.UPDATE,
+      changes: this.audit.diff(before, after, [
+        'fullName',
+        'phone',
+        'rate',
+        'brigadeId',
+        'isActive',
+        'duties',
+      ]),
+    });
+    return after;
   }
 
   /**
-   * Удаление клинера. Если есть история смен/штрафов — не удаляем физически
-   * (иначе каскад стёр бы историю и изменил суммы выплат за прошлые месяцы),
-   * а отключаем: из списков пропадает, история сохраняется.
+   * Удаление клинера переносит его в корзину (ТЗ 6).
+   * Если за ним есть смены или штрафы — он ещё и снимается с работы и выводится
+   * из бригады: иначе он останется в расчёте выплат и в составе выездов,
+   * а суммы за прошлые месяцы поедут.
    */
-  async remove(id: string) {
+  async remove(user: AuthUser, id: string, reason?: string) {
+    const cleaner = await this.prisma.cleaner.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
+    if (!cleaner) throw new NotFoundException('Клинер не найден');
+
     const [shifts, fines] = await Promise.all([
       this.prisma.shift.count({ where: { cleanerId: id } }),
       this.prisma.fine.count({ where: { cleanerId: id } }),
     ]);
-    if (shifts > 0 || fines > 0) {
-      return this.prisma.cleaner.update({
-        where: { id },
-        data: { isActive: false, brigadeId: null },
-      });
-    }
-    return this.prisma.cleaner.delete({ where: { id } });
+
+    const removed = await this.prisma.cleaner.update({
+      where: { id },
+      data: { ...softDeleteData(user, reason), isActive: false, brigadeId: null },
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'CLEANER',
+      entityId: id,
+      entityTitle: cleaner.fullName,
+      action: AuditAction.DELETE,
+      summary:
+        shifts > 0 || fines > 0
+          ? `Перенесён в корзину; история сохранена (смен: ${shifts}, штрафов: ${fines})`
+          : 'Перенесён в корзину',
+    });
+    return removed;
   }
 
   // ─────────────── БРИГАДЫ ───────────────
@@ -191,15 +248,18 @@ export class CleanersService {
     return { ok: true };
   }
 
-  /** Задания команды на день: заказы в работе с назначенными клинерами */
+  /**
+   * Задания команды на день: заказы в работе с назначенными клинерами.
+   * Границы суток берём по Душанбе (UTC+5), а не по времени сервера —
+   * иначе «сегодня» на экране начинается в 5 утра по местному времени.
+   */
   async teamTasksForDay(user: AuthUser, dateStr?: string) {
-    const date = dateStr ? new Date(dateStr) : new Date();
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
+    const key = dateStr ? dayKey(new Date(dateStr)) : dayKey(new Date());
+    const start = new Date(dayUTC(key).getTime() - 5 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     const where: any = {
+      ...NOT_DELETED,
       stage: { in: ['CONFIRMED', 'IN_PROGRESS'] },
       scheduledDate: { gte: start, lte: end },
     };

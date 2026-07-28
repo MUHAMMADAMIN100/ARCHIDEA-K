@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AuditAction,
   NotificationType,
   Prisma,
   TaskPriority,
@@ -13,10 +14,19 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import {
-  AuthUser,
-  seesAll,
-} from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import { seesAllTasks } from '../common/permissions';
+import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+
+/**
+ * Полный доступ к модулю задач (ТЗ 1.2).
+ *
+ * Раньше «все задачи компании» видели только директор и ops-менеджер. Теперь
+ * это отдельное право: его получают они же плюс сотрудники с флагом
+ * canManageTasks — по ТЗ такой доступ нужен Ироде, которая остаётся менеджером.
+ */
+const seesAll = seesAllTasks;
 
 const taskInclude = {
   assignee: { select: { id: true, fullName: true } },
@@ -55,6 +65,7 @@ export class TasksService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private audit: AuditService,
   ) {}
 
   /**
@@ -82,8 +93,9 @@ export class TasksService {
    */
   async list(user: AuthUser) {
     const where: Prisma.TaskWhereInput = seesAll(user)
-      ? {}
+      ? { ...NOT_DELETED }
       : {
+          ...NOT_DELETED,
           OR: [
             { assigneeId: user.id },
             { assignments: { some: { userId: user.id } } },
@@ -199,8 +211,8 @@ export class TasksService {
     if (!Object.values(TaskStatus).includes(status)) {
       throw new BadRequestException('Неизвестный статус');
     }
-    const task = await this.prisma.task.findUnique({
-      where: { id },
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
       include: taskInclude,
     });
     if (!task) throw new NotFoundException('Задача не найдена');
@@ -256,7 +268,7 @@ export class TasksService {
     if (!seesAll(user)) {
       throw new ForbiddenException('Нет прав переносить задачи');
     }
-    const exists = await this.prisma.task.findUnique({ where: { id } });
+    const exists = await this.prisma.task.findFirst({ where: { id, deletedAt: null } });
     if (!exists) throw new NotFoundException('Задача не найдена');
     const task = await this.prisma.task.update({
       where: { id },
@@ -282,8 +294,8 @@ export class TasksService {
     if (!seesAll(user)) {
       throw new ForbiddenException('Нет прав редактировать задачи');
     }
-    const task = await this.prisma.task.findUnique({
-      where: { id },
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
       include: taskInclude,
     });
     if (!task) throw new NotFoundException('Задача не найдена');
@@ -401,12 +413,30 @@ export class TasksService {
     return this.shape(updated);
   }
 
-  /** Удаление задачи (директор или ops-менеджер) */
-  async remove(user: AuthUser, id: string) {
+  /** Удаление задачи — перенос в корзину (ТЗ 6) */
+  async remove(user: AuthUser, id: string, reason?: string) {
     if (!seesAll(user)) {
       throw new ForbiddenException('Нет прав удалять задачи');
     }
-    return this.prisma.task.delete({ where: { id } });
+    const task = await this.prisma.task.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
+    if (!task) throw new NotFoundException('Задача не найдена');
+
+    const removed = await this.prisma.task.update({
+      where: { id },
+      data: softDeleteData(user, reason),
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'TASK',
+      entityId: id,
+      entityTitle: task.title,
+      action: AuditAction.DELETE,
+      summary: reason ? `Перенесена в корзину: ${reason}` : 'Перенесена в корзину',
+    });
+    return removed;
   }
 
   /** «YYYY-MM-DD» → полдень UTC (день не «уезжает» из-за часового пояса) */

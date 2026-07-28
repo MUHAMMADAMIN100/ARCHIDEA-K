@@ -7,6 +7,7 @@ import { ProxyThrottlerGuard } from './common/guards/proxy-throttler.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
 
 import { PrismaModule } from './prisma/prisma.module';
+import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -22,6 +23,13 @@ import { PayrollModule } from './payroll/payroll.module';
 import { ReportsModule } from './reports/reports.module';
 import { SetupModule } from './setup/setup.module';
 import { BackupModule } from './backup/backup.module';
+// ── Модули доработки по ТЗ ──
+import { TrashModule } from './trash/trash.module'; // корзина/архив (ТЗ 1.3, 6)
+import { FinanceModule } from './finance/finance.module'; // доходы, расходы, премии (ТЗ 7)
+import { ChecklistsModule } from './checklists/checklists.module'; // чек-листы (ТЗ 8)
+import { ProposalsModule } from './proposals/proposals.module'; // КП (ТЗ 9)
+import { RemindersModule } from './reminders/reminders.module'; // напоминания (ТЗ 10.1)
+import { TelegramModule } from './telegram/telegram.module'; // уведомления в Telegram (ТЗ 10.2)
 import { AppController } from './app.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -35,6 +43,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // (8/мин) и /leads/intake (6/мин). Это защита от лавины, а не от поллинга.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 1200 }]),
     PrismaModule,
+    AuditModule,
     NotificationsModule,
     AuthModule,
     UsersModule,
@@ -50,6 +59,12 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ReportsModule,
     SetupModule,
     BackupModule,
+    TrashModule,
+    FinanceModule,
+    ChecklistsModule,
+    ProposalsModule,
+    RemindersModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [
