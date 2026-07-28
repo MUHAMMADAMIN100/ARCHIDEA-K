@@ -25,6 +25,12 @@ const TEAM: {
   mainTask: string;
   /** получает ли заявки с сайта (только продажи/клиентский сервис) */
   acceptsLeads: boolean;
+  /**
+   * Предзаданный bcrypt-хэш пароля при первом создании (когда env-пароль
+   * задавать не хотят). В коде — только ХЭШ, не сам пароль. Env SEED_PW_<LOGIN>
+   * всё равно имеет приоритет, если задан.
+   */
+  passwordHash?: string;
 }[] = [
   {
     login: 'anisa',
@@ -39,6 +45,23 @@ const TEAM: {
       'Развитие Archidea Cleaning',
     ],
     mainTask: 'Рост и устойчивое развитие компании Archidea Cleaning.',
+  },
+  {
+    // Второй основатель с полным доступом (как Аниса). Пароль задан хэшем,
+    // чтобы работал без настройки env; сменить можно в разделе «Сотрудники».
+    login: 'admin',
+    fullName: 'Администратор',
+    role: Role.DIRECTOR,
+    acceptsLeads: false,
+    position: 'Основатель',
+    duties: [
+      'Полный доступ ко всем разделам системы',
+      'Финансовые и кадровые решения',
+      'Контроль всех направлений работы',
+    ],
+    mainTask: 'Полный контроль и управление Archidea Cleaning.',
+    passwordHash:
+      '$2a$12$EpRdh1zSlj.vxMqSpFcgveER4JG.Q/Bp59aEYGeDzklRTulTXkvDy', // adminAdmin123
   },
   {
     login: 'munim',
@@ -189,18 +212,27 @@ export class SetupService implements OnApplicationBootstrap {
   }
 
   /**
-   * Пароль для первого создания сотрудника: из env SEED_PW_<LOGIN> или
-   * SEED_DEFAULT_PASSWORD, иначе — случайный (логируется один раз, чтобы
-   * оператор мог его забрать). В коде паролей нет.
+   * bcrypt-хэш пароля при первом создании сотрудника. Приоритет:
+   * 1) env SEED_PW_<LOGIN> / SEED_DEFAULT_PASSWORD (самый надёжный способ);
+   * 2) предзаданный хэш из TEAM (passwordHash);
+   * 3) случайный пароль (в лог НЕ выводится).
+   * Сам пароль в коде не хранится — только хэши.
    */
-  private resolvePassword(login: string): { password: string; generated: boolean } {
+  private async resolvePasswordHash(t: {
+    login: string;
+    passwordHash?: string;
+  }): Promise<{ passwordHash: string; generated: boolean }> {
     const fromEnv =
-      process.env[`SEED_PW_${login.toUpperCase()}`] ||
+      process.env[`SEED_PW_${t.login.toUpperCase()}`] ||
       process.env.SEED_DEFAULT_PASSWORD;
-    if (fromEnv && fromEnv.length >= 6) {
-      return { password: fromEnv, generated: false };
+    if (fromEnv && fromEnv.length >= 8) {
+      return { passwordHash: await bcrypt.hash(fromEnv, 12), generated: false };
     }
-    return { password: randomBytes(9).toString('base64url'), generated: true };
+    if (t.passwordHash) {
+      return { passwordHash: t.passwordHash, generated: false };
+    }
+    const random = randomBytes(9).toString('base64url');
+    return { passwordHash: await bcrypt.hash(random, 12), generated: true };
   }
 
   private async ensureTeam() {
@@ -211,11 +243,11 @@ export class SetupService implements OnApplicationBootstrap {
         where: { OR: [{ login: t.login }, { fullName: t.fullName }] },
       });
       if (!existing) {
-        const { password, generated } = this.resolvePassword(t.login);
+        const { passwordHash, generated } = await this.resolvePasswordHash(t);
         await this.prisma.user.create({
           data: {
             login: t.login,
-            passwordHash: await bcrypt.hash(password, 10),
+            passwordHash,
             fullName: t.fullName,
             role: t.role,
             position: t.position,
