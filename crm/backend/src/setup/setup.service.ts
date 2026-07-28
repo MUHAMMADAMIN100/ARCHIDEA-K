@@ -13,9 +13,11 @@ import { PrismaService } from '../prisma/prisma.service';
  * (кроме одноразового заполнения пустых полей должности/обязанностей).
  */
 
-// Пароли НЕ хранятся в коде. При первом создании сотрудника пароль берётся
-// из переменной окружения SEED_PW_<LOGIN> (напр. SEED_PW_ANISA), либо из
-// SEED_DEFAULT_PASSWORD, либо генерируется случайно и логируется один раз.
+// Пароли НЕ хранятся в коде — ни открытым текстом, ни хэшем. Пароль берётся
+// только из переменной окружения SEED_PW_<LOGIN> (напр. SEED_PW_ANISA) либо
+// из SEED_DEFAULT_PASSWORD. Если ни та, ни другая не задана — сотрудник
+// создаётся со случайным паролем, который никуда не выводится (войти нельзя
+// до тех пор, пока пароль не задан через окружение или вручную).
 const TEAM: {
   login: string;
   fullName: string;
@@ -25,12 +27,6 @@ const TEAM: {
   mainTask: string;
   /** получает ли заявки с сайта (только продажи/клиентский сервис) */
   acceptsLeads: boolean;
-  /**
-   * Предзаданный bcrypt-хэш пароля при первом создании (когда env-пароль
-   * задавать не хотят). В коде — только ХЭШ, не сам пароль. Env SEED_PW_<LOGIN>
-   * всё равно имеет приоритет, если задан.
-   */
-  passwordHash?: string;
 }[] = [
   {
     login: 'anisa',
@@ -47,8 +43,8 @@ const TEAM: {
     mainTask: 'Рост и устойчивое развитие компании Archidea Cleaning.',
   },
   {
-    // Второй основатель с полным доступом (как Аниса). Пароль задан хэшем,
-    // чтобы работал без настройки env; сменить можно в разделе «Сотрудники».
+    // Второй основатель с полным доступом (как Аниса).
+    // Пароль — только через SEED_PW_ADMIN в переменных окружения.
     login: 'admin',
     fullName: 'Администратор',
     role: Role.DIRECTOR,
@@ -60,8 +56,6 @@ const TEAM: {
       'Контроль всех направлений работы',
     ],
     mainTask: 'Полный контроль и управление Archidea Cleaning.',
-    passwordHash:
-      '$2a$12$EpRdh1zSlj.vxMqSpFcgveER4JG.Q/Bp59aEYGeDzklRTulTXkvDy', // adminAdmin123
   },
   {
     login: 'munim',
@@ -134,6 +128,15 @@ const TEAM: {
     mainTask:
       'Увеличивать узнаваемость компании, привлекать новых клиентов и укреплять бренд Archidea Cleaning.',
   },
+  {
+    login: 'iroda',
+    fullName: 'Ирода',
+    role: Role.MANAGER,
+    acceptsLeads: false,
+    position: 'Менеджер',
+    duties: ['Работа с задачами и заявками'],
+    mainTask: 'Ведение задач и сопровождение клиентов.',
+  },
 ];
 
 const LEADER_RATE = 330;
@@ -205,6 +208,7 @@ export class SetupService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     try {
       await this.ensureTeam();
+      await this.syncPasswords();
       await this.ensureBrigades();
     } catch (e) {
       this.logger.error('Инициализация данных компании не удалась', e as any);
@@ -212,24 +216,87 @@ export class SetupService implements OnApplicationBootstrap {
   }
 
   /**
+   * Разовая синхронизация паролей уже существующих сотрудников с окружением.
+   *
+   * Зачем нужна: ensureTeam() назначает пароль ТОЛЬКО при создании сотрудника.
+   * Если аккаунты завели раньше, чем появились переменные SEED_PW_<LOGIN>
+   * (типичная ситуация при первом деплое), пароли у них случайные и никуда не
+   * выведены — войти невозможно, а повторный запуск ничего не исправляет.
+   *
+   * Включается флагом SEED_RESET_PASSWORDS=true (или 1). Для каждого сотрудника
+   * из TEAM с заданным SEED_PW_<LOGIN>: пароль перезаписывается, снимается
+   * блокировка после неудачных попыток, аккаунт активируется, а sessionEpoch
+   * увеличивается — все ранее выданные токены перестают действовать.
+   *
+   * ВАЖНО: флаг разовый. Пока он включён, при каждом рестарте пароли
+   * возвращаются к значениям из окружения, то есть смена пароля сотрудником
+   * внутри CRM будет откатываться. Снимите флаг сразу после проверки входа.
+   */
+  private async syncPasswords() {
+    const flag = (process.env.SEED_RESET_PASSWORDS || '').trim().toLowerCase();
+    if (flag !== 'true' && flag !== '1') return;
+
+    this.logger.warn(
+      'SEED_RESET_PASSWORDS включён — пароли сотрудников синхронизируются с ' +
+        'переменными окружения. Снимите флаг после того, как убедитесь, что вход работает.',
+    );
+
+    for (const t of TEAM) {
+      const raw = this.envPassword(t.login);
+      if (!raw) continue;
+
+      try {
+        const user = await this.prisma.user.findUnique({
+          where: { login: t.login },
+        });
+        if (!user) {
+          // сотрудника нет — его только что создал ensureTeam() уже с нужным
+          // паролем, либо логин отличается от ожидаемого
+          continue;
+        }
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: await bcrypt.hash(raw, 12),
+            failedLogins: 0,
+            lockedUntil: null,
+            isActive: true,
+            sessionEpoch: { increment: 1 },
+          },
+        });
+        // сам пароль в лог НЕ пишем: логи Railway живут долго и видны всем,
+        // у кого есть доступ к панели
+        this.logger.log(`Пароль синхронизирован: @${t.login}`);
+      } catch (e) {
+        this.logger.error(
+          `Не удалось синхронизировать пароль для @${t.login}`,
+          e as any,
+        );
+      }
+    }
+  }
+
+  /** Пароль из окружения для конкретного логина (или null, если не задан) */
+  private envPassword(login: string): string | null {
+    const raw =
+      process.env[`SEED_PW_${login.toUpperCase()}`] ||
+      process.env.SEED_DEFAULT_PASSWORD;
+    return raw && raw.length >= 8 ? raw : null;
+  }
+
+  /**
    * bcrypt-хэш пароля при первом создании сотрудника. Приоритет:
-   * 1) env SEED_PW_<LOGIN> / SEED_DEFAULT_PASSWORD (самый надёжный способ);
-   * 2) предзаданный хэш из TEAM (passwordHash);
-   * 3) случайный пароль (в лог НЕ выводится).
-   * Сам пароль в коде не хранится — только хэши.
+   * 1) env SEED_PW_<LOGIN> / SEED_DEFAULT_PASSWORD (единственный рабочий способ);
+   * 2) случайный пароль (в лог НЕ выводится — войти будет нельзя).
+   * Паролей и их хэшей в коде нет.
    */
   private async resolvePasswordHash(t: {
     login: string;
-    passwordHash?: string;
   }): Promise<{ passwordHash: string; generated: boolean }> {
-    const fromEnv =
-      process.env[`SEED_PW_${t.login.toUpperCase()}`] ||
-      process.env.SEED_DEFAULT_PASSWORD;
-    if (fromEnv && fromEnv.length >= 8) {
+    const fromEnv = this.envPassword(t.login);
+    if (fromEnv) {
       return { passwordHash: await bcrypt.hash(fromEnv, 12), generated: false };
-    }
-    if (t.passwordHash) {
-      return { passwordHash: t.passwordHash, generated: false };
     }
     const random = randomBytes(9).toString('base64url');
     return { passwordHash: await bcrypt.hash(random, 12), generated: true };
