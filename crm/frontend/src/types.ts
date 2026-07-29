@@ -17,7 +17,7 @@ export type CleaningType =
   | 'FURNITURE';
 export type DirtLevel = 'LIGHT' | 'MEDIUM' | 'HEAVY';
 export type ClientTag = 'VIP' | 'REGULAR' | 'REFUSED' | 'POTENTIAL';
-export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
 export type TaskType =
   | 'CALL'

@@ -72,6 +72,7 @@ enum TaskPriority {
   LOW
   MEDIUM
   HIGH
+  URGENT // срочно — выше «высокого», задача идёт первой в списке
 }
 
 enum TaskStatus {

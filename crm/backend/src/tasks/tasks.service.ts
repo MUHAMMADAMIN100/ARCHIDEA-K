@@ -52,6 +52,18 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 
 const MAX_ASSIGNEES = 20;
 
+/**
+ * Вес приоритета для сортировки: срочное — первым.
+ * В базе перечисление отсортировать в нужном порядке нельзя,
+ * поэтому расставляем список уже после выборки.
+ */
+const PRIORITY_WEIGHT: Record<TaskPriority, number> = {
+  URGENT: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
+
 /** Сводный статус задачи по статусам исполнителей */
 function aggregate(statuses: TaskStatus[]): TaskStatus {
   if (statuses.length === 0) return TaskStatus.OPEN;
@@ -106,7 +118,21 @@ export class TasksService {
       include: taskInclude,
       orderBy: [{ status: 'asc' }, { deadline: 'asc' }],
     });
-    return tasks.map((t) => this.shape(t));
+
+    /*
+     * Внутри одного статуса сначала идёт срочное, затем высокое и так далее,
+     * а уже потом — по сроку. Иначе срочная задача теряется в общем списке.
+     */
+    const sorted = [...tasks].sort((a, b) => {
+      if (a.status !== b.status) return 0; // порядок статусов задала база
+      const w = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
+      if (w !== 0) return w;
+      const ad = a.deadline ? a.deadline.getTime() : Number.MAX_SAFE_INTEGER;
+      const bd = b.deadline ? b.deadline.getTime() : Number.MAX_SAFE_INTEGER;
+      return ad - bd;
+    });
+
+    return sorted.map((t) => this.shape(t));
   }
 
   /** Постановка задачи (директор или ops-менеджер) + уведомления исполнителям */

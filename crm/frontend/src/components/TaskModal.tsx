@@ -7,6 +7,8 @@ import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
 import {
+  PRIORITY_LABEL,
+  PRIORITY_ORDER,
   TASK_STATUS_COLOR,
   TASK_STATUS_LABEL,
   TASK_TYPE_DOT,
@@ -266,9 +268,11 @@ export function TaskModal({
               value={priority}
               onChange={(e) => setPriority(e.target.value as TaskPriority)}
             >
-              <option value="LOW">Низкий</option>
-              <option value="MEDIUM">Средний</option>
-              <option value="HIGH">Высокий</option>
+              {PRIORITY_ORDER.map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_LABEL[p]}
+                </option>
+              ))}
             </select>
           </div>
           <div>

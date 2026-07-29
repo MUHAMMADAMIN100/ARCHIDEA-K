@@ -111,13 +111,24 @@ export const PRIORITY_LABEL: Record<TaskPriority, string> = {
   LOW: 'Низкий',
   MEDIUM: 'Средний',
   HIGH: 'Высокий',
+  URGENT: 'Срочно',
 };
 
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {
   LOW: 'bg-navy-100 text-navy-600',
   MEDIUM: 'bg-amber-100 text-amber-700',
-  HIGH: 'bg-red-100 text-red-700',
+  HIGH: 'bg-orange-100 text-orange-700',
+  // срочное должно выделяться сильнее «высокого», иначе разница незаметна
+  URGENT: 'bg-red-600 text-white',
 };
+
+/** Порядок в выпадающем списке и вес при сортировке: срочное — первым */
+export const PRIORITY_ORDER: TaskPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
+
+export function priorityWeight(p: TaskPriority): number {
+  const i = PRIORITY_ORDER.indexOf(p);
+  return i === -1 ? PRIORITY_ORDER.length : i;
+}
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN: 'Открыта',
