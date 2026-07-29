@@ -7,7 +7,7 @@ import { SuccessScreen } from './SuccessScreen';
 import { Stepper } from './Stepper';
 import { IconArrowLeft, IconArrowRight, IconCheck } from '../ui/icons';
 import { calculatePrice } from '../../lib/calc';
-import { formatPrice } from '../../lib/format';
+import { PERSON_NAME_RE, formatPrice } from '../../lib/format';
 import { submitOrderOptimistic, flushPendingOrders } from '../../lib/submit';
 import { DEFAULTS } from '../../config/pricing';
 import { usePricing } from '../../lib/tariffs';
@@ -83,7 +83,8 @@ export function QuizForm() {
 
   const validateContacts = () => {
     const errs: Partial<Record<keyof ContactState, boolean>> = {
-      name: contact.name.trim().length < 2,
+      // имя — только буквы: раньше в заявку проходило «Тест клиент1й21»
+      name: !PERSON_NAME_RE.test(contact.name.trim()),
       phone: contact.phone.replace(/\D/g, '').length < 12, // 992 + 9 цифр
       address: contact.address.trim().length < 4,
     };

@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { FinanceService } from '../finance/finance.service';
+import { ReportsService } from '../reports/reports.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { escapeHtml } from '../telegram/telegram.util';
 import {
@@ -97,6 +98,7 @@ export class OrdersService {
     private audit: AuditService,
     private finance: FinanceService,
     private telegram: TelegramService,
+    private reports: ReportsService,
   ) {}
 
   private scopeWhere(user: AuthUser): Prisma.OrderWhereInput {
@@ -448,6 +450,8 @@ export class OrdersService {
       data.scheduledDate = parseDate(dto.scheduledDate);
     }
 
+    let draftReport: { id: string } | null = null;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.order.update({
         where: { id },
@@ -481,6 +485,17 @@ export class OrdersService {
         await this.finance.removeOrderIncome(tx, res.id, user);
       }
 
+      /*
+       * Черновик платёжной ведомости по оплаченному заказу.
+       * Заполняется данными самого заказа — клиент, адрес, объём, сумма,
+       * ответственный менеджер и назначенная команда, — чтобы менеджеру
+       * осталось только нажать «Отправить основателю».
+       * Повторный перевод в «Оплачено» второй ведомости не создаёт.
+       */
+      if (dto.stage === FunnelStage.PAID) {
+        draftReport = await this.reports.createFromOrder(tx, res.id, user.id);
+      }
+
       await this.audit.log(tx, {
         user,
         entity: 'ORDER',
@@ -502,6 +517,21 @@ export class OrdersService {
     }
     if (dto.stage === FunnelStage.PAID || order.stage === FunnelStage.PAID) {
       await this.refreshClientRepeat(order.clientId);
+    }
+
+    /*
+     * Сообщаем ответственному, что ведомость уже готова к отправке.
+     * Вне транзакции: сбой уведомления не должен откатывать смену этапа.
+     */
+    if (draftReport) {
+      const target = updated.managerId ?? user.id;
+      await this.notifications.notify({
+        userId: target,
+        type: NotificationType.REPORT_DRAFT_READY,
+        title: 'Готов черновик платёжной ведомости',
+        message: `${updated.client.fullName} · ${updated.finalPrice ?? updated.estimatedPrice} сомони — проверьте и отправьте основателю`,
+        orderId: updated.id,
+      });
     }
 
     // уведомление руководителю о смене статуса крупного заказа

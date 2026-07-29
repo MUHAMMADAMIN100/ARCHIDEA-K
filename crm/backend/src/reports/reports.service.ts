@@ -10,6 +10,12 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import {
+  OrderForReport,
+  orderForReportInclude,
+  reportDataFromOrder,
+  workersFromOrder,
+} from './report-from-order';
 
 /** Целое неотрицательное число (сомони/дни) из произвольного ввода, с потолком (ниже int32) */
 const int = (v: unknown, def = 0) => {
@@ -178,6 +184,48 @@ export class ReportsService {
       );
     }
     throw e;
+  }
+
+  /**
+   * Черновик ведомости по заказу, переведённому в «Оплачено» (ТЗ).
+   *
+   * Вызывается из orders.service внутри его транзакции. Менеджеру остаётся
+   * проверить дни и нажать «Отправить основателю» — всё остальное уже заполнено
+   * данными самого заказа: клиент, адрес, объём, сумма, ответственный менеджер
+   * и назначенная команда.
+   *
+   * Повторный перевод заказа в «Оплачено» второй ведомости не создаёт.
+   * Возвращает созданную ведомость или null, если она уже была.
+   */
+  async createFromOrder(
+    db: PrismaService | Prisma.TransactionClient,
+    orderId: string,
+    fallbackOwnerId: string,
+  ) {
+    const existing = await db.report.findFirst({
+      where: { orderId, ...NOT_DELETED },
+      select: { id: true },
+    });
+    if (existing) return null;
+
+    const order = (await db.order.findFirst({
+      where: { id: orderId, ...NOT_DELETED },
+      include: orderForReportInclude,
+    })) as OrderForReport | null;
+    if (!order) return null;
+
+    // владелец ведомости обязателен — по нему работает доступ «вижу только своё».
+    // Если у заказа менеджера нет, владельцем становится тот, кто закрыл заказ,
+    // а видимое поле «Ответственный менеджер» остаётся пустым.
+    const ownerId = order.managerId ?? fallbackOwnerId;
+
+    return db.report.create({
+      data: {
+        ...reportDataFromOrder(order, ownerId),
+        workers: { create: workersFromOrder(order) },
+      },
+      include: reportInclude,
+    });
   }
 
   async create(user: AuthUser, dto: ReportInput) {

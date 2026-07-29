@@ -26,6 +26,7 @@ import {
   formatDate,
   formatVolume,
 } from '../lib/labels';
+import { formatPhone } from '../lib/contact';
 import { tempId, nowISO, withRetry } from '../lib/util';
 import type {
   Cleaner,
@@ -209,9 +210,9 @@ export function ClientCard() {
         subtitle={SOURCE_LABEL[data.source] + ' · клиент'}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <a href={`tel:${data.phone}`} className="btn-primary">
+            <a href={`tel:${formatPhone(data.phone)}`} className="btn-primary">
               <Phone className="h-4 w-4" />
-              {data.phone}
+              {formatPhone(data.phone)}
             </a>
             <button onClick={() => setShowReminder(true)} className="btn-ghost">
               <PhoneCall className="h-4 w-4" />
@@ -256,7 +257,7 @@ export function ClientCard() {
           <div className="card p-5">
             <h3 className="mb-3 font-bold text-navy-900">Информация</h3>
             <dl className="space-y-2 text-sm">
-              <Row label="Телефон" value={data.phone} />
+              <Row label="Телефон" value={formatPhone(data.phone)} />
               <Row label="Источник" value={SOURCE_LABEL[data.source]} />
               <Row label="Менеджер" value={data.manager?.fullName ?? '—'} />
               <Row label="Последний контакт" value={formatDate(data.lastContactAt)} />

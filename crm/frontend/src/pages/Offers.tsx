@@ -33,6 +33,7 @@ import {
   formatPrice,
   formatVolume,
 } from '../lib/labels';
+import { formatPhone } from '../lib/contact';
 import { formatDateTz, formatDateTimeTz, rangeOf } from '../lib/date';
 import { userSeesAll } from '../types';
 import type {
@@ -538,7 +539,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between rounded-xl border border-navy-200 bg-navy-50/60 px-3 py-2.5">
               <div>
                 <div className="font-medium text-navy-900">{client.fullName}</div>
-                <div className="text-xs text-navy-400">{client.phone}</div>
+                <div className="text-xs text-navy-400">{formatPhone(client.phone)}</div>
               </div>
               <button onClick={clearClient} className="text-navy-400 hover:text-navy-700">
                 <X className="h-4 w-4" />
@@ -570,7 +571,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
                     >
                       <div className="font-medium text-navy-900">{c.fullName}</div>
-                      <div className="text-xs text-navy-400">{c.phone}</div>
+                      <div className="text-xs text-navy-400">{formatPhone(c.phone)}</div>
                     </button>
                   ))}
                 </div>

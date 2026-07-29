@@ -18,6 +18,7 @@ import { TelegramService } from '../telegram/telegram.service';
 import { escapeHtml } from '../telegram/telegram.util';
 import { NOT_DELETED } from '../common/soft-delete';
 import { parseDate } from '../common/time/dushanbe';
+import { normalizePhone } from '../common/validation/contact';
 import { LeadIntakeDto } from './dto/intake.dto';
 
 const TYPE_MAP: Record<string, CleaningType> = {
@@ -59,7 +60,8 @@ export class LeadsService {
     }
 
     // 2. Rate-limit: не чаще раза в 20 сек с одного телефона
-    const phoneKey = dto.contact.phone.replace(/\D/g, '');
+    // ключ по каноническому номеру: «+992 90…» и «90…» — один и тот же человек
+    const phoneKey = normalizePhone(dto.contact.phone) ?? dto.contact.phone;
     const nowMs = Date.now();
     const last = this.recent.get(phoneKey);
     if (last && nowMs - last < 20_000) {

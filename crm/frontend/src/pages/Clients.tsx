@@ -17,7 +17,10 @@ import {
   DIRT_ORDER,
   formatDate,
 } from '../lib/labels';
+import { formatPhone } from '../lib/contact';
 import { tempId, nowISO } from '../lib/util';
+import { isValidPersonName, isValidPhone } from '../lib/contact';
+import { NameInput, PhoneInput } from '../components/ContactFields';
 import { userSeesAll } from '../types';
 import type {
   BoardColumn,
@@ -155,7 +158,7 @@ export function Clients() {
               </Badge>
             )}
           </div>
-          <div className="text-xs text-navy-400">{c.phone}</div>
+          <div className="text-xs text-navy-400">{formatPhone(c.phone)}</div>
         </div>
       ),
     },
@@ -363,7 +366,11 @@ function AddClientModal({
     if (!manualPrice) setPrice(computed ? String(computed) : '');
   }, [computed, manualPrice]);
 
+  // кнопку не даём нажать, пока данные некорректны — сервер их всё равно отклонит
+  const canSubmit = isValidPersonName(fullName) && isValidPhone(phone);
+
   const submit = () => {
+    if (!canSubmit) return;
     const managerName =
       (managers ?? []).find((m) => m.id === managerId)?.fullName ?? null;
     const toInt = (s: string) => Math.round(Number(s)) || 0;
@@ -389,14 +396,8 @@ function AddClientModal({
   return (
     <Modal open onClose={onClose} title="Новый клиент">
       <div className="space-y-3">
-        <div>
-          <label className="label">ФИО *</label>
-          <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Телефон *</label>
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+992 ..." />
-        </div>
+        <NameInput value={fullName} onChange={setFullName} autoFocus />
+        <PhoneInput value={phone} onChange={setPhone} required />
         <div>
           <label className="label">Источник</label>
           <select className="input" value={source} onChange={(e) => setSource(e.target.value as LeadSource)}>
@@ -532,7 +533,12 @@ function AddClientModal({
 
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="btn-ghost">Отмена</button>
-          <button onClick={submit} disabled={!fullName || !phone} className="btn-primary">
+          <button
+            onClick={submit}
+            disabled={!canSubmit}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            title={canSubmit ? undefined : 'Заполните ФИО и телефон правильно'}
+          >
             Создать
           </button>
         </div>

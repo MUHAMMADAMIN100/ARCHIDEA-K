@@ -25,6 +25,7 @@ import {
   PasswordInput,
 } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { NameInput, PhoneInput } from '../components/ContactFields';
 import { formatDate } from '../lib/labels';
 import type { Role } from '../types';
 
@@ -389,18 +390,12 @@ function EditUserModal({
   return (
     <Modal open onClose={onClose} title="Редактирование сотрудника">
       <div className="space-y-3">
-        <div>
-          <label className="label">ФИО</label>
-          <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </div>
+        <NameInput value={fullName} onChange={setFullName} />
         <div>
           <label className="label">Логин</label>
           <input className="input" value={login} onChange={(e) => setLogin(e.target.value)} />
         </div>
-        <div>
-          <label className="label">Телефон</label>
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+992 ..." />
-        </div>
+        <PhoneInput value={phone} onChange={setPhone} />
         <div>
           <label className="label">Должность</label>
           <input

@@ -8,16 +8,18 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
 
 export class CreateCleanerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
+  @IsPersonName()
   fullName: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @IsTjPhone()
   phone?: string;
 
   /** Ставка за смену — деньги, поэтому менять её может только руководитель */
@@ -48,11 +50,12 @@ export class UpdateCleanerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
+  @IsPersonName()
   fullName?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @IsTjPhone()
   phone?: string;
 
   @IsOptional()

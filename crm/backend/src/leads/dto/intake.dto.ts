@@ -10,6 +10,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
 
 /** Данные калькулятора (площадь, тип уборки, доп. услуги) */
 class CalculatorDto {
@@ -75,11 +76,12 @@ class ContactDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  @IsPersonName()
   name?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(32)
+  @IsTjPhone()
   phone?: string;
 
   @IsOptional()

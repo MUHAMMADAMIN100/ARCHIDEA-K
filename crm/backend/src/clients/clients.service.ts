@@ -12,11 +12,19 @@ import {
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { normalizePhone as canonicalPhone } from '../common/validation/contact';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto';
 
-/** Нормализуем телефон до цифр (для дедупликации) */
+/**
+ * Телефон в едином виде — девять цифр без кода страны.
+ *
+ * Правило живёт в common/validation/contact, чтобы номер, пришедший с сайта
+ * («992900000001»), и тот же номер, вбитый в CRM руками («90 000 00 01»),
+ * стали одной и той же строкой. Иначе защита от дублей по телефону
+ * не срабатывает и один клиент заводится дважды.
+ */
 export function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '');
+  return canonicalPhone(phone) ?? phone.replace(/\D/g, '');
 }
 
 @Injectable()
@@ -106,11 +114,11 @@ export class ClientsService {
     tags?: ClientTag[];
     notes?: string;
   }) {
-    const phone = normalizePhone(data.phone);
-    // телефон должен содержать хотя бы 5 цифр — иначе «мусорные» номера
-    // (пустые/из одних дефисов) схлопывали бы разных клиентов в одного
-    if (phone.length < 5) {
-      throw new BadRequestException('Укажите корректный номер телефона');
+    const phone = canonicalPhone(data.phone);
+    if (!phone) {
+      throw new BadRequestException(
+        'Укажите корректный номер телефона: 9 цифр, например +992 90 000 00 01',
+      );
     }
     const fullName = (data.fullName || '').trim().slice(0, 120); // ограничение длины
     const existing = await this.prisma.client.findUnique({ where: { phone } });

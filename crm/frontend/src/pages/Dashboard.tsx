@@ -11,6 +11,7 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, ErrorState } from '../components/ui';
 import { formatPrice, formatVolume } from '../lib/labels';
+import { formatPhone } from '../lib/contact';
 import type { Order, Task } from '../types';
 
 interface Summary {
@@ -114,7 +115,7 @@ export function Dashboard() {
                     {o.client?.fullName}
                   </div>
                   <div className="text-xs text-navy-400">
-                    {formatVolume(o)} · {o.client?.phone}
+                    {formatVolume(o)} · {formatPhone(o.client?.phone)}
                   </div>
                 </div>
                 <div className="text-sm font-bold text-navy-700">

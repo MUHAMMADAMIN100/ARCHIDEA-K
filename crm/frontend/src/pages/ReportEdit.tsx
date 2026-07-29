@@ -6,6 +6,7 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, EmptyState } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { PhoneInput } from '../components/ContactFields';
 import { DatePicker } from '../components/DatePicker';
 import { formatPrice, formatVolume } from '../lib/labels';
 import type { Brigade, Cleaner, Order, Report } from '../types';
@@ -150,6 +151,43 @@ export function ReportEdit() {
     if (o.scheduledDate) setWorkDate(o.scheduledDate.slice(0, 10));
     setUnitsLabel(formatVolume(o));
     setTotalPrice(String(o.finalPrice ?? o.estimatedPrice ?? ''));
+
+    /*
+     * Ответственный — менеджер ЗАКАЗА, а не тот, кто открыл форму.
+     * Раньше поле оставалось со значением текущего пользователя, и в ведомости
+     * оказывался не тот человек, который вёл объект.
+     */
+    setManagerName(o.manager?.fullName ?? '');
+
+    /*
+     * Команда заказа переносится в таблицу работников со ставкой и днями.
+     * Раньше блок оставался пустым, хотя на заказе были назначены люди —
+     * их приходилось выбирать заново вручную.
+     */
+    const assigned = o.cleaners ?? [];
+    if (assigned.length) {
+      const known = cleaners ?? [];
+      const rows: WorkerRow[] = assigned.map((a) => {
+        const full = known.find((c) => c.id === a.id);
+        const isLeader = leaderIds.has(a.id);
+        return {
+          key: rowKey(),
+          cleanerId: a.id,
+          fullName: a.fullName ?? full?.fullName ?? '',
+          role: isLeader ? 'Бригадир' : 'Клинер',
+          days: '1',
+          rate: String(full?.rate ?? ''),
+          fine: '',
+          extra: '',
+        };
+      });
+      // бригадир — первой строкой, как на бумажном бланке
+      rows.sort((a, b) => (a.role === 'Бригадир' ? -1 : b.role === 'Бригадир' ? 1 : 0));
+      setWorkers(rows);
+
+      const leader = assigned.find((a) => leaderIds.has(a.id));
+      if (leader) setBrigadierName(leader.fullName);
+    }
   };
 
   const addCleanerRow = (c: Cleaner) => {
@@ -347,15 +385,7 @@ export function ReportEdit() {
               placeholder="Например: Галина"
             />
           </div>
-          <div>
-            <label className="label">Телефон</label>
-            <input
-              className="input"
-              value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
-              placeholder="+992 ..."
-            />
-          </div>
+          <PhoneInput value={clientPhone} onChange={setClientPhone} />
           <div className="sm:col-span-2">
             <label className="label">Адрес</label>
             <input

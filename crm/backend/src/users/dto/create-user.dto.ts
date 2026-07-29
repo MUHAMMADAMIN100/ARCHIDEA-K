@@ -7,6 +7,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Role } from '@prisma/client';
+import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
 
 export class CreateUserDto {
   @IsString()
@@ -18,6 +19,8 @@ export class CreateUserDto {
   password: string;
 
   @IsString()
+  @MaxLength(120)
+  @IsPersonName()
   fullName: string;
 
   @IsOptional()
@@ -26,6 +29,7 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
+  @IsTjPhone()
   phone?: string;
 }
 
@@ -35,9 +39,9 @@ export class CreateUserDto {
  * с whitelist не имеет класса для проверки и пропускает что угодно.
  */
 export class UpdateUserDto {
-  @IsOptional() @IsString() @MaxLength(120) fullName?: string;
+  @IsOptional() @IsString() @MaxLength(120) @IsPersonName() fullName?: string;
   @IsOptional() @IsString() @MaxLength(60) login?: string;
-  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsString() @IsTjPhone() phone?: string;
   @IsOptional() @IsString() @MaxLength(120) position?: string;
   @IsOptional() @IsString() @MaxLength(4000) duties?: string;
   @IsOptional() @IsString() @MaxLength(1000) mainTask?: string;

@@ -7,14 +7,17 @@ import {
   MinLength,
 } from 'class-validator';
 import { ClientTag, LeadSource } from '@prisma/client';
+import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
 
 export class CreateClientDto {
   @IsString()
   @MinLength(2)
+  @MaxLength(120)
+  @IsPersonName()
   fullName: string;
 
   @IsString()
-  @MinLength(5)
+  @IsTjPhone()
   phone: string;
 
   @IsOptional()
@@ -46,8 +49,8 @@ export class CreateClientDto {
 }
 
 export class UpdateClientDto {
-  @IsOptional() @IsString() fullName?: string;
-  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() @MaxLength(120) @IsPersonName() fullName?: string;
+  @IsOptional() @IsString() @IsTjPhone() phone?: string;
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
   @IsOptional() @IsString() notes?: string;

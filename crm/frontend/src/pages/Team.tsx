@@ -14,6 +14,8 @@ import {
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
+import { PhoneInput } from '../components/ContactFields';
+import { sanitizePersonName } from '../lib/contact';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, Modal, EmptyState, Badge } from '../components/ui';
@@ -592,17 +594,10 @@ function CleanerModal({
           <input
             className="input"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => setFullName(sanitizePersonName(e.target.value))}
           />
         </div>
-        <div>
-          <label className="label">Телефон</label>
-          <input
-            className="input"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
+        <PhoneInput value={phone} onChange={setPhone} />
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Ставка, сомони/смена</label>

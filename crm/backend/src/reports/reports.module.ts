@@ -7,5 +7,7 @@ import { ReportsController } from './reports.controller';
   imports: [NotificationsModule],
   providers: [ReportsService],
   controllers: [ReportsController],
+  // заказы создают черновик ведомости при переходе в «Оплачено»
+  exports: [ReportsService],
 })
 export class ReportsModule {}
