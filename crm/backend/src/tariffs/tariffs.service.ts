@@ -65,6 +65,37 @@ const TARIFF_DEFAULTS: {
   },
 ];
 
+/**
+ * Базовые доп. услуги. Ключи совпадают с калькулятором лендинга
+ * (src/config/pricing.ts) — по ним сайт сопоставляет выбранные опции с ценами.
+ * Раньше они появлялись только из тестового сида, который в проде не запускается,
+ * и в боевой базе доп. услуг не было вовсе.
+ */
+const EXTRA_DEFAULTS: {
+  key: string;
+  title: string;
+  price: number;
+  hasQty: boolean;
+  sortOrder: number;
+}[] = [
+  { key: 'windows', title: 'Мытьё окон', price: 50, hasQty: true, sortOrder: 0 },
+  {
+    key: 'fridge',
+    title: 'Мытьё холодильника внутри',
+    price: 80,
+    hasQty: false,
+    sortOrder: 1,
+  },
+  { key: 'oven', title: 'Чистка духовки', price: 70, hasQty: false, sortOrder: 2 },
+  {
+    key: 'ironing',
+    title: 'Глажка белья (1 час)',
+    price: 90,
+    hasQty: false,
+    sortOrder: 3,
+  },
+];
+
 const SYSTEM_KEYS = TARIFF_DEFAULTS.map((d) => d.key);
 const MAX_PRICE = 2_000_000_000;
 
@@ -142,6 +173,24 @@ export class TariffsService implements OnModuleInit {
         where: { key: CleaningType.MAINTENANCE },
         data: { isActive: false, isSystem: true },
       });
+
+      // Доп. услуги: создаём только отсутствующие, цены директора не трогаем
+      for (const e of EXTRA_DEFAULTS) {
+        const existing = await this.prisma.extraService.findUnique({
+          where: { key: e.key },
+        });
+        if (!existing) {
+          await this.prisma.extraService.create({
+            data: { ...e, isSystem: true },
+          });
+          this.logger.log(`Доп. услуга создана: ${e.title}`);
+        } else if (!existing.isSystem) {
+          await this.prisma.extraService.update({
+            where: { key: e.key },
+            data: { isSystem: true },
+          });
+        }
+      }
     } catch (e) {
       this.logger.error('Инициализация услуг не удалась', e as any);
     }
