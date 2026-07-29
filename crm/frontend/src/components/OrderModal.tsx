@@ -8,7 +8,7 @@ import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
 import { CleanerPicker, Tabs } from './common';
 import { withRetry } from '../lib/util';
-import { formatDateTz, formatDateTimeTz } from '../lib/date';
+import { formatDateTz, formatDateTimeTz, toDateTimeInput } from '../lib/date';
 import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
 import { ReminderModal } from './ReminderModal';
@@ -108,6 +108,19 @@ export function OrderModal({
   const [stage, setStage] = useState<FunnelStage>('NEW');
   const [rejectionReason, setRejectionReason] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  // время уборки хранится в той же дате; отдельным полем, чтобы его
+  // не терять при сохранении — раньше от даты оставался только день
+  const [scheduledTime, setScheduledTime] = useState('');
+
+  /*
+   * Дата уборки уходит на сервер вместе со временем, если оно указано.
+   * Время трактуется как местное (Душанбе) — так же, как его вводит человек.
+   */
+  const scheduledWithTime = scheduledDate
+    ? scheduledTime
+      ? `${scheduledDate}T${scheduledTime}`
+      : scheduledDate
+    : '';
   const [serviceKey, setServiceKey] = useState('');
   const [editDirt, setEditDirt] = useState<DirtLevel | ''>('');
   const [editArea, setEditArea] = useState('');
@@ -181,7 +194,10 @@ export function OrderModal({
       setRejectionReason(o.rejectionReason ?? '');
     }
     if (!skip('address')) setEditAddress(o.address ?? '');
-    if (!skip('scheduledDate')) setScheduledDate(o.scheduledDate?.slice(0, 10) ?? '');
+    if (!skip('scheduledDate')) {
+      setScheduledDate(o.scheduledDate?.slice(0, 10) ?? '');
+      setScheduledTime(o.scheduledDate ? toDateTimeInput(o.scheduledDate).slice(11, 16) : '');
+    }
     if (!skip('pricing')) {
       setServiceKey(o.serviceKey ?? o.cleaningType);
       setEditDirt(o.dirtLevel ?? '');
@@ -352,7 +368,7 @@ export function OrderModal({
       isManualPrice,
       preferences: trimmedPrefs || null,
       address: editAddress || order.address,
-      scheduledDate: scheduledDate || order.scheduledDate,
+      scheduledDate: scheduledWithTime || order.scheduledDate,
       rejectionReason: stage === 'REJECTED' ? rejectionReason : order.rejectionReason,
     };
     // cleaners подмешиваем в патч, только если реально трогали — иначе в кэш
@@ -388,10 +404,10 @@ export function OrderModal({
         await api.patch(`/orders/${order.id}/stage`, {
           stage,
           rejectionReason: stage === 'REJECTED' ? rejectionReason : undefined,
-          scheduledDate: scheduledDate || undefined,
+          scheduledDate: scheduledWithTime || undefined,
         });
-      } else if (scheduledDate) {
-        await api.patch(`/orders/${order.id}`, { scheduledDate });
+      } else if (scheduledWithTime) {
+        await api.patch(`/orders/${order.id}`, { scheduledDate: scheduledWithTime });
       }
       onUpdated();
     } catch (e: any) {
@@ -471,7 +487,12 @@ export function OrderModal({
                 <Info label="Менеджер" value={order.manager?.fullName ?? 'не назначен'} />
                 <Info label="Расчёт с сайта" value={formatPrice(order.estimatedPrice)} />
                 {order.preferredDate && (
-                  <Info label="Желаемая дата" value={formatDateTz(order.preferredDate)} />
+                  <Info
+                    label="Клиент просил"
+                    value={`${formatDateTz(order.preferredDate)}${
+                      order.preferredTime ? `, ${order.preferredTime}` : ''
+                    }`}
+                  />
                 )}
                 {order.comment && <Info label="Комментарий с сайта" value={order.comment} />}
               </div>
@@ -642,14 +663,33 @@ export function OrderModal({
                   )}
                 </div>
                 <div>
-                  <label className="label">Дата уборки</label>
-                  <DatePicker
-                    value={scheduledDate}
-                    onChange={(v) => {
-                      markTouched('scheduledDate');
-                      setScheduledDate(v);
-                    }}
-                  />
+                  <label className="label">Дата и время уборки</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <DatePicker
+                        value={scheduledDate}
+                        onChange={(v) => {
+                          markTouched('scheduledDate');
+                          setScheduledDate(v);
+                        }}
+                      />
+                    </div>
+                    <input
+                      type="time"
+                      className="input w-28"
+                      value={scheduledTime}
+                      onChange={(e) => {
+                        markTouched('scheduledDate');
+                        setScheduledTime(e.target.value);
+                      }}
+                      aria-label="Время уборки"
+                    />
+                  </div>
+                  {order.preferredDate && (
+                    <div className="mt-1 text-xs text-navy-400">
+                      Заполнено по выбору клиента с сайта — можно изменить
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -136,6 +136,13 @@ export class LeadsService {
         address: dto.contact.address,
         preferredDate: preferred,
         preferredTime: dto.quiz?.time,
+        /*
+         * Дата уборки сразу заполняется тем, что выбрал клиент на сайте.
+         * Раньше она оставалась пустой, и менеджер вбивал ту же дату руками,
+         * хотя клиент её уже указал. Менеджер может изменить её при
+         * согласовании — в поле «Желаемая дата» остаётся исходный выбор клиента.
+         */
+        scheduledDate: preferred,
         hasUtilities:
           dto.quiz?.hasUtilities === 'yes'
             ? true
