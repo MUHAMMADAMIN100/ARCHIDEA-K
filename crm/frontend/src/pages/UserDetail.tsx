@@ -38,6 +38,7 @@ interface UserDetailData {
   duties?: string | null;
   mainTask?: string | null;
   canManageOps?: boolean;
+  canManageTasks?: boolean;
   isActive: boolean;
   createdAt: string;
   stats: {
@@ -75,6 +76,7 @@ export function UserDetail() {
     mainTask: string;
     role: Role;
     canManageOps: boolean;
+    canManageTasks: boolean;
     isActive: boolean;
     password?: string;
   }) => {
@@ -91,6 +93,7 @@ export function UserDetail() {
             mainTask: payload.mainTask,
             role: payload.role,
             canManageOps: payload.canManageOps,
+            canManageTasks: payload.canManageTasks,
             isActive: payload.isActive,
           }
         : d,
@@ -345,6 +348,7 @@ function EditUserModal({
     mainTask: string;
     role: Role;
     canManageOps: boolean;
+    canManageTasks: boolean;
     isActive: boolean;
     password?: string;
   }) => void;
@@ -358,6 +362,8 @@ function EditUserModal({
   const [mainTask, setMainTask] = useState(user.mainTask ?? '');
   const [role, setRole] = useState<Role>(user.role);
   const [canManageOps, setCanManageOps] = useState(!!user.canManageOps);
+  // ТЗ 1.2 — личный доступ к модулю задач (у Ироды)
+  const [canManageTasks, setCanManageTasks] = useState(!!user.canManageTasks);
   const [isActive, setIsActive] = useState(user.isActive);
   const [password, setPassword] = useState('');
 
@@ -372,6 +378,7 @@ function EditUserModal({
       mainTask,
       role,
       canManageOps,
+      canManageTasks,
       isActive,
       ...(password ? { password } : {}),
     });
@@ -457,6 +464,28 @@ function EditUserModal({
                 Видит клиентов, заказы, команду и аналитику всей компании, ставит
                 задачи любому сотруднику. Без разделов «Смены и выплаты», «Отчёты»,
                 «Тарифы» и без данных о доходах.
+              </span>
+            </span>
+          </label>
+        )}
+
+        {/* Полный доступ к задачам — отдельно от расширенного доступа:
+            нужен сотруднику, который ведёт задачи всей компании, но
+            во всём остальном остаётся обычным менеджером (ТЗ 1.2) */}
+        {role === 'MANAGER' && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={canManageTasks}
+              onChange={(e) => setCanManageTasks(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-navy-500"
+            />
+            <span className="text-sm text-navy-800">
+              <span className="font-medium">Полный доступ к задачам</span>
+              <span className="mt-0.5 block text-xs text-navy-500">
+                Видит, ставит, назначает и контролирует задачи всей компании,
+                включая календарь. На доступ к клиентам, заказам и финансам
+                не влияет.
               </span>
             </span>
           </label>

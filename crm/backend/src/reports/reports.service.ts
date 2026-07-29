@@ -4,10 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { NotificationType, Prisma, ReportStatus, Role } from '@prisma/client';
+import { AuditAction, NotificationType, Prisma, ReportStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
+import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 
 /** Целое неотрицательное число (сомони/дни) из произвольного ввода, с потолком (ниже int32) */
 const int = (v: unknown, def = 0) => {
@@ -87,10 +89,13 @@ export class ReportsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private audit: AuditService,
   ) {}
 
   private scope(user: AuthUser): Prisma.ReportWhereInput {
-    return user.role === Role.DIRECTOR ? {} : { managerId: user.id };
+    return user.role === Role.DIRECTOR
+      ? { ...NOT_DELETED }
+      : { ...NOT_DELETED, managerId: user.id };
   }
 
   list(user: AuthUser) {
@@ -102,8 +107,9 @@ export class ReportsService {
   }
 
   async getOne(user: AuthUser, id: string) {
-    const report = await this.prisma.report.findUnique({
-      where: { id },
+    // findFirst, а не findUnique: вместе с идентификатором нужен фильтр корзины
+    const report = await this.prisma.report.findFirst({
+      where: { id, ...NOT_DELETED },
       include: reportInclude,
     });
     if (!report) throw new NotFoundException('Отчёт не найден');
@@ -336,12 +342,34 @@ export class ReportsService {
     });
   }
 
-  async remove(user: AuthUser, id: string) {
+  /**
+   * Удаление ведомости переносит её в корзину (ТЗ 6).
+   *
+   * Физического удаления здесь больше нет: ведомость — финансовый документ,
+   * по принятым уже выплачены деньги. Восстановить её можно в разделе «Корзина».
+   */
+  async remove(user: AuthUser, id: string, reason?: string) {
     const report = await this.getOne(user, id);
     if (report.status === ReportStatus.ACCEPTED && user.role !== Role.DIRECTOR) {
       throw new BadRequestException('Принятый отчёт может удалить только основатель');
     }
-    await this.prisma.report.delete({ where: { id } }); // строки удалятся каскадом
+
+    await this.prisma.report.update({
+      where: { id },
+      data: softDeleteData(user, reason),
+    });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'REPORT',
+      entityId: id,
+      entityTitle: `Ведомость — ${report.clientName}`,
+      action: AuditAction.DELETE,
+      summary:
+        report.status === ReportStatus.ACCEPTED
+          ? 'Принятая ведомость перенесена в корзину'
+          : 'Ведомость перенесена в корзину',
+    });
     return { ok: true };
   }
 }

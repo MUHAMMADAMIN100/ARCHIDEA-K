@@ -20,7 +20,17 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // системный набор: Inter с CDN не грузится из-за политики безопасности,
+        // а локальной копии в проекте нет
+        sans: [
+          'Inter',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'Roboto',
+          'system-ui',
+          'sans-serif',
+        ],
       },
       boxShadow: {
         card: '0 6px 24px -10px rgba(6, 26, 46, 0.2)',

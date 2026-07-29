@@ -24,7 +24,17 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Montserrat', 'system-ui', 'sans-serif'],
+        // системный набор: Montserrat с CDN не грузится из-за политики
+        // безопасности, а локальной копии в проекте нет
+        sans: [
+          'Montserrat',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'Roboto',
+          'system-ui',
+          'sans-serif',
+        ],
       },
       boxShadow: {
         glow: '0 0 40px -10px rgba(0, 120, 201, 0.5)',

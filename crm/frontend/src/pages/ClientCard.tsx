@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, PhoneCall, Plus, Repeat2, Save, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -35,6 +35,7 @@ import type {
   DirtLevel,
   Manager,
   Order,
+  Tariffs,
 } from '../types';
 
 const ALL_TAGS: ClientTag[] = ['VIP', 'REGULAR', 'POTENTIAL', 'REFUSED'];
@@ -449,6 +450,9 @@ function AddOrderModal({
     area: number;
     seats?: number;
     estimatedPrice: number;
+    /** ТЗ 5 — цена за единицу и итог */
+    pricePerSqm?: number;
+    finalPrice?: number;
     managerId?: string;
     cleanerIds?: string[];
   }) => void;
@@ -458,12 +462,40 @@ function AddOrderModal({
   const [area, setArea] = useState('');
   const [seats, setSeats] = useState('');
   const [estimatedPrice, setEstimatedPrice] = useState('');
+  // ТЗ 5: цена за единицу и автоматический расчёт суммы
+  const [pricePerUnit, setPricePerUnit] = useState('');
+  const [manualPrice, setManualPrice] = useState(false);
   const [managerId, setManagerId] = useState('');
   const [cleanerIds, setCleanerIds] = useState<string[]>([]);
   const { data: managers } = useFetch<Manager[]>(
     isDirector ? '/users/managers' : null,
   );
+  const { data: tariffs } = useFetch<Tariffs>('/tariffs');
   const isFurniture = cleaningType === 'FURNITURE';
+
+  // цена за единицу подставляется из услуги по виду уборки и загрязнению
+  const tariff = (tariffs?.tariffs ?? []).find((t) => t.key === cleaningType);
+  const suggestedUnitPrice = !tariff
+    ? 0
+    : !tariff.hasLevels
+      ? tariff.priceMedium || tariff.pricePerSqm
+      : dirtLevel === 'LIGHT'
+        ? tariff.priceLight
+        : dirtLevel === 'HEAVY'
+          ? tariff.priceHeavy
+          : tariff.priceMedium;
+
+  useEffect(() => {
+    if (!manualPrice) setPricePerUnit(String(suggestedUnitPrice || ''));
+  }, [suggestedUnitPrice, manualPrice]);
+
+  const units = Math.round(Number(isFurniture ? seats : area)) || 0;
+  const unitPrice = Math.round(Number(pricePerUnit)) || 0;
+  const computed = units * unitPrice;
+
+  useEffect(() => {
+    if (!manualPrice) setEstimatedPrice(computed ? String(computed) : '');
+  }, [computed, manualPrice]);
 
   const submit = () => {
     const toInt = (s: string) => Math.round(Number(s)) || 0; // бэкенд принимает только целые
@@ -473,6 +505,8 @@ function AddOrderModal({
       area: isFurniture ? 0 : toInt(area),
       seats: isFurniture ? toInt(seats) : undefined,
       estimatedPrice: toInt(estimatedPrice),
+      pricePerSqm: unitPrice || undefined,
+      finalPrice: toInt(estimatedPrice) || undefined,
       managerId: managerId || undefined,
       cleanerIds: cleanerIds.length > 0 ? cleanerIds : undefined,
     });
@@ -524,8 +558,49 @@ function AddOrderModal({
             </div>
           )}
           <div>
-            <label className="label">Стоимость</label>
-            <input type="number" className="input" value={estimatedPrice} onChange={(e) => setEstimatedPrice(e.target.value)} />
+            <label className="label">Цена за {isFurniture ? 'место' : 'м²'}</label>
+            <input
+              type="number"
+              className="input"
+              value={pricePerUnit}
+              onChange={(e) => {
+                setPricePerUnit(e.target.value);
+                setManualPrice(false);
+              }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Общая сумма</label>
+          <input
+            type="number"
+            className="input"
+            value={estimatedPrice}
+            onChange={(e) => {
+              setEstimatedPrice(e.target.value);
+              setManualPrice(true);
+            }}
+          />
+          <div className="mt-1 flex items-center gap-2 text-xs text-navy-500">
+            {manualPrice ? (
+              <>
+                <span>Сумма задана вручную</span>
+                <button
+                  type="button"
+                  className="text-brand-600 underline"
+                  onClick={() => setManualPrice(false)}
+                >
+                  вернуть расчёт
+                </button>
+              </>
+            ) : (
+              <span>
+                {units > 0 && unitPrice > 0
+                  ? `${units} × ${unitPrice} = ${computed} сомони`
+                  : 'Укажите объём и цену — сумма посчитается сама'}
+              </span>
+            )}
           </div>
         </div>
         {isDirector && (

@@ -12,6 +12,7 @@ import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
+import { seesAllTasks } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -73,13 +74,18 @@ export class UsersService {
     });
   }
 
-  /** Сотрудники, которым можно ставить задачи. Доступ: директор или ops-менеджер. */
+  /**
+   * Сотрудники, которым можно ставить задачи.
+   * Доступ у тех, кто ведёт задачи компании: руководитель, операционный
+   * управляющий и сотрудник с личным доступом к модулю задач (ТЗ 1.2).
+   * Без этого Ирода получала 403 и не могла выбрать исполнителя.
+   */
   assignable(user: AuthUser) {
-    if (!seesAll(user)) {
+    if (!seesAll(user) && !seesAllTasks(user)) {
       throw new ForbiddenException('Нет доступа');
     }
     return this.prisma.user.findMany({
-      where: { isActive: true },
+      where: { ...NOT_DELETED, isActive: true },
       select: { id: true, fullName: true, position: true, role: true },
       orderBy: { fullName: 'asc' },
     });

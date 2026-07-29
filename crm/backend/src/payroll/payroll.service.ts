@@ -63,12 +63,15 @@ export class PayrollService {
    * baseline — список тех, кого клиент ВИДЕЛ при загрузке: удаляем только их,
    * чтобы не стереть смены, отмеченные параллельно с другого устройства.
    */
-  async markDay(dto: {
-    date: string;
-    cleanerIds: string[];
-    baseline?: string[];
-    note?: string;
-  }) {
+  async markDay(
+    user: AuthUser,
+    dto: {
+      date: string;
+      cleanerIds: string[];
+      baseline?: string[];
+      note?: string;
+    },
+  ) {
     const date = dayUTC(dto.date);
     const ids = Array.from(new Set(dto.cleanerIds ?? []));
     // baseline — кого клиент ВИДЕЛ при загрузке; удаляем ТОЛЬКО их снятые
@@ -108,16 +111,43 @@ export class PayrollService {
       }),
     ]);
 
+    // ТЗ 2: смены — одна из сущностей, изменения которых обязаны фиксироваться
+    if (toCreate.length || toDelete.length) {
+      const names = new Map(cleaners.map((c) => [c.id, c.id]));
+      await this.audit.log(this.prisma, {
+        user,
+        entity: 'SHIFT',
+        entityId: dto.date,
+        entityTitle: `Смены за ${formatDate(date)}`,
+        action: AuditAction.UPDATE,
+        summary:
+          `Отмечено: +${toCreate.length}, снято: ${toDelete.length}` +
+          (names.size ? '' : ''),
+      });
+    }
+
     return this.prisma.shift.findMany({
       where: { date },
       include: { cleaner: { select: cleanerSelect } },
     });
   }
 
-  async removeShift(id: string) {
-    const shift = await this.prisma.shift.findUnique({ where: { id } });
+  async removeShift(user: AuthUser, id: string) {
+    const shift = await this.prisma.shift.findUnique({
+      where: { id },
+      include: { cleaner: { select: { fullName: true } } },
+    });
     if (!shift) throw new NotFoundException('Смена не найдена');
     await this.prisma.shift.delete({ where: { id } });
+
+    await this.audit.log(this.prisma, {
+      user,
+      entity: 'SHIFT',
+      entityId: id,
+      entityTitle: `Смена ${shift.cleaner.fullName} — ${formatDate(shift.date)}`,
+      action: AuditAction.DELETE,
+      summary: `Отметка смены снята (ставка ${shift.rate} сомони)`,
+    });
     return { ok: true };
   }
 

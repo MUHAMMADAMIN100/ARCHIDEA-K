@@ -16,7 +16,7 @@ import {
   formatDate,
 } from '../lib/labels';
 import { tempId, nowISO, withRetry } from '../lib/util';
-import { userSeesAll } from '../types';
+import { userManagesTasks } from '../types';
 import type { Task, TaskPriority, TaskStatus, TaskType } from '../types';
 
 const STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'DONE'];
@@ -33,7 +33,12 @@ export function Tasks() {
   const { user } = useAuth();
   const toast = useToast();
   // задачи ставит директор ИЛИ ops-менеджер (расширенный доступ)
-  const canAssign = userSeesAll(user);
+  /*
+   * ТЗ 1.2: полный доступ к задачам определяется правом на модуль задач,
+   * а не признаком «видит всю компанию». Иначе Ирода видела бы все задачи,
+   * но не могла ни поставить, ни назначить, ни удалить ни одной.
+   */
+  const canAssign = userManagesTasks(user);
   const inFlightRef = useRef(0);
   const { data, loading, reload, setData } = useFetch<Task[]>('/tasks', {
     pollMs: 20000,

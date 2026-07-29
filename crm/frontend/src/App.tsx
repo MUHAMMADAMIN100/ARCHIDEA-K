@@ -127,7 +127,10 @@ export default function App() {
           />
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/team" element={<Team />} />
-          <Route path="/shifts" element={<NoOpsFinance><Shifts /></NoOpsFinance>} />
+          {/* Смены и выезды — операционный раздел: адрес, состав группы,
+              кто куда ездил. Денежные вкладки внутри скрыты от ops-менеджера
+              отдельно, а сам раздел ему нужен по работе (ТЗ 4). */}
+          <Route path="/shifts" element={<Shifts />} />
           <Route path="/reports" element={<NoOpsFinance><Reports /></NoOpsFinance>} />
           <Route path="/reports/new" element={<NoOpsFinance><ReportEdit /></NoOpsFinance>} />
           <Route path="/reports/:id" element={<NoOpsFinance><ReportView /></NoOpsFinance>} />

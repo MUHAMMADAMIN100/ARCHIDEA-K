@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
+/*
+ * Шрифт Montserrat больше не тянется с Google Fonts: политика безопасности
+ * в vercel.json разрешает стили и шрифты только со своего домена, поэтому
+ * запрос всё равно блокировался — посетители видели системный шрифт,
+ * а в консоли копились ошибки. Плюс сторонний CDN видит адреса посетителей.
+ */
 
 @tailwind base;
 @tailwind components;
