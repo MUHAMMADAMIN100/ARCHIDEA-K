@@ -141,6 +141,29 @@ export function ReportEdit() {
     [brigades],
   );
 
+  /*
+   * Если заказ выбрали раньше, чем догрузился справочник клинеров, ставки
+   * в строках работников остаются пустыми. Доставляем их, как только справочник
+   * появится — уже введённые вручную значения не трогаем.
+   */
+  useEffect(() => {
+    if (!cleaners?.length) return;
+    setWorkers((prev) => {
+      if (!prev.some((w) => w.cleanerId && !w.rate)) return prev;
+      return prev.map((w) => {
+        if (!w.cleanerId || w.rate) return w;
+        const full = cleaners.find((c) => c.id === w.cleanerId);
+        return full
+          ? {
+              ...w,
+              rate: String(full.rate),
+              fullName: w.fullName || full.fullName,
+            }
+          : w;
+      });
+    });
+  }, [cleaners]);
+
   const fillFromOrder = (oid: string) => {
     setOrderId(oid);
     const o = (orders ?? []).find((x) => x.id === oid);
