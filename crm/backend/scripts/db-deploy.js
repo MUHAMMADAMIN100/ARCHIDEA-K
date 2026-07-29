@@ -7,64 +7,138 @@
  * одноразового шага: сказать Prisma, что базовая схема (0_init) в базе уже есть.
  * Иначе `migrate deploy` попытается создать таблицы, которые давно созданы.
  *
- * Логика:
- *   1. Если таблицы _prisma_migrations нет, а таблицы приложения есть —
- *      база создана прежним `db push`. Отмечаем 0_init как применённую (baseline).
- *   2. Если нет ни того, ни другого — база пустая, baseline не нужен:
- *      migrate deploy создаст всё с нуля.
- *   3. В обоих случаях дальше выполняется `prisma migrate deploy`.
+ * Что делает:
+ *   1. Если таблицы приложения есть, а истории миграций нет — база создана
+ *      прежним `db push`; отмечаем 0_init как применённую (baseline).
+ *   2. Снимаем зависшие миграции: запись без finished_at блокирует все
+ *      последующие запуски `migrate deploy` до ручного вмешательства.
+ *   3. Применяем миграции.
+ *   4. Если применить не удалось, а деловых данных в базе ещё нет — приводим
+ *      схему напрямую, чтобы сервис поднялся, и пишем причину в лог.
+ *      При наличии реальных данных этот путь запрещён: молча ломать боевую
+ *      базу хуже, чем не стартовать.
  *
- * Скрипт идемпотентен: повторный запуск ничего не ломает.
+ * Скрипт идемпотентен: повторный запуск ничего не портит.
  */
 const { execFileSync } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
 
 const BASELINE = '0_init';
 
-function run(args) {
-  execFileSync('npx', ['prisma', ...args], {
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  });
+/**
+ * Запуск Prisma CLI напрямую, а НЕ через npx.
+ *
+ * npx при отсутствии пакета лезет в сеть и тянет его с реестра: в контейнере
+ * это либо долгий запуск, либо падение. Локальный бинарник — детерминированно.
+ */
+function prisma(args, { allowFail = false } = {}) {
+  let cli;
+  try {
+    cli = require.resolve('prisma/build/index.js');
+  } catch {
+    throw new Error(
+      'CLI Prisma не найден. Пакет prisma должен быть в dependencies, ' +
+        'иначе на продакшене его не будет и миграции не применятся.',
+    );
+  }
+  try {
+    execFileSync(process.execPath, [cli, ...args], { stdio: 'inherit' });
+    return true;
+  } catch (e) {
+    if (allowFail) return false;
+    throw e;
+  }
 }
 
-/**
- * Состояние базы читаем сырым запросом через Prisma Client: расхождение схемы
- * с кодом ему не мешает, отдельный драйвер Postgres в зависимостях не нужен.
- */
+/** Состояние базы: читаем сырыми запросами — расхождение схемы с кодом не мешает */
 async function inspect() {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL не задан — развернуть базу невозможно');
   }
 
-  const prisma = new PrismaClient();
+  const db = new PrismaClient();
   try {
-    const rows = await prisma.$queryRawUnsafe(
+    const [state] = await db.$queryRawUnsafe(
       `SELECT to_regclass('public."_prisma_migrations"') IS NOT NULL AS has_history,
               to_regclass('public."User"')              IS NOT NULL AS has_tables`,
     );
-    return rows[0];
+
+    // зависшие миграции: начали применяться и не завершились
+    let stuck = [];
+    if (state.has_history) {
+      stuck = await db.$queryRawUnsafe(
+        `SELECT migration_name FROM "_prisma_migrations"
+          WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL`,
+      );
+    }
+
+    // деловые данные: если их нет, схему можно безопасно привести напрямую
+    let hasBusinessData = false;
+    if (state.has_tables) {
+      try {
+        const [counts] = await db.$queryRawUnsafe(
+          `SELECT (SELECT COUNT(*) FROM "Client")
+                + (SELECT COUNT(*) FROM "Order")
+                + (SELECT COUNT(*) FROM "Report") AS total`,
+        );
+        hasBusinessData = Number(counts.total) > 0;
+      } catch {
+        // таблиц может не быть на самой ранней стадии — считаем, что данных нет
+        hasBusinessData = false;
+      }
+    }
+
+    return {
+      hasHistory: Boolean(state.has_history),
+      hasTables: Boolean(state.has_tables),
+      stuck: stuck.map((r) => r.migration_name),
+      hasBusinessData,
+    };
   } finally {
-    await prisma.$disconnect();
+    await db.$disconnect();
   }
 }
 
 (async () => {
-  const { has_history: hasHistory, has_tables: hasTables } = await inspect();
+  const state = await inspect();
 
-  if (!hasHistory && hasTables) {
+  if (!state.hasHistory && state.hasTables) {
     console.log(
-      `[db-deploy] Таблицы есть, истории миграций нет — отмечаю ${BASELINE} как применённую (baseline).`,
+      `[db-deploy] Таблицы есть, истории миграций нет — отмечаю ${BASELINE} как применённую.`,
     );
-    run(['migrate', 'resolve', '--applied', BASELINE]);
-  } else if (!hasHistory) {
+    prisma(['migrate', 'resolve', '--applied', BASELINE], { allowFail: true });
+  } else if (!state.hasHistory) {
     console.log('[db-deploy] База пустая — миграции создадут схему с нуля.');
-  } else {
-    console.log('[db-deploy] История миграций на месте.');
   }
 
-  run(['migrate', 'deploy']);
-  console.log('[db-deploy] Схема базы актуальна.');
+  for (const name of state.stuck) {
+    console.warn(
+      `[db-deploy] Миграция ${name} осталась незавершённой — помечаю откатившейся, чтобы разблокировать деплой.`,
+    );
+    prisma(['migrate', 'resolve', '--rolled-back', name], { allowFail: true });
+  }
+
+  const applied = prisma(['migrate', 'deploy'], { allowFail: true });
+  if (applied) {
+    console.log('[db-deploy] Схема базы актуальна.');
+    return;
+  }
+
+  console.error('[db-deploy] Применить миграции не удалось (подробности выше).');
+
+  if (state.hasBusinessData) {
+    throw new Error(
+      'В базе есть рабочие данные — привести схему в обход миграций нельзя. ' +
+        'Разберите ошибку миграции выше и задеплойте заново.',
+    );
+  }
+
+  console.warn(
+    '[db-deploy] Деловых данных в базе нет — привожу схему напрямую, ' +
+      'чтобы сервис поднялся. Историю миграций нужно будет восстановить.',
+  );
+  prisma(['db', 'push', '--skip-generate', '--accept-data-loss']);
+  console.log('[db-deploy] Схема приведена к текущему состоянию.');
 })().catch((e) => {
   console.error('[db-deploy] Ошибка развёртывания схемы:', e.message || e);
   process.exit(1);
