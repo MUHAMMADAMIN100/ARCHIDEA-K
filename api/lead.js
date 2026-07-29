@@ -98,9 +98,26 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
       body: JSON.stringify(body ?? {}),
     });
-    // наружу отдаём только факт успеха — без деталей бэкенда
-    return res.status(upstream.ok ? 200 : 502).json({ ok: upstream.ok });
-  } catch {
-    return res.status(502).json({ ok: false });
+    /*
+     * Наружу не отдаём подробности бэкенда, но код ответа обязательно пишем в
+     * лог: без него «заявка не дошла» неотличимо от «CRM ответила отказом», и
+     * потерю заявок можно заметить только вручную, сверяя сайт с воронкой.
+     */
+    if (!upstream.ok) {
+      console.error(
+        `[lead] CRM отклонила заявку: ${upstream.status} ${upstream.statusText}`,
+      );
+    }
+    // reason нужен поддержке, чтобы отличить неверный ключ от недоступной CRM
+    return res
+      .status(upstream.ok ? 200 : 502)
+      .json(
+        upstream.ok
+          ? { ok: true }
+          : { ok: false, reason: `upstream_${upstream.status}` },
+      );
+  } catch (e) {
+    console.error('[lead] CRM недоступна:', e?.message || e);
+    return res.status(502).json({ ok: false, reason: 'unreachable' });
   }
 }
