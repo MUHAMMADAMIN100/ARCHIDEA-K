@@ -419,16 +419,24 @@ export function Tabs<T extends string>({
   );
 }
 
+/**
+ * Карточка-показатель. С `onClick` становится кнопкой: цифра на ней —
+ * не итог, а вход в расшифровку (из каких заказов она сложилась).
+ */
 export function StatCard({
   label,
   value,
   hint,
   tone = 'default',
+  onClick,
+  title,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   tone?: 'default' | 'positive' | 'negative';
+  onClick?: () => void;
+  title?: string;
 }) {
   const toneClass =
     tone === 'positive'
@@ -436,8 +444,9 @@ export function StatCard({
       : tone === 'negative'
         ? 'text-rose-600'
         : 'text-navy-900';
-  return (
-    <div className="rounded-2xl border border-navy-100 bg-white p-4">
+
+  const body = (
+    <>
       <div className="text-xs uppercase tracking-wide text-navy-400">
         {label}
       </div>
@@ -445,7 +454,22 @@ export function StatCard({
         {value}
       </div>
       {hint && <div className="mt-0.5 text-xs text-navy-400">{hint}</div>}
-    </div>
+    </>
+  );
+
+  if (!onClick) {
+    return <div className="rounded-2xl border border-navy-100 bg-white p-4">{body}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title ?? 'Показать подробности'}
+      className="rounded-2xl border border-navy-100 bg-white p-4 text-left transition hover:border-navy-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
+    >
+      {body}
+    </button>
   );
 }
 

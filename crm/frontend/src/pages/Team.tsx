@@ -19,6 +19,7 @@ import { sanitizePersonName } from '../lib/contact';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, Modal, EmptyState, Badge } from '../components/ui';
+import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   STAGE_COLOR,
   STAGE_LABEL,
@@ -60,6 +61,11 @@ export function Team() {
   } | null>(null);
   const [editCleaner, setEditCleaner] = useState<Cleaner | null>(null);
   const [addToBrigade, setAddToBrigade] = useState<string | null | 'open'>(null);
+  // бригада, по которой раскрыт состав и стоимость смены
+  const [brigadeDrill, setBrigadeDrill] = useState<{
+    brigade: Brigade;
+    members: Cleaner[];
+  } | null>(null);
 
   const reloadAll = () => {
     reloadBrigades();
@@ -229,7 +235,16 @@ export function Team() {
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-navy-900">{b.name}</div>
                   <div className="text-xs text-navy-400">
-                    {members.length} чел. · бригадир:{' '}
+                    <DrillValue
+                      tone="muted"
+                      className="text-xs"
+                      disabled={members.length === 0}
+                      title="Состав бригады и стоимость её смены"
+                      onClick={() => setBrigadeDrill({ brigade: b, members })}
+                    >
+                      {members.length} чел.
+                    </DrillValue>
+                    {' · бригадир: '}
                     {b.leader?.fullName ?? 'не назначен'}
                   </div>
                 </div>
@@ -427,7 +442,107 @@ export function Team() {
           onSubmit={(payload) => upsertCleaner(payload)}
         />
       )}
+      {brigadeDrill && (
+        <BrigadeCostModal
+          brigade={brigadeDrill.brigade}
+          members={brigadeDrill.members}
+          onPick={(c) => {
+            setBrigadeDrill(null);
+            setEditCleaner(c);
+          }}
+          onClose={() => setBrigadeDrill(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Состав бригады со ставками и стоимостью её выезда. На самой карточке ставки
+ * тоже видны, но сумму «сколько стоит смена этой бригады» никто не считает
+ * глазами — а именно она нужна, когда прикидываешь себестоимость заказа.
+ */
+function BrigadeCostModal({
+  brigade,
+  members,
+  onPick,
+  onClose,
+}: {
+  brigade: Brigade;
+  members: Cleaner[];
+  onPick: (cleaner: Cleaner) => void;
+  onClose: () => void;
+}) {
+  const total = members.reduce((s, c) => s + c.rate, 0);
+
+  return (
+    <DetailModal
+      title={brigade.name}
+      subtitle={`Бригадир: ${brigade.leader?.fullName ?? 'не назначен'}`}
+      onClose={onClose}
+    >
+      <DetailStats
+        items={[
+          { label: 'В бригаде', value: `${members.length} чел.` },
+          { label: 'Смена бригады', value: `${total} сомони`, tone: 'success' },
+          {
+            label: 'Средняя ставка',
+            value: members.length ? `${Math.round(total / members.length)} сомони` : '—',
+          },
+        ]}
+      />
+
+      <DetailTable
+        rows={members}
+        rowKey={(c) => c.id}
+        onRowClick={onPick}
+        emptyText="В бригаде нет активных клинеров"
+        columns={[
+          {
+            key: 'name',
+            header: 'Клинер',
+            cell: (c) => (
+              <div>
+                <div className="font-medium text-navy-900">{c.fullName}</div>
+                <div className="text-xs text-navy-400">
+                  {c.phone || 'телефон не указан'}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'role',
+            header: 'Роль',
+            cell: (c) =>
+              c.id === brigade.leaderId ? (
+                <Badge className="bg-amber-100 text-amber-700">Бригадир</Badge>
+              ) : (
+                <span className="text-navy-400">Клинер</span>
+              ),
+          },
+          {
+            key: 'rate',
+            header: 'Ставка',
+            align: 'right',
+            cell: (c) => <span className="font-bold text-navy-900">{c.rate} с</span>,
+          },
+        ]}
+        footer={
+          members.length > 0 ? (
+            <tr className="border-t border-navy-100 font-bold text-navy-900">
+              <td className="px-3 py-2" colSpan={2}>
+                Стоимость одной смены бригады
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{total} с</td>
+            </tr>
+          ) : undefined
+        }
+      />
+
+      <p className="mt-3 text-xs text-navy-400">
+        Нажмите на клинера, чтобы изменить его ставку или бригаду.
+      </p>
+    </DetailModal>
   );
 }
 

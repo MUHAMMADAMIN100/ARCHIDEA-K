@@ -40,4 +40,31 @@ export class AnalyticsController {
       : 'month';
     return this.service.full(user, p, from, to);
   }
+
+  /**
+   * Расшифровка одной цифры: столбика диаграммы, сектора или карточки.
+   * Возвращает те самые заказы, из которых цифра сложилась.
+   */
+  @Get('drilldown')
+  drilldown(
+    @CurrentUser() user: AuthUser,
+    @Query('metric') metric: string,
+    @Query('key') key?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('period') period?: string,
+  ) {
+    const allowed: AnalyticsPeriod[] = [
+      'day',
+      'week',
+      'month',
+      'quarter',
+      'year',
+      'all',
+    ];
+    const p = allowed.includes(period as AnalyticsPeriod)
+      ? (period as AnalyticsPeriod)
+      : 'month';
+    return this.service.drilldown(user, metric, key, from, to, p);
+  }
 }

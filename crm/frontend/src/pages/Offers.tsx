@@ -16,6 +16,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { PageHeader, Modal, Badge, EmptyState, Spinner, ErrorState } from '../components/ui';
+import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   DataTable,
   type Column,
@@ -143,6 +144,8 @@ function ProposalsTab() {
   const [managerId, setManagerId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  // КП, по которому раскрыт состав сметы
+  const [totalFor, setTotalFor] = useState<Proposal | null>(null);
 
   const qs = new URLSearchParams();
   if (period.from) qs.set('from', period.from);
@@ -259,7 +262,18 @@ function ProposalsTab() {
       key: 'total',
       title: 'Сумма',
       numeric: true,
-      render: (p) => formatPrice(p.total),
+      // строка ведёт на само КП, а цифра — раскрывает состав сметы на месте
+      render: (p) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <DrillValue
+            align="right"
+            title="Из чего сложилась сумма КП"
+            onClick={() => setTotalFor(p)}
+          >
+            {formatPrice(p.total)}
+          </DrillValue>
+        </span>
+      ),
     },
     {
       key: 'status',
@@ -388,7 +402,108 @@ function ProposalsTab() {
       />
 
       {showCreate && <CreateOfferModal onClose={() => setShowCreate(false)} />}
+
+      {totalFor && (
+        <ProposalTotalModal
+          proposal={totalFor}
+          onOpen={() => navigate(`/offers/${totalFor.id}`)}
+          onClose={() => setTotalFor(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ───────────── Расшифровка суммы КП ─────────────
+
+/**
+ * Состав сметы: позиции с объёмом и ценой за единицу, скидка, итог.
+ * Открывается прямо из списка — сверить цифру, не уходя в само КП.
+ */
+function ProposalTotalModal({
+  proposal,
+  onOpen,
+  onClose,
+}: {
+  proposal: Proposal;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const items = proposal.items ?? [];
+  const amountOf = (i: (typeof items)[number]) =>
+    i.amount ?? (i.volume ?? 0) * (i.unitPrice ?? 0);
+  const subtotal = items.reduce((s, i) => s + amountOf(i), 0);
+
+  return (
+    <DetailModal
+      title={`КП №${proposal.number}`}
+      subtitle={[proposal.clientName, proposal.address, proposal.templateName]
+        .filter(Boolean)
+        .join(' · ')}
+      onClose={onClose}
+    >
+      <DetailStats
+        items={[
+          { label: 'Позиций', value: items.length },
+          { label: 'Сумма позиций', value: formatPrice(subtotal) },
+          {
+            label: 'Скидка',
+            value: proposal.discount > 0 ? `− ${formatPrice(proposal.discount)}` : '—',
+            tone: proposal.discount > 0 ? 'danger' : 'default',
+          },
+          { label: 'Итог', value: formatPrice(proposal.total), tone: 'success' },
+        ]}
+      />
+
+      <DetailTable
+        rows={items}
+        rowKey={(i, idx) => `${i.title}-${idx}`}
+        emptyText="Смета без позиций — сумма проставлена вручную"
+        columns={[
+          {
+            key: 'title',
+            header: 'Позиция',
+            cell: (i) => <span className="font-medium text-navy-900">{i.title}</span>,
+          },
+          {
+            key: 'calc',
+            header: 'Расчёт',
+            cell: (i) =>
+              i.volume && i.unitPrice ? (
+                <span className="text-navy-500">
+                  {i.volume} × {formatPrice(i.unitPrice)}
+                </span>
+              ) : (
+                <span className="text-navy-300">фиксированная</span>
+              ),
+          },
+          {
+            key: 'amount',
+            header: 'Сумма',
+            align: 'right',
+            cell: (i) => (
+              <span className="font-bold text-navy-900">{formatPrice(amountOf(i))}</span>
+            ),
+          },
+        ]}
+        footer={
+          items.length > 0 ? (
+            <tr className="border-t border-navy-100 font-bold text-navy-900">
+              <td className="px-3 py-2" colSpan={2}>
+                Итого{proposal.discount > 0 ? ' со скидкой' : ''}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                {formatPrice(proposal.total)}
+              </td>
+            </tr>
+          ) : undefined
+        }
+      />
+
+      <button onClick={onOpen} className="btn-ghost mt-3 w-full">
+        Открыть КП целиком
+      </button>
+    </DetailModal>
   );
 }
 

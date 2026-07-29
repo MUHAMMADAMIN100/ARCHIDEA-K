@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -17,6 +19,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { Badge, EmptyState, ErrorState, Modal, PageHeader } from '../components/ui';
+import { DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   Column,
   DataTable,
@@ -114,6 +117,20 @@ interface FinanceEntryPayload {
 
 const ALL_CATEGORIES = Object.keys(FINANCE_CATEGORY_LABEL) as FinanceCategory[];
 
+/** Подпись под графиками: без неё неочевидно, что столбики кликабельны */
+const CHART_HINT = 'Нажмите на столбик — покажем операции, из которых он сложился.';
+
+/** Что расшифровываем: срез книги операций + как назвать модалку */
+interface FinanceDrill {
+  title: string;
+  subtitle?: string;
+  kind?: FinanceKind;
+  category?: FinanceCategory;
+  /** свой диапазон (например один месяц с графика); иначе — период страницы */
+  from?: string;
+  to?: string;
+}
+
 function EntriesTab() {
   const { user } = useAuth();
   const toast = useToast();
@@ -125,6 +142,29 @@ function EntriesTab() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FinanceEntry | null>(null);
+  const [drill, setDrill] = useState<FinanceDrill | null>(null);
+  const [entryDetail, setEntryDetail] = useState<FinanceEntry | null>(null);
+
+  /**
+   * Столбик помесячной динамики. Он живёт по своему месяцу, а не по периоду
+   * страницы, поэтому диапазон в расшифровке задаём явно — иначе список
+   * покажет не тот месяц, по которому кликнули.
+   */
+  const openMonth = (monthKey: string, kind: FinanceKind) => {
+    const [y, m] = monthKey.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const label = new Date(`${monthKey}-01T00:00:00`).toLocaleDateString('ru-RU', {
+      month: 'long',
+      year: 'numeric',
+    });
+    setDrill({
+      title: `${kind === 'INCOME' ? 'Доход' : 'Расход'} · ${label}`,
+      subtitle: 'Операции за этот месяц',
+      kind,
+      from: `${monthKey}-01`,
+      to: `${monthKey}-${String(lastDay).padStart(2, '0')}`,
+    });
+  };
 
   const listQuery = useMemo(() => {
     const q = new URLSearchParams();
@@ -352,7 +392,8 @@ function EntriesTab() {
       key: 'actions',
       title: '',
       render: (row) => (
-        <div className="flex justify-end gap-1">
+        // клик по строке открывает расшифровку — кнопки не должны её задевать
+        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => {
               setEditingEntry(row);
@@ -383,23 +424,39 @@ function EntriesTab() {
           label="Доход за период"
           value={summary ? formatPrice(summary.income) : '—'}
           tone="positive"
+          title="Из каких операций сложился доход"
+          onClick={() =>
+            setDrill({ title: 'Доход за период', kind: 'INCOME' })
+          }
         />
         <StatCard
           label="Расход за период"
           value={summary ? formatPrice(summary.expense) : '—'}
           tone="negative"
+          title="Из каких операций сложился расход"
+          onClick={() =>
+            setDrill({ title: 'Расход за период', kind: 'EXPENSE' })
+          }
         />
         <StatCard
           label="Прибыль"
           value={summary ? formatPrice(summary.profit) : '—'}
           tone={summary && summary.profit < 0 ? 'negative' : 'positive'}
+          title="Все операции периода: доход минус расход"
+          onClick={() =>
+            setDrill({
+              title: 'Прибыль за период',
+              subtitle: 'Все операции: доход минус расход',
+            })
+          }
         />
       </div>
 
       {/* Разбивка по статьям за период */}
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <div className="card p-5">
-          <h3 className="mb-4 font-bold text-navy-900">Разбивка по статьям за период</h3>
+          <h3 className="mb-1 font-bold text-navy-900">Разбивка по статьям за период</h3>
+          <p className="mb-3 text-xs text-navy-400">{CHART_HINT}</p>
           {summary && summary.byCategory.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={summary.byCategory} layout="vertical" margin={{ left: 24 }}>
@@ -412,7 +469,19 @@ function EntriesTab() {
                   tick={{ fontSize: 11, fill: '#0a2a48' }}
                 />
                 <Tooltip formatter={(v: number) => formatPrice(v)} />
-                <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
+                <Bar
+                  dataKey="amount"
+                  radius={[0, 6, 6, 0]}
+                  cursor="pointer"
+                  onClick={(bar: any) =>
+                    bar?.payload?.category &&
+                    setDrill({
+                      title: bar.payload.label,
+                      subtitle: 'Операции по этой статье',
+                      category: bar.payload.category,
+                    })
+                  }
+                >
                   {summary.byCategory.map((c, i) => (
                     <Cell key={i} fill={c.kind === 'INCOME' ? '#10b981' : '#f43f5e'} />
                   ))}
@@ -425,7 +494,8 @@ function EntriesTab() {
         </div>
 
         <div className="card p-5">
-          <h3 className="mb-4 font-bold text-navy-900">Динамика по месяцам</h3>
+          <h3 className="mb-1 font-bold text-navy-900">Динамика по месяцам</h3>
+          <p className="mb-3 text-xs text-navy-400">{CHART_HINT}</p>
           {summary && summary.series && summary.series.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={summary.series}>
@@ -434,8 +504,22 @@ function EntriesTab() {
                 <YAxis tick={{ fontSize: 12, fill: '#5fb1e8' }} />
                 <Tooltip formatter={(v: number) => formatPrice(v)} />
                 <Legend />
-                <Bar dataKey="income" name="Доход" fill="#10b981" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="expense" name="Расход" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                <Bar
+                  dataKey="income"
+                  name="Доход"
+                  fill="#10b981"
+                  radius={[6, 6, 0, 0]}
+                  cursor="pointer"
+                  onClick={(bar: any) => bar?.payload?.date && openMonth(bar.payload.date, 'INCOME')}
+                />
+                <Bar
+                  dataKey="expense"
+                  name="Расход"
+                  fill="#f43f5e"
+                  radius={[6, 6, 0, 0]}
+                  cursor="pointer"
+                  onClick={(bar: any) => bar?.payload?.date && openMonth(bar.payload.date, 'EXPENSE')}
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -500,6 +584,7 @@ function EntriesTab() {
           loading={loading}
           error={error}
           onRetry={reload}
+          onRowClick={setEntryDetail}
           emptyText="За выбранный период и фильтры операций нет. Доход появится автоматически при оплате заказа, либо добавьте запись вручную кнопкой выше."
           totals={
             rows.length > 0
@@ -527,7 +612,219 @@ function EntriesTab() {
           onSubmit={upsertEntry}
         />
       )}
+
+      {drill && (
+        <FinanceDrilldownModal
+          drill={drill}
+          period={period}
+          onPick={(entry) => {
+            setDrill(null);
+            setEntryDetail(entry);
+          }}
+          onClose={() => setDrill(null)}
+        />
+      )}
+
+      {entryDetail && (
+        <EntryDetailModal entry={entryDetail} onClose={() => setEntryDetail(null)} />
+      )}
     </div>
+  );
+}
+
+// ───────────── Расшифровка финансовых цифр ─────────────
+
+/**
+ * Список операций, из которых сложилась цифра на карточке или столбик графика.
+ * Считается тем же фильтром, что и сама цифра, поэтому итог внизу сходится
+ * с числом, по которому кликнули.
+ */
+function FinanceDrilldownModal({
+  drill,
+  period,
+  onPick,
+  onClose,
+}: {
+  drill: FinanceDrill;
+  period: Period;
+  onPick: (entry: FinanceEntry) => void;
+  onClose: () => void;
+}) {
+  const from = drill.from ?? period.from;
+  const to = drill.to ?? period.to;
+
+  const query = new URLSearchParams({ take: '500' });
+  if (from) query.set('from', from);
+  if (to) query.set('to', to);
+  if (drill.kind) query.set('kind', drill.kind);
+  if (drill.category) query.set('category', drill.category);
+
+  const { data, loading, error, reload } = useFetch<FinanceListResponse>(
+    `/finance?${query.toString()}`,
+    { deps: [query.toString()] },
+  );
+
+  const rows = data?.rows ?? [];
+  const income = rows.filter((r) => r.kind === 'INCOME').reduce((s, r) => s + r.amount, 0);
+  const expense = rows.filter((r) => r.kind === 'EXPENSE').reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <DetailModal
+      title={drill.title}
+      subtitle={`${drill.subtitle ? `${drill.subtitle} · ` : ''}${
+        from && to ? `${formatDateTz(from)} — ${formatDateTz(to)}` : 'за всё время'
+      }`}
+      onClose={onClose}
+    >
+      {error ? (
+        <ErrorState onRetry={reload} />
+      ) : (
+        <>
+          <DetailStats
+            items={[
+              { label: 'Операций', value: data ? rows.length : '…' },
+              { label: 'Доход', value: `+${formatPrice(income)}`, tone: 'success' },
+              { label: 'Расход', value: `−${formatPrice(expense)}`, tone: 'danger' },
+              {
+                label: 'Итог',
+                value: formatPrice(income - expense),
+                tone: income - expense < 0 ? 'danger' : 'success',
+              },
+            ]}
+          />
+
+          <DetailTable
+            rows={data?.rows}
+            loading={loading}
+            rowKey={(e) => e.id}
+            onRowClick={onPick}
+            emptyText="Операций по этому срезу нет"
+            columns={[
+              {
+                key: 'date',
+                header: 'Дата',
+                cell: (e) => (
+                  <span className="whitespace-nowrap font-medium text-navy-900">
+                    {formatDateTz(e.date)}
+                  </span>
+                ),
+              },
+              {
+                key: 'title',
+                header: 'Операция',
+                cell: (e) => (
+                  <div>
+                    <div className="font-medium text-navy-900">{e.title}</div>
+                    <div className="text-xs text-navy-400">
+                      {FINANCE_CATEGORY_LABEL[e.category]}
+                      {e.source === 'AUTO' ? ' · авто' : ''}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'amount',
+                header: 'Сумма',
+                align: 'right',
+                cell: (e) => (
+                  <span
+                    className={
+                      e.kind === 'INCOME'
+                        ? 'font-semibold text-emerald-600'
+                        : 'font-semibold text-rose-600'
+                    }
+                  >
+                    {e.kind === 'INCOME' ? '+' : '−'}
+                    {formatPrice(e.amount)}
+                  </span>
+                ),
+              },
+            ]}
+            footer={
+              rows.length > 0 ? (
+                <tr className="border-t border-navy-100 font-bold text-navy-900">
+                  <td className="px-3 py-2" colSpan={2}>
+                    Итого по срезу
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {formatPrice(income - expense)}
+                  </td>
+                </tr>
+              ) : undefined
+            }
+          />
+
+          <p className="mt-3 text-xs text-navy-400">
+            Нажмите на операцию, чтобы увидеть комментарий, привязку к заказу и автора записи.
+          </p>
+        </>
+      )}
+    </DetailModal>
+  );
+}
+
+/** Одна операция целиком — включая поля, скрытые в таблице на узком экране */
+function EntryDetailModal({
+  entry,
+  onClose,
+}: {
+  entry: FinanceEntry;
+  onClose: () => void;
+}) {
+  const facts: { label: string; value: ReactNode }[] = [
+    { label: 'Дата', value: formatDateTz(entry.date) },
+    { label: 'Тип', value: FINANCE_KIND_LABEL[entry.kind] },
+    { label: 'Статья', value: FINANCE_CATEGORY_LABEL[entry.category] },
+    {
+      label: 'Сумма',
+      value: (
+        <span
+          className={
+            entry.kind === 'INCOME'
+              ? 'font-bold text-emerald-600'
+              : 'font-bold text-rose-600'
+          }
+        >
+          {entry.kind === 'INCOME' ? '+' : '−'}
+          {formatPrice(entry.amount)}
+        </span>
+      ),
+    },
+    {
+      label: 'Источник',
+      value:
+        entry.source === 'AUTO'
+          ? 'Создана автоматически (оплата заказа)'
+          : 'Внесена вручную',
+    },
+    { label: 'Кто внёс', value: entry.createdByName ?? '—' },
+    {
+      label: 'Заказ',
+      value: entry.orderId ? (
+        <Link
+          to={`/clients/${entry.clientId ?? ''}`}
+          className="text-navy-600 underline decoration-dotted underline-offset-4 hover:text-navy-900"
+        >
+          №{entry.orderId.slice(-6).toUpperCase()}
+        </Link>
+      ) : (
+        '—'
+      ),
+    },
+    { label: 'Комментарий', value: entry.comment || '—' },
+  ];
+
+  return (
+    <DetailModal title={entry.title} subtitle="Полная карточка операции" onClose={onClose}>
+      <dl className="divide-y divide-navy-50 rounded-xl border border-navy-100">
+        {facts.map((f) => (
+          <div key={f.label} className="flex gap-4 px-3 py-2.5 text-sm">
+            <dt className="w-40 shrink-0 text-navy-400">{f.label}</dt>
+            <dd className="min-w-0 flex-1 text-navy-900">{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </DetailModal>
   );
 }
 

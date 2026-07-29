@@ -48,11 +48,33 @@ export class PayrollService {
 
   // ─────────────── СМЕНЫ ───────────────
 
-  /** Смены за период (для страницы учёта) */
-  listShifts(from?: string, to?: string) {
+  /**
+   * Смены за период. cleanerId сужает выборку до одного клинера — на этом
+   * держится расшифровка колонки «Смены» в выплатах: цифру 3 надо уметь
+   * развернуть в три конкретные даты, а не заставлять считать глазами.
+   *
+   * Выезд подтягиваем вместе со сменой: по ней сразу видно, откуда взялось
+   * начисление — с адреса объекта или это ручная отметка дня.
+   */
+  listShifts(from?: string, to?: string, cleanerId?: string) {
     return this.prisma.shift.findMany({
-      where: { date: rangeUTC(from, to) },
-      include: { cleaner: { select: cleanerSelect } },
+      where: {
+        date: rangeUTC(from, to),
+        ...(cleanerId ? { cleanerId } : {}),
+      },
+      include: {
+        cleaner: { select: cleanerSelect },
+        group: {
+          select: {
+            id: true,
+            address: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            brigadeName: true,
+          },
+        },
+      },
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
   }

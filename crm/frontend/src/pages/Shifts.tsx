@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   Wallet,
   AlertTriangle,
   Trash2,
   Plus,
-  Save,
-  Check,
-  Star,
   MapPin,
   Pencil,
   Lock,
@@ -23,6 +19,13 @@ import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { DatePicker } from '../components/DatePicker';
 import { HistoryPanel } from '../components/HistoryPanel';
+import {
+  DrillValue,
+  DetailModal,
+  DetailStats,
+  DetailTabs,
+  DetailTable,
+} from '../components/Drilldown';
 import {
   CleanerPicker,
   UserPicker,
@@ -48,13 +51,14 @@ import type {
   Fine,
   Manager,
   Order,
+  PayrollRow,
   PayrollSummary,
   Shift,
   ShiftGroup,
   ShiftGroupStatus,
 } from '../types';
 
-type ShiftsTab = 'visits' | 'marking' | 'payroll' | 'fines';
+type ShiftsTab = 'visits' | 'payroll' | 'fines';
 
 export function Shifts() {
   const { user } = useAuth();
@@ -69,7 +73,6 @@ export function Shifts() {
   const showMoney = !userIsOpsOnly(user);
   const tabs = [
     { value: 'visits' as const, label: 'Выезды' },
-    { value: 'marking' as const, label: 'Отметка смен' },
     ...(showMoney
       ? [
           { value: 'payroll' as const, label: 'Выплаты' },
@@ -95,7 +98,6 @@ export function Shifts() {
       </div>
 
       {tab === 'visits' && <ShiftGroupsSection canManage={canManageVisits} />}
-      {tab === 'marking' && <DayMarking />}
       {tab === 'payroll' && showMoney && <PayrollSummarySection />}
       {tab === 'fines' && showMoney && <FinesSection />}
     </div>
@@ -751,255 +753,6 @@ function OrderPicker({
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Вкладка «Отметка смен» — без изменений логики
-// ═══════════════════════════════════════════════════════════
-
-function DayMarking() {
-  const toast = useToast();
-  const [date, setDate] = useState(() => todayISO());
-  const { data: brigades } = useFetch<Brigade[]>('/brigades');
-  const { data: cleaners } = useFetch<Cleaner[]>('/cleaners');
-  const {
-    data: dayShifts,
-    loading,
-    reload,
-    setData: setDayShifts,
-  } = useFetch<Shift[]>(`/payroll/shifts?from=${date}&to=${date}`, {
-    deps: [date],
-  });
-
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-
-  // Галочки заполняем с сервера ОДИН раз на дату (и после сохранения) —
-  // фоновые обновления не должны затирать несохранённые отметки.
-  // baseline — что именно видел пользователь: сервер удалит только эти смены.
-  const syncedFor = useRef<string | null>(null);
-  const baselineRef = useRef<string[]>([]);
-  useEffect(() => {
-    // при смене даты сбрасываем отметки и baseline — иначе кнопка «Сохранить»
-    // над спиннером новой даты сохранила бы отметки предыдущего дня в новую дату
-    syncedFor.current = null;
-    setChecked(new Set());
-    baselineRef.current = [];
-  }, [date]);
-  useEffect(() => {
-    if (dayShifts && syncedFor.current !== date) {
-      const ids = dayShifts.map((s) => s.cleanerId);
-      setChecked(new Set(ids));
-      baselineRef.current = ids;
-      syncedFor.current = date;
-    }
-  }, [dayShifts, date]);
-
-  const serverIds = useMemo(
-    () => new Set((dayShifts ?? []).map((s) => s.cleanerId)),
-    [dayShifts],
-  );
-  // ставка-снапшот уже отмеченной смены (может отличаться от текущей ставки клинера)
-  const shiftRateById = useMemo(
-    () => new Map((dayShifts ?? []).map((s) => [s.cleanerId, s.rate])),
-    [dayShifts],
-  );
-  const dirty =
-    checked.size !== serverIds.size ||
-    [...checked].some((id) => !serverIds.has(id));
-
-  const toggle = (id: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  // клинер, чья смена сегодня уже начислена выездом — второй раз её не отмечаем,
-  // чтобы случайно не разойтись с составом закрытого выезда
-  const fromGroupIds = useMemo(
-    () => new Set((dayShifts ?? []).filter((s) => s.groupId).map((s) => s.cleanerId)),
-    [dayShifts],
-  );
-
-  const save = () => {
-    const ids = [...checked];
-    const oldBaseline = baselineRef.current; // прежнее серверное состояние — для сервера
-    // оптимистично: сразу считаем смены сохранёнными (кнопка → «Сохранено»)
-    const byId = new Map((dayShifts ?? []).map((s) => [s.cleanerId, s]));
-    setDayShifts(
-      ids.map(
-        (id) =>
-          byId.get(id) ?? {
-            id: tempId(),
-            date,
-            cleanerId: id,
-            rate: (cleaners ?? []).find((c) => c.id === id)?.rate ?? 0,
-          },
-      ),
-    );
-    baselineRef.current = ids;
-    syncedFor.current = date; // фоновый refetch не должен перетирать отметки
-    toast.success('Смены сохранены');
-    withRetry(() =>
-      api.post('/payroll/shifts/day', {
-        date,
-        cleanerIds: ids,
-        baseline: oldBaseline,
-      }),
-    )
-      .then(() => {
-        // НЕ обнуляем syncedFor: оптимистичное состояние уже равно сохранённому,
-        // а ресинк перетёр бы отметки, сделанные пользователем после «Сохранить».
-        // reload лишь досогласует dayShifts со сервером (checked не трогаем).
-        reload();
-      })
-      .catch((e: any) => {
-        toast.error(e?.response?.data?.message || 'Не удалось сохранить смены');
-        syncedFor.current = null;
-        reload(); // откат к серверному состоянию
-      });
-  };
-
-  const unassigned = (cleaners ?? []).filter((c) => !c.brigadeId && c.isActive);
-  const groups: { title: string; leaderId?: string | null; list: Cleaner[] }[] = [
-    ...(brigades ?? []).map((b) => ({
-      title: b.name,
-      leaderId: b.leaderId,
-      list: b.cleaners.filter((c) => c.isActive) as Cleaner[],
-    })),
-    ...(unassigned.length > 0
-      ? [{ title: 'Без бригады', leaderId: null, list: unassigned }]
-      : []),
-  ];
-
-  return (
-    <div className="card mb-6 p-5">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-100 text-navy-700">
-            <CalendarCheck className="h-5 w-5" />
-          </span>
-          <div>
-            <div className="font-bold text-navy-900">Отметка смен</div>
-            <div className="text-xs text-navy-400">
-              Кто вышел на работу в этот день
-            </div>
-          </div>
-        </div>
-        <div className="w-full max-w-[220px]">
-          <DatePicker value={date} onChange={setDate} />
-        </div>
-      </div>
-
-      {loading && !dayShifts ? (
-        <Spinner />
-      ) : groups.length === 0 ? (
-        <EmptyState text="Добавьте клинеров в разделе «Команда»" />
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {groups.map((g) => {
-            const allOn =
-              g.list.length > 0 && g.list.every((c) => checked.has(c.id));
-            return (
-              <div key={g.title} className="rounded-2xl border border-navy-100 p-3.5">
-                <div className="mb-2.5 flex items-center justify-between">
-                  <span className="text-sm font-bold text-navy-900">{g.title}</span>
-                  {g.list.length > 0 && (
-                    <button
-                      onClick={() =>
-                        setChecked((prev) => {
-                          const next = new Set(prev);
-                          g.list.forEach((c) =>
-                            allOn ? next.delete(c.id) : next.add(c.id),
-                          );
-                          return next;
-                        })
-                      }
-                      className="text-xs font-medium text-navy-500 hover:text-navy-800"
-                    >
-                      {allOn ? 'Снять всех' : 'Отметить всех'}
-                    </button>
-                  )}
-                </div>
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  {g.list.map((c) => {
-                    const on = checked.has(c.id);
-                    const isLeader = c.id === g.leaderId;
-                    const fromGroup = fromGroupIds.has(c.id);
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => toggle(c.id)}
-                        disabled={fromGroup}
-                        title={fromGroup ? 'Смена уже начислена закрытым выездом' : undefined}
-                        className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-sm transition ${
-                          on
-                            ? 'border-navy-500 bg-navy-50 ring-1 ring-navy-200'
-                            : 'border-navy-100 bg-white hover:border-navy-300'
-                        } ${fromGroup ? 'cursor-not-allowed opacity-70' : ''}`}
-                      >
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                            on
-                              ? 'border-navy-500 bg-navy-500 text-white'
-                              : 'border-navy-300 text-transparent'
-                          }`}
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate font-medium text-navy-900">
-                          {c.fullName}
-                          {isLeader && (
-                            <Star className="ml-1 inline h-3 w-3 text-amber-500" />
-                          )}
-                        </span>
-                        <span className="shrink-0 text-xs text-navy-400">
-                          {c.rate} с
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="text-sm text-navy-500">
-          Отмечено: <b className="text-navy-900">{checked.size}</b> ·{' '}
-          {formatPrice(
-            [...checked].reduce((sum, id) => {
-              const snapshot = shiftRateById.get(id);
-              if (snapshot != null) return sum + snapshot;
-              const c = (cleaners ?? []).find((x) => x.id === id);
-              return sum + (c?.rate ?? 0);
-            }, 0),
-          )}{' '}
-          за день
-        </div>
-        <button
-          onClick={save}
-          disabled={!dirty || (loading && !dayShifts)}
-          className={dirty ? 'btn-primary' : 'btn-ghost !text-navy-400'}
-        >
-          {dirty ? (
-            <>
-              <Save className="h-4 w-4" />
-              Сохранить смены
-            </>
-          ) : (
-            <>
-              <Check className="h-4 w-4" />
-              Сохранено
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════
 //  Вкладка «Выплаты» — сводка за месяц (без штрафов — у них своя вкладка)
 // ═══════════════════════════════════════════════════════════
 
@@ -1023,6 +776,16 @@ function PayrollSummarySection() {
   const { data: cleaners } = useFetch<Cleaner[]>('/cleaners');
 
   const [fineFor, setFineFor] = useState<string | null>(null);
+  // расшифровка: по какой строке и с какого раздела открыта модалка
+  const [drillRow, setDrillRow] = useState<{ row: PayrollRow; tab: PayrollDetailTab } | null>(
+    null,
+  );
+  // расшифровка сводных цифр: «Итого», бригада целиком, список без смен
+  const [drillGroup, setDrillGroup] = useState<{
+    title: string;
+    subtitle: string;
+    rows: PayrollRow[];
+  } | null>(null);
 
   const quickFine = (payload: { cleanerId: string; amount: number; reason: string; date: string }) => {
     toast.success('Штраф назначен');
@@ -1038,6 +801,13 @@ function PayrollSummarySection() {
 
   const rows = (payroll?.rows ?? []).filter((r) => r.shifts > 0 || r.fines > 0);
   const idle = (payroll?.rows ?? []).filter((r) => r.shifts === 0 && r.fines === 0);
+
+  // расшифровка строки «Итого» — та же ведомость, но целиком
+  const totalsDrill = {
+    title: 'Ведомость за период',
+    subtitle: `Из чего сложилось «Итого» · ${label}`,
+    rows,
+  };
 
   return (
     <div className="card p-5">
@@ -1096,21 +866,69 @@ function PayrollSummarySection() {
               {rows.map((r) => (
                 <tr key={r.cleanerId} className="border-b border-navy-50">
                   <td className="py-2.5 pr-3 font-medium text-navy-900">
-                    {r.fullName}
+                    <DrillValue
+                      tone="strong"
+                      title={`Все смены и штрафы: ${r.fullName}`}
+                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                    >
+                      {r.fullName}
+                    </DrillValue>
                   </td>
-                  <td className="py-2.5 pr-3 text-navy-500">{r.brigade ?? '—'}</td>
-                  <td className="py-2.5 pr-3 text-right text-navy-800">
-                    {r.shifts}
+                  <td className="py-2.5 pr-3 text-navy-500">
+                    {r.brigade ? (
+                      <DrillValue
+                        tone="muted"
+                        title={`Вся бригада: ${r.brigade}`}
+                        onClick={() =>
+                          setDrillGroup({
+                            title: r.brigade!,
+                            subtitle: `Выплаты бригады · ${label}`,
+                            rows: (payroll?.rows ?? []).filter(
+                              (x) => x.brigadeId === r.brigadeId,
+                            ),
+                          })
+                        }
+                      >
+                        {r.brigade}
+                      </DrillValue>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="py-2.5 pr-3 text-right text-navy-800">
-                    {formatPrice(r.accrued)}
+                    <DrillValue
+                      align="right"
+                      disabled={r.shifts === 0}
+                      title={`Какие именно смены: ${r.fullName}`}
+                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                    >
+                      {r.shifts}
+                    </DrillValue>
+                  </td>
+                  <td className="py-2.5 pr-3 text-right text-navy-800">
+                    <DrillValue
+                      align="right"
+                      disabled={r.shifts === 0}
+                      title="Из чего сложилось начисление"
+                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                    >
+                      {formatPrice(r.accrued)}
+                    </DrillValue>
                   </td>
                   <td
                     className={`py-2.5 pr-3 text-right ${
-                      r.fines > 0 ? 'font-medium text-red-600' : 'text-navy-300'
+                      r.fines > 0 ? '' : 'text-navy-300'
                     }`}
                   >
-                    {r.fines > 0 ? `− ${formatPrice(r.fines)}` : '—'}
+                    <DrillValue
+                      align="right"
+                      tone="danger"
+                      disabled={r.fines === 0}
+                      title="За что назначены штрафы"
+                      onClick={() => setDrillRow({ row: r, tab: 'fines' })}
+                    >
+                      {r.fines > 0 ? `− ${formatPrice(r.fines)}` : '—'}
+                    </DrillValue>
                   </td>
                   <td
                     className={`py-2.5 pr-3 text-right font-bold ${
@@ -1118,7 +936,14 @@ function PayrollSummarySection() {
                     }`}
                     title={r.total < 0 ? 'Штрафы превысили начисления (долг)' : undefined}
                   >
-                    {formatPrice(r.total)}
+                    <DrillValue
+                      align="right"
+                      tone={r.total < 0 ? 'danger' : 'strong'}
+                      title="Полный расчёт по клинеру"
+                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                    >
+                      {formatPrice(r.total)}
+                    </DrillValue>
                   </td>
                   <td className="py-2.5 text-right">
                     <button
@@ -1137,21 +962,57 @@ function PayrollSummarySection() {
                 <tr className="text-sm font-bold text-navy-900">
                   <td className="py-3 pr-3">Итого</td>
                   <td />
-                  <td className="py-3 pr-3 text-right">{payroll.totals.shifts}</td>
                   <td className="py-3 pr-3 text-right">
-                    {formatPrice(payroll.totals.accrued)}
+                    <DrillValue
+                      align="right"
+                      tone="strong"
+                      disabled={rows.length === 0}
+                      title="Кто из чего сложил эти смены"
+                      onClick={() => setDrillGroup(totalsDrill)}
+                    >
+                      {payroll.totals.shifts}
+                    </DrillValue>
+                  </td>
+                  <td className="py-3 pr-3 text-right">
+                    <DrillValue
+                      align="right"
+                      tone="strong"
+                      disabled={rows.length === 0}
+                      title="Разбивка начислений по клинерам"
+                      onClick={() => setDrillGroup(totalsDrill)}
+                    >
+                      {formatPrice(payroll.totals.accrued)}
+                    </DrillValue>
                   </td>
                   <td className="py-3 pr-3 text-right text-red-600">
-                    {payroll.totals.fines > 0
-                      ? `− ${formatPrice(payroll.totals.fines)}`
-                      : '—'}
+                    <DrillValue
+                      align="right"
+                      tone="danger"
+                      disabled={payroll.totals.fines === 0}
+                      title="Все штрафы за период"
+                      onClick={() =>
+                        setDrillGroup({
+                          title: 'Штрафы за период',
+                          subtitle: `Кому и сколько · ${label}`,
+                          rows: (payroll?.rows ?? []).filter((x) => x.fines > 0),
+                        })
+                      }
+                    >
+                      {payroll.totals.fines > 0
+                        ? `− ${formatPrice(payroll.totals.fines)}`
+                        : '—'}
+                    </DrillValue>
                   </td>
-                  <td
-                    className={`py-3 pr-3 text-right ${
-                      payroll.totals.total < 0 ? 'text-red-600' : 'text-green-700'
-                    }`}
-                  >
-                    {formatPrice(payroll.totals.total)}
+                  <td className="py-3 pr-3 text-right">
+                    <DrillValue
+                      align="right"
+                      tone={payroll.totals.total < 0 ? 'danger' : 'success'}
+                      disabled={rows.length === 0}
+                      title="Полная ведомость за период"
+                      onClick={() => setDrillGroup(totalsDrill)}
+                    >
+                      {formatPrice(payroll.totals.total)}
+                    </DrillValue>
                   </td>
                   <td />
                 </tr>
@@ -1160,7 +1021,21 @@ function PayrollSummarySection() {
           </table>
           {idle.length > 0 && (
             <p className="mt-2 text-xs text-navy-400">
-              Без смен в этом месяце: {idle.map((r) => r.fullName).join(', ')}
+              Без смен в этом месяце:{' '}
+              <DrillValue
+                tone="muted"
+                title="Кто не выходил и какая у него ставка"
+                onClick={() =>
+                  setDrillGroup({
+                    title: 'Без смен в этом месяце',
+                    subtitle: `${idle.length} чел. · ${label}`,
+                    rows: idle,
+                  })
+                }
+                className="text-xs"
+              >
+                {idle.map((r) => r.fullName).join(', ')}
+              </DrillValue>
             </p>
           )}
         </div>
@@ -1175,7 +1050,310 @@ function PayrollSummarySection() {
           onSubmit={quickFine}
         />
       )}
+
+      {drillRow && (
+        <CleanerPayrollModal
+          row={drillRow.row}
+          initialTab={drillRow.tab}
+          from={from}
+          to={to}
+          periodLabel={label}
+          onClose={() => setDrillRow(null)}
+        />
+      )}
+
+      {drillGroup && (
+        <PayrollBreakdownModal
+          title={drillGroup.title}
+          subtitle={drillGroup.subtitle}
+          rows={drillGroup.rows}
+          onPick={(row) => {
+            setDrillGroup(null);
+            setDrillRow({ row, tab: row.shifts > 0 ? 'shifts' : 'fines' });
+          }}
+          onClose={() => setDrillGroup(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ───────────── Расшифровка выплат ─────────────
+
+type PayrollDetailTab = 'shifts' | 'fines';
+
+/**
+ * Что стоит за строкой клинера: конкретные смены (с датами и адресами выездов)
+ * и конкретные штрафы (с причинами). Раньше в таблице было только «3» — теперь
+ * видно, какие именно три дня и откуда взялась каждая ставка.
+ */
+function CleanerPayrollModal({
+  row,
+  initialTab,
+  from,
+  to,
+  periodLabel,
+  onClose,
+}: {
+  row: PayrollRow;
+  initialTab: PayrollDetailTab;
+  from: string;
+  to: string;
+  periodLabel: string;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<PayrollDetailTab>(initialTab);
+
+  const { data: shifts, loading: shiftsLoading } = useFetch<Shift[]>(
+    `/payroll/shifts?from=${from}&to=${to}&cleanerId=${row.cleanerId}`,
+    { deps: [row.cleanerId, from, to] },
+  );
+  const { data: fines, loading: finesLoading } = useFetch<Fine[]>(
+    `/payroll/fines?from=${from}&to=${to}&cleanerId=${row.cleanerId}`,
+    { deps: [row.cleanerId, from, to] },
+  );
+
+  return (
+    <DetailModal
+      title={row.fullName}
+      subtitle={`${row.brigade ?? 'Без бригады'} · ставка ${formatPrice(row.rate)} · ${periodLabel}`}
+      onClose={onClose}
+    >
+      <DetailStats
+        items={[
+          { label: 'Смены', value: row.shifts },
+          { label: 'Начислено', value: formatPrice(row.accrued) },
+          {
+            label: 'Штрафы',
+            value: row.fines > 0 ? `− ${formatPrice(row.fines)}` : '—',
+            tone: row.fines > 0 ? 'danger' : 'default',
+          },
+          {
+            label: 'К выплате',
+            value: formatPrice(row.total),
+            tone: row.total < 0 ? 'danger' : 'success',
+          },
+        ]}
+      />
+
+      <DetailTabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { value: 'shifts' as const, label: `Смены · ${row.shifts}` },
+          { value: 'fines' as const, label: `Штрафы · ${fines?.length ?? 0}` },
+        ]}
+      />
+
+      {tab === 'shifts' ? (
+        <DetailTable
+          rows={shifts}
+          loading={shiftsLoading}
+          rowKey={(s) => s.id}
+          emptyText="В этом периоде смен не было"
+          columns={[
+            {
+              key: 'date',
+              header: 'Дата',
+              cell: (s) => (
+                <span className="font-medium text-navy-900">{formatDateTz(s.date)}</span>
+              ),
+            },
+            {
+              key: 'source',
+              header: 'Откуда',
+              cell: (s) =>
+                s.group ? (
+                  <div>
+                    <div className="text-navy-800">{s.group.address}</div>
+                    <div className="text-xs text-navy-400">
+                      Выезд
+                      {s.group.startTime ? ` · ${s.group.startTime}` : ''}
+                      {s.group.endTime ? `–${s.group.endTime}` : ''}
+                      {s.group.brigadeName ? ` · ${s.group.brigadeName}` : ''}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-navy-400">Отметка дня{s.note ? ` · ${s.note}` : ''}</span>
+                ),
+            },
+            {
+              key: 'rate',
+              header: 'Ставка',
+              align: 'right',
+              cell: (s) => formatPrice(s.rate),
+            },
+          ]}
+          footer={
+            shifts && shifts.length > 0 ? (
+              <tr className="border-t border-navy-100 font-bold text-navy-900">
+                <td className="px-3 py-2" colSpan={2}>
+                  Начислено за {shifts.length}{' '}
+                  {shifts.length === 1 ? 'смену' : shifts.length < 5 ? 'смены' : 'смен'}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {formatPrice(shifts.reduce((sum, s) => sum + s.rate, 0))}
+                </td>
+              </tr>
+            ) : undefined
+          }
+        />
+      ) : (
+        <DetailTable
+          rows={fines}
+          loading={finesLoading}
+          rowKey={(f) => f.id}
+          emptyText="Штрафов в этом периоде нет"
+          columns={[
+            {
+              key: 'date',
+              header: 'Дата',
+              cell: (f) => (
+                <span className="font-medium text-navy-900">{formatDateTz(f.date)}</span>
+              ),
+            },
+            { key: 'reason', header: 'Причина', cell: (f) => f.reason },
+            {
+              key: 'amount',
+              header: 'Сумма',
+              align: 'right',
+              cell: (f) => (
+                <span className="font-medium text-red-600">− {formatPrice(f.amount)}</span>
+              ),
+            },
+          ]}
+          footer={
+            fines && fines.length > 0 ? (
+              <tr className="border-t border-navy-100 font-bold text-navy-900">
+                <td className="px-3 py-2" colSpan={2}>
+                  Всего удержано
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-red-600">
+                  − {formatPrice(fines.reduce((sum, f) => sum + f.amount, 0))}
+                </td>
+              </tr>
+            ) : undefined
+          }
+        />
+      )}
+    </DetailModal>
+  );
+}
+
+/**
+ * Расшифровка сводной цифры — «Итого», бригады целиком или списка без смен.
+ * Строка внутри тоже кликабельна: с уровня бригады можно провалиться к клинеру.
+ */
+function PayrollBreakdownModal({
+  title,
+  subtitle,
+  rows,
+  onPick,
+  onClose,
+}: {
+  title: string;
+  subtitle: string;
+  rows: PayrollRow[];
+  onPick: (row: PayrollRow) => void;
+  onClose: () => void;
+}) {
+  const totals = rows.reduce(
+    (acc, r) => ({
+      shifts: acc.shifts + r.shifts,
+      accrued: acc.accrued + r.accrued,
+      fines: acc.fines + r.fines,
+      total: acc.total + r.total,
+    }),
+    { shifts: 0, accrued: 0, fines: 0, total: 0 },
+  );
+
+  return (
+    <DetailModal title={title} subtitle={subtitle} onClose={onClose}>
+      <DetailStats
+        items={[
+          { label: 'Человек', value: rows.length },
+          { label: 'Смены', value: totals.shifts },
+          {
+            label: 'Штрафы',
+            value: totals.fines > 0 ? `− ${formatPrice(totals.fines)}` : '—',
+            tone: totals.fines > 0 ? 'danger' : 'default',
+          },
+          {
+            label: 'К выплате',
+            value: formatPrice(totals.total),
+            tone: totals.total < 0 ? 'danger' : 'success',
+          },
+        ]}
+      />
+
+      <DetailTable
+        rows={rows}
+        rowKey={(r) => r.cleanerId}
+        onRowClick={onPick}
+        emptyText="Здесь никого нет"
+        columns={[
+          {
+            key: 'name',
+            header: 'Клинер',
+            cell: (r) => (
+              <div>
+                <div className="font-medium text-navy-900">{r.fullName}</div>
+                <div className="text-xs text-navy-400">{r.brigade ?? 'Без бригады'}</div>
+              </div>
+            ),
+          },
+          { key: 'shifts', header: 'Смены', align: 'right', cell: (r) => r.shifts },
+          {
+            key: 'accrued',
+            header: 'Начислено',
+            align: 'right',
+            cell: (r) => formatPrice(r.accrued),
+          },
+          {
+            key: 'fines',
+            header: 'Штрафы',
+            align: 'right',
+            cell: (r) =>
+              r.fines > 0 ? (
+                <span className="text-red-600">− {formatPrice(r.fines)}</span>
+              ) : (
+                <span className="text-navy-300">—</span>
+              ),
+          },
+          {
+            key: 'total',
+            header: 'К выплате',
+            align: 'right',
+            cell: (r) => (
+              <span className={`font-bold ${r.total < 0 ? 'text-red-600' : 'text-navy-900'}`}>
+                {formatPrice(r.total)}
+              </span>
+            ),
+          },
+        ]}
+        footer={
+          rows.length > 0 ? (
+            <tr className="border-t border-navy-100 font-bold text-navy-900">
+              <td className="px-3 py-2">Итого</td>
+              <td className="px-3 py-2 text-right tabular-nums">{totals.shifts}</td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                {formatPrice(totals.accrued)}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums text-red-600">
+                {totals.fines > 0 ? `− ${formatPrice(totals.fines)}` : '—'}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums text-green-700">
+                {formatPrice(totals.total)}
+              </td>
+            </tr>
+          ) : undefined
+        }
+      />
+
+      <p className="mt-3 text-xs text-navy-400">
+        Нажмите на строку, чтобы посмотреть конкретные смены и штрафы клинера.
+      </p>
+    </DetailModal>
   );
 }
 

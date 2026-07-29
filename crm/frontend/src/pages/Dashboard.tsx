@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Inbox,
@@ -10,6 +11,7 @@ import {
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, ErrorState } from '../components/ui';
+import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
 import { formatPrice, formatVolume } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import type { Order, Task } from '../types';
@@ -32,6 +34,12 @@ export function Dashboard() {
     pollMs: 15000,
   });
   const { data: tasks } = useFetch<Task[]>('/tasks', { pollMs: 20000 });
+  const [drill, setDrill] = useState<{
+    title: string;
+    subtitle?: string;
+    metric: string;
+    key?: string;
+  } | null>(null);
 
   // нет данных: показываем ошибку с повтором (а не вечный спиннер),
   // если запрос завершился ошибкой; иначе — спиннер загрузки
@@ -40,11 +48,44 @@ export function Dashboard() {
     return <Spinner />;
   }
 
+  /*
+   * Цифра на карточке — вход в расшифровку, а не итог: клик открывает список
+   * тех самых заказов. Исключение — «Клиентов в базе»: там полезнее целая
+   * страница с поиском и фильтрами, чем список в модалке.
+   */
   const cards = [
-    { label: 'Новые заявки', value: data.newLeads, icon: Inbox, color: 'bg-navy-100 text-navy-700', to: '/funnel' },
-    { label: 'Заказы в работе', value: data.inProgress, icon: Loader, color: 'bg-indigo-100 text-indigo-700', to: '/funnel' },
-    { label: 'Выполнено за месяц', value: data.doneThisMonth, icon: CheckCircle2, color: 'bg-green-100 text-green-700', to: '/funnel' },
-    { label: 'Клиентов в базе', value: data.totalClients, icon: Users, color: 'bg-amber-100 text-amber-700', to: '/clients' },
+    {
+      label: 'Новые заявки',
+      value: data.newLeads,
+      icon: Inbox,
+      color: 'bg-navy-100 text-navy-700',
+      drill: { title: 'Новые заявки', metric: 'stageNow', key: 'NEW' },
+    },
+    {
+      label: 'Заказы в работе',
+      value: data.inProgress,
+      icon: Loader,
+      color: 'bg-indigo-100 text-indigo-700',
+      drill: { title: 'Заказы в работе', metric: 'stageNow', key: 'IN_PROGRESS' },
+    },
+    {
+      label: 'Выполнено за месяц',
+      value: data.doneThisMonth,
+      icon: CheckCircle2,
+      color: 'bg-green-100 text-green-700',
+      drill: {
+        title: 'Выполнено за месяц',
+        subtitle: 'Заказы, оплаченные в текущем месяце',
+        metric: 'paidThisMonth',
+      },
+    },
+    {
+      label: 'Клиентов в базе',
+      value: data.totalClients,
+      icon: Users,
+      color: 'bg-amber-100 text-amber-700',
+      to: '/clients',
+    },
   ];
 
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'DONE').slice(0, 5);
@@ -57,20 +98,38 @@ export function Dashboard() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((c) => (
-          <Link key={c.label} to={c.to} className="card p-5 transition-shadow hover:shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.color}`}>
-                <c.icon className="h-5 w-5" />
-              </span>
-              <ArrowRight className="h-4 w-4 text-navy-300" />
-            </div>
-            <div className="mt-4 text-3xl font-extrabold text-navy-900">
-              {c.value}
-            </div>
-            <div className="text-sm text-navy-500">{c.label}</div>
-          </Link>
-        ))}
+        {cards.map((c) => {
+          const body = (
+            <>
+              <div className="flex items-center justify-between">
+                <span
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.color}`}
+                >
+                  <c.icon className="h-5 w-5" />
+                </span>
+                <ArrowRight className="h-4 w-4 text-navy-300" />
+              </div>
+              <div className="mt-4 text-3xl font-extrabold text-navy-900">{c.value}</div>
+              <div className="text-sm text-navy-500">{c.label}</div>
+            </>
+          );
+
+          return c.to ? (
+            <Link key={c.label} to={c.to} className="card p-5 transition-shadow hover:shadow-lg">
+              {body}
+            </Link>
+          ) : (
+            <button
+              key={c.label}
+              type="button"
+              onClick={() => setDrill(c.drill!)}
+              title="Показать эти заказы"
+              className="card p-5 text-left transition-shadow hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
+            >
+              {body}
+            </button>
+          );
+        })}
       </div>
 
       {/* Доход — приходит только руководителю (финансы) */}
@@ -82,9 +141,20 @@ export function Dashboard() {
             </span>
             <div>
               <div className="text-sm text-white/90">Доход за текущий месяц</div>
-              <div className="text-3xl font-extrabold">
+              <button
+                type="button"
+                onClick={() =>
+                  setDrill({
+                    title: 'Доход за текущий месяц',
+                    subtitle: 'Заказы, оплаченные в этом месяце',
+                    metric: 'paidThisMonth',
+                  })
+                }
+                title="Из каких заказов сложился доход"
+                className="text-3xl font-extrabold underline decoration-dotted underline-offset-4 decoration-white/50 transition hover:decoration-white"
+              >
                 {formatPrice(data.revenueMonth)}
-              </div>
+              </button>
             </div>
           </div>
           <Link to="/analytics" className="btn bg-white/10 text-white hover:bg-white/20">
@@ -159,6 +229,17 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {drill && (
+        <OrdersDrilldownModal
+          title={drill.title}
+          subtitle={drill.subtitle}
+          metric={drill.metric}
+          drillKey={drill.key}
+          showMoney={user?.role === 'DIRECTOR'}
+          onClose={() => setDrill(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { FunnelStage, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -256,6 +256,178 @@ export class AnalyticsService {
     return result;
   }
 
+  /**
+   * Расшифровка одной цифры с экрана аналитики.
+   *
+   * Правило кабинета: сводная цифра не тупик. Столбик диаграммы, сектор
+   * «источники», карточка выручки — за каждым стоит конкретный список заказов,
+   * и его должно быть видно в один клик, а не собирать руками через фильтры.
+   *
+   * Здесь важнее всего одно: срез считается ТЕМ ЖЕ условием, что и цифра над
+   * ним. Иначе расшифровка «не сойдётся» с числом, которое её открыло, и
+   * доверие к аналитике пропадёт быстрее, чем от любой ошибки в сумме.
+   */
+  async drilldown(
+    user: AuthUser,
+    metric: string,
+    key?: string,
+    from?: string,
+    to?: string,
+    period: AnalyticsPeriod = 'month',
+  ) {
+    /*
+     * Права те же, что и у самих цифр: расшифровка не должна становиться
+     * дырой, через которую менеджер увидит выручку компании или чужую
+     * загруженность в обход `full()`.
+     */
+    const MONEY = ['revenuePeriod', 'revenueMoment', 'revenueDay', 'unpriced', 'noCloseDate'];
+    const ALL_STAFF = ['managerActive', 'managerPaid'];
+    if (MONEY.includes(metric) && user.role !== Role.DIRECTOR) {
+      throw new ForbiddenException('Финансовые данные доступны только руководителю');
+    }
+    if (ALL_STAFF.includes(metric) && !seesAll(user)) {
+      throw new ForbiddenException('Загруженность сотрудников доступна руководству');
+    }
+
+    const scope = this.scope(user);
+    const range = this.rangeOf(period, from, to);
+    const hasRange = range.gte !== undefined || range.lte !== undefined;
+    // воронка/типы/источники считаются по дате создания заказа
+    const periodScope: Prisma.OrderWhereInput = hasRange
+      ? { ...scope, createdAt: range }
+      : scope;
+    // выручка — по дате закрытия
+    const paidInRange: Prisma.OrderWhereInput = {
+      ...scope,
+      stage: FunnelStage.PAID,
+      ...(hasRange ? { closedAt: range } : {}),
+    };
+
+    const activeStages: FunnelStage[] = [
+      FunnelStage.NEW,
+      FunnelStage.PROCESSING,
+      FunnelStage.INSPECTION,
+      FunnelStage.OFFER,
+      FunnelStage.CONFIRMED,
+      FunnelStage.IN_PROGRESS,
+      FunnelStage.DONE,
+    ];
+
+    let where: Prisma.OrderWhereInput;
+    switch (metric) {
+      case 'type':
+        where = { ...periodScope, cleaningType: key as any };
+        break;
+      case 'source':
+        where = { ...periodScope, source: key as any };
+        break;
+      case 'conversionTotal':
+        where = periodScope;
+        break;
+      /*
+       * Карточки дашборда. Они показывают положение дел СЕЙЧАС, а не за период,
+       * поэтому диапазон здесь сознательно не применяется — иначе расшифровка
+       * покажет меньше заказов, чем написано на карточке.
+       */
+      case 'stageNow':
+        where = { ...scope, stage: key as FunnelStage };
+        break;
+      case 'paidThisMonth':
+        where = {
+          ...scope,
+          stage: FunnelStage.PAID,
+          closedAt: this.rangeOf('month'),
+        };
+        break;
+      case 'conversionPaid':
+        where = { ...periodScope, stage: FunnelStage.PAID };
+        break;
+      case 'conversionRejected':
+        where = { ...periodScope, stage: FunnelStage.REJECTED };
+        break;
+      case 'revenuePeriod':
+        where = paidInRange;
+        break;
+      // карточки «за день/неделю/месяц/квартал» живут по своему окну,
+      // независимо от выбранного сверху периода — расшифровка тоже
+      case 'revenueMoment': {
+        const r = this.rangeOf((key as AnalyticsPeriod) ?? 'day');
+        where = { ...scope, stage: FunnelStage.PAID, closedAt: r };
+        break;
+      }
+      // один столбик графика «Доход за 14 дней» — конкретный день по Душанбе
+      case 'revenueDay':
+        where = {
+          ...scope,
+          stage: FunnelStage.PAID,
+          closedAt: momentRange(key, key),
+        };
+        break;
+      case 'managerActive':
+        where = {
+          ...NOT_DELETED,
+          stage: { in: activeStages },
+          managerId: key === 'none' ? null : key,
+        };
+        break;
+      case 'managerPaid':
+        where = {
+          ...NOT_DELETED,
+          stage: FunnelStage.PAID,
+          managerId: key === 'none' ? null : key,
+        };
+        break;
+      // сверка: заказы, которые молча выпадают из выручки
+      case 'unpriced':
+        where = {
+          ...paidInRange,
+          OR: [
+            { finalPrice: { lte: 0 } },
+            { finalPrice: null, estimatedPrice: { lte: 0 } },
+          ],
+        };
+        break;
+      case 'noCloseDate':
+        where = { ...scope, stage: FunnelStage.PAID, closedAt: null };
+        break;
+      default:
+        throw new BadRequestException('Неизвестный разрез аналитики');
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      select: {
+        id: true,
+        createdAt: true,
+        closedAt: true,
+        stage: true,
+        source: true,
+        cleaningType: true,
+        address: true,
+        area: true,
+        estimatedPrice: true,
+        finalPrice: true,
+        client: { select: { id: true, fullName: true, phone: true } },
+        manager: { select: { id: true, fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+
+    return {
+      metric,
+      key: key ?? null,
+      count: orders.length,
+      sum: orders.reduce((s, o) => s + priceOf(o), 0),
+      orders: orders.map((o) => ({
+        ...o,
+        typeLabel: TYPE_LABEL[o.cleaningType] ?? o.cleaningType,
+        sourceLabel: SOURCE_LABEL[o.source] ?? o.source,
+        price: priceOf(o),
+      })),
+    };
+  }
+
   /** Выручка по дням за последние N дней — для графика */
   private async revenueSeries(scope: Prisma.OrderWhereInput, days: number) {
     const start = startOfDay(new Date());
@@ -285,6 +457,7 @@ export class AnalyticsService {
     }
     return order.map((key) => ({
       date: key.slice(5), // «07-28» — как ожидает график
+      day: key, // полная дата — по ней открывается расшифровка столбика
       revenue: buckets.get(key) ?? 0,
     }));
   }

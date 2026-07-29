@@ -166,8 +166,15 @@ export class FinanceService {
       profit: income - expense,
       avgCheck: incomeCount ? Math.round(income / incomeCount) : 0,
       count: entries.length,
+      // kind обязателен: по нему график красит доход зелёным, а расход красным,
+      // и по нему же открывается расшифровка статьи
       byCategory: [...byCategory.entries()]
-        .map(([category, amount]) => ({ category, label: categoryLabel(category), amount }))
+        .map(([category, amount]) => ({
+          category,
+          label: categoryLabel(category),
+          kind: CATEGORY_META[category]?.kind ?? FinanceKind.EXPENSE,
+          amount,
+        }))
         .sort((a, b) => b.amount - a.amount),
       series: [...byMonth.entries()]
         .sort(([a], [b]) => a.localeCompare(b))

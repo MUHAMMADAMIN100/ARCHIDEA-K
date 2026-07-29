@@ -45,6 +45,8 @@ export function Tasks() {
     pollPaused: () => inFlightRef.current > 0,
   });
   const [showAdd, setShowAdd] = useState(false);
+  // задача, открытая по клику на карточку
+  const [editTask, setEditTask] = useState<Task | null>(null);
 
   const patchTask = (id: string, patch: Partial<Task>) =>
     setData((tasks) =>
@@ -170,7 +172,14 @@ export function Tasks() {
               ? t.assignments
               : t.assignments.filter((a) => a.userId === user?.id);
             return (
-              <div key={t.id} className="card p-4">
+              // карточка кликабельна: открывает задачу целиком — срок, тип,
+              // приоритет, все исполнители и их статусы можно менять на месте
+              <div
+                key={t.id}
+                onClick={() => setEditTask(t)}
+                title="Открыть задачу"
+                className="card cursor-pointer p-4 transition-shadow hover:shadow-lg"
+              >
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -203,7 +212,10 @@ export function Tasks() {
 
                   {canAssign && (
                     <button
-                      onClick={() => remove(t.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remove(t.id);
+                      }}
                       className="rounded-lg p-2 text-navy-400 hover:bg-red-50 hover:text-red-600"
                       title="Удалить задачу"
                     >
@@ -212,8 +224,11 @@ export function Tasks() {
                   )}
                 </div>
 
-                {/* Исполнители и их статусы */}
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-navy-50 pt-3">
+                {/* Исполнители и их статусы — селекты не должны открывать карточку */}
+                <div
+                  className="mt-3 flex flex-wrap gap-2 border-t border-navy-50 pt-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {visible.map((a) => (
                     <div
                       key={a.id}
@@ -255,6 +270,27 @@ export function Tasks() {
           onDeleted={(id) =>
             setData((tasks) => (tasks ? tasks.filter((t) => t.id !== id) : tasks))
           }
+          onReload={reload}
+          inFlightRef={inFlightRef}
+        />
+      )}
+
+      {/*
+       * Берём задачу из свежего списка, а не из состояния: пока модалка открыта,
+       * поллинг обновляет статусы, и снимок в стейте успел бы устареть.
+       */}
+      {editTask && (
+        <TaskModal
+          key={editTask.id}
+          mode="edit"
+          task={(data ?? []).find((t) => t.id === editTask.id) ?? editTask}
+          onClose={() => setEditTask(null)}
+          onCreate={createTask}
+          onPatch={patchTask}
+          onDeleted={(id) => {
+            setData((tasks) => (tasks ? tasks.filter((t) => t.id !== id) : tasks));
+            setEditTask(null);
+          }}
           onReload={reload}
           inFlightRef={inFlightRef}
         />

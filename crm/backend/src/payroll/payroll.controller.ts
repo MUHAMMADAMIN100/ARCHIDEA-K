@@ -69,9 +69,10 @@ export class PayrollController {
     @CurrentUser() user: AuthUser,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('cleanerId') cleanerId?: string,
   ) {
     this.assertOps(user);
-    return this.service.listShifts(from, to);
+    return this.service.listShifts(from, to, cleanerId);
   }
 
   @Post('shifts/day')

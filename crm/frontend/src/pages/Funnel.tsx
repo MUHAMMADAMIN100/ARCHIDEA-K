@@ -11,6 +11,7 @@ import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Spinner, PageHeader, Badge, ErrorState } from '../components/ui';
+import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { OrderModal } from '../components/OrderModal';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -161,6 +162,8 @@ export function Funnel() {
     },
   );
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
+  // счётчик над колонкой — не просто число: по клику показываем сам список
+  const [stageDrill, setStageDrill] = useState<BoardColumn | null>(null);
 
   // Оптимистичное перемещение карточки между этапами (до ответа сервера)
   const applyPatch = (orderId: string, patch: Partial<Order>) => {
@@ -311,7 +314,14 @@ export function Funnel() {
               <div className="mb-3 flex items-center justify-between">
                 <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>
                 <span className="text-sm font-bold text-navy-400">
-                  {col.orders.length}
+                  <DrillValue
+                    tone="muted"
+                    disabled={col.orders.length === 0}
+                    title={`Все заказы на этапе «${col.label}» с суммами`}
+                    onClick={() => setStageDrill(col)}
+                  >
+                    {col.orders.length}
+                  </DrillValue>
                 </span>
               </div>
 
@@ -368,6 +378,17 @@ export function Funnel() {
         </div>
       </DragDropContext>
 
+      {stageDrill && (
+        <StageOrdersModal
+          column={stageDrill}
+          onPick={(o) => {
+            setStageDrill(null);
+            setOpenOrder(o);
+          }}
+          onClose={() => setStageDrill(null)}
+        />
+      )}
+
       <OrderModal
         orderId={openOrder?.id ?? null}
         initial={openOrder ?? undefined}
@@ -386,5 +407,101 @@ export function Funnel() {
         }
       />
     </div>
+  );
+}
+
+// ───────────── Расшифровка счётчика над колонкой ─────────────
+
+/**
+ * Все заказы одного этапа списком: суммы, объём, ответственный. На доске
+ * карточки видны не все сразу (колонка скроллится), а здесь этап виден
+ * целиком — с итогом по деньгам, которого на доске нет вообще.
+ */
+function StageOrdersModal({
+  column,
+  onPick,
+  onClose,
+}: {
+  column: BoardColumn;
+  onPick: (order: Order) => void;
+  onClose: () => void;
+}) {
+  const priceOf = (o: Order) => o.finalPrice ?? o.estimatedPrice ?? 0;
+  const sum = column.orders.reduce((s, o) => s + priceOf(o), 0);
+
+  return (
+    <DetailModal
+      title={column.label}
+      subtitle="Все заказы на этом этапе"
+      onClose={onClose}
+    >
+      <DetailStats
+        items={[
+          { label: 'Заказов', value: column.orders.length },
+          { label: 'На сумму', value: formatPrice(sum), tone: 'success' },
+        ]}
+      />
+
+      <DetailTable
+        rows={column.orders}
+        rowKey={(o) => o.id}
+        onRowClick={onPick}
+        emptyText="На этом этапе заказов нет"
+        columns={[
+          {
+            key: 'client',
+            header: 'Клиент',
+            cell: (o) => (
+              <div>
+                <div className="font-medium text-navy-900">{o.client?.fullName}</div>
+                <div className="text-xs text-navy-400">{cardDate(o.createdAt)}</div>
+              </div>
+            ),
+          },
+          {
+            key: 'what',
+            header: 'Уборка',
+            cell: (o) => (
+              <div>
+                <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
+                <div className="text-xs text-navy-400">
+                  {formatVolume(o)}
+                  {o.address ? ` · ${o.address}` : ''}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'manager',
+            header: 'Ответственный',
+            cell: (o) => (
+              <span className="text-navy-500">{o.manager?.fullName ?? '—'}</span>
+            ),
+          },
+          {
+            key: 'price',
+            header: 'Сумма',
+            align: 'right',
+            cell: (o) => (
+              <span className="font-bold text-navy-900">{formatPrice(priceOf(o))}</span>
+            ),
+          },
+        ]}
+        footer={
+          column.orders.length > 0 ? (
+            <tr className="border-t border-navy-100 font-bold text-navy-900">
+              <td className="px-3 py-2" colSpan={3}>
+                Итого на этапе
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatPrice(sum)}</td>
+            </tr>
+          ) : undefined
+        }
+      />
+
+      <p className="mt-3 text-xs text-navy-400">
+        Нажмите на заказ, чтобы открыть его карточку.
+      </p>
+    </DetailModal>
   );
 }

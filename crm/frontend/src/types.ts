@@ -123,6 +123,15 @@ export interface Shift {
   note?: string | null;
   /** выезд, который породил эту оплачиваемую смену (ТЗ 4) */
   groupId?: string | null;
+  /** сам выезд — чтобы в расшифровке смены был виден адрес объекта */
+  group?: {
+    id: string;
+    address: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    status: ShiftGroupStatus;
+    brigadeName?: string | null;
+  } | null;
   cleaner?: {
     id: string;
     fullName: string;
@@ -346,7 +355,8 @@ export interface Analytics {
   sources: { source: LeadSource; label: string; count: number }[];
   conversion: { total: number; paid: number; rejected: number; rate: number };
   revenue?: { day: number; week: number; month: number; quarter: number };
-  revenueSeries?: { date: string; revenue: number }[];
+  /** date — подпись оси («07-28»), day — полная дата для расшифровки столбика */
+  revenueSeries?: { date: string; day: string; revenue: number }[];
   managerWorkload?: { id: string; name: string; active: number; paid: number }[];
 }
 
@@ -469,7 +479,13 @@ export interface FinanceSummary {
   income: number;
   expense: number;
   profit: number;
-  byCategory: { category: FinanceCategory; kind: FinanceKind; amount: number }[];
+  byCategory: {
+    category: FinanceCategory;
+    label: string;
+    kind: FinanceKind;
+    amount: number;
+  }[];
+  /** date — ключ месяца «ГГГГ-ММ»: по нему открывается расшифровка столбика */
   series?: { date: string; income: number; expense: number }[];
 }
 
@@ -710,6 +726,34 @@ export interface AnalyticsFull extends Omit<Analytics, 'revenue'> {
     ordersWithoutPrice: number;
     paidWithoutCloseDate: number;
   };
+}
+
+/** Заказ в расшифровке аналитики — ровно те поля, что нужны списку */
+export interface DrilldownOrder {
+  id: string;
+  createdAt: string;
+  closedAt?: string | null;
+  stage: FunnelStage;
+  source: LeadSource;
+  cleaningType: CleaningType;
+  address?: string | null;
+  area: number;
+  estimatedPrice: number;
+  finalPrice?: number | null;
+  price: number;
+  typeLabel: string;
+  sourceLabel: string;
+  client: { id: string; fullName: string; phone: string };
+  manager?: { id: string; fullName: string } | null;
+}
+
+/** Ответ /analytics/drilldown — из чего сложилась цифра на экране */
+export interface AnalyticsDrilldown {
+  metric: string;
+  key: string | null;
+  count: number;
+  sum: number;
+  orders: DrilldownOrder[];
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -4,9 +4,10 @@ import { Plus, Download, Repeat2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { PageHeader, Badge, Modal } from '../components/ui';
+import { PageHeader, Badge, Modal, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { Column, DataTable, SearchInput } from '../components/common';
+import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   TAG_LABEL,
   TAG_COLOR,
@@ -15,7 +16,10 @@ import {
   ACTIVE_TYPES,
   DIRT_LABEL,
   DIRT_ORDER,
+  STAGE_COLOR,
+  STAGE_LABEL,
   formatDate,
+  formatPrice,
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import { tempId, nowISO } from '../lib/util';
@@ -61,6 +65,8 @@ export function Clients() {
   // ТЗ 9.4 — повторные клиенты видны и фильтруются отдельно
   const [ordersFilter, setOrdersFilter] = useState<OrdersFilter>('all');
   const [showAdd, setShowAdd] = useState(false);
+  // чьи заказы показываем в расшифровке счётчика
+  const [ordersFor, setOrdersFor] = useState<Client | null>(null);
   const toast = useToast();
 
   const query = new URLSearchParams();
@@ -202,14 +208,23 @@ export function Clients() {
       key: 'orders',
       title: 'Заказов (оплачено)',
       numeric: true,
+      // клик по строке уводит в карточку клиента, а по цифре — показывает
+      // его заказы прямо здесь: не теряется место в отфильтрованном списке
       render: (c) => (
-        <span className="text-navy-700">
-          {c._count?.orders ?? 0}
-          {(c.paidOrdersCount ?? 0) > 0 && (
-            <span className="ml-1 text-xs text-emerald-600">
-              ({c.paidOrdersCount} опл.)
-            </span>
-          )}
+        <span className="text-navy-700" onClick={(e) => e.stopPropagation()}>
+          <DrillValue
+            align="right"
+            disabled={(c._count?.orders ?? 0) === 0}
+            title={`Заказы клиента: ${c.fullName}`}
+            onClick={() => setOrdersFor(c)}
+          >
+            {c._count?.orders ?? 0}
+            {(c.paidOrdersCount ?? 0) > 0 && (
+              <span className="ml-1 text-xs text-emerald-600">
+                ({c.paidOrdersCount} опл.)
+              </span>
+            )}
+          </DrillValue>
         </span>
       ),
     },
@@ -294,6 +309,14 @@ export function Clients() {
           onClose={() => setShowAdd(false)}
           onCreate={createClient}
           isDirector={userSeesAll(user)}
+        />
+      )}
+
+      {ordersFor && (
+        <ClientOrdersModal
+          client={ordersFor}
+          onOpenCard={() => navigate(`/clients/${ordersFor.id}`)}
+          onClose={() => setOrdersFor(null)}
         />
       )}
     </div>
@@ -544,5 +567,105 @@ function AddClientModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ───────────── Расшифровка счётчика заказов ─────────────
+
+/**
+ * Заказы клиента прямо из списка. Карточка клиента показывает то же самое,
+ * но уводит со страницы — а здесь важно быстро свериться и вернуться
+ * к отфильтрованному списку, не теряя место в нём.
+ */
+function ClientOrdersModal({
+  client,
+  onOpenCard,
+  onClose,
+}: {
+  client: Client;
+  onOpenCard: () => void;
+  onClose: () => void;
+}) {
+  const { data, loading, error, reload } = useFetch<Client>(`/clients/${client.id}`, {
+    deps: [client.id],
+  });
+
+  const orders = data?.orders ?? [];
+  const priceOf = (o: Order) => o.finalPrice ?? o.estimatedPrice ?? 0;
+  const paid = orders.filter((o) => o.stage === 'PAID');
+
+  return (
+    <DetailModal
+      title={client.fullName}
+      subtitle={`${formatPhone(client.phone)} · ${SOURCE_LABEL[client.source]}`}
+      onClose={onClose}
+    >
+      {error ? (
+        <ErrorState onRetry={reload} />
+      ) : (
+        <>
+          <DetailStats
+            items={[
+              { label: 'Всего заказов', value: data ? orders.length : '…' },
+              { label: 'Оплачено', value: data ? paid.length : '…' },
+              {
+                label: 'Принёс',
+                value: data ? formatPrice(paid.reduce((s, o) => s + priceOf(o), 0)) : '…',
+                tone: 'success',
+              },
+            ]}
+          />
+
+          <DetailTable
+            rows={data ? orders : null}
+            loading={loading}
+            rowKey={(o) => o.id}
+            emptyText="У клиента ещё нет заказов"
+            columns={[
+              {
+                key: 'date',
+                header: 'Дата',
+                cell: (o) => (
+                  <span className="whitespace-nowrap font-medium text-navy-900">
+                    {formatDate(o.createdAt)}
+                  </span>
+                ),
+              },
+              {
+                key: 'what',
+                header: 'Уборка',
+                cell: (o) => (
+                  <div>
+                    <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
+                    <div className="text-xs text-navy-400">
+                      {o.address || 'адрес не указан'}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'stage',
+                header: 'Этап',
+                cell: (o) => (
+                  <Badge className={STAGE_COLOR[o.stage]}>{STAGE_LABEL[o.stage]}</Badge>
+                ),
+              },
+              {
+                key: 'price',
+                header: 'Сумма',
+                align: 'right',
+                cell: (o) => (
+                  <span className="font-bold text-navy-900">{formatPrice(priceOf(o))}</span>
+                ),
+              },
+            ]}
+          />
+
+          <button onClick={onOpenCard} className="btn-ghost mt-3 w-full">
+            Открыть карточку клиента
+          </button>
+        </>
+      )}
+    </DetailModal>
   );
 }
