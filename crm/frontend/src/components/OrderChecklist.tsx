@@ -1,0 +1,469 @@
+import { useState } from 'react';
+import { Check, CheckCircle2, ClipboardList, Plus, X } from 'lucide-react';
+import { api } from '../api/client';
+import { useFetch } from '../api/hooks';
+import { useAuth } from '../auth/AuthContext';
+import { Badge, EmptyState, ErrorState, Spinner } from './ui';
+import { useDialog } from './Dialog';
+import { useToast } from './Toast';
+import { formatDateTimeTz } from '../lib/date';
+import { tempId } from '../lib/util';
+import type { ChecklistStatus, ChecklistTemplate, OrderChecklist, OrderChecklistItem } from '../types';
+
+const STATUS_LABEL: Record<ChecklistStatus, string> = {
+  OPEN: 'Не начат',
+  IN_PROGRESS: 'В процессе',
+  DONE: 'Закрыт',
+};
+
+const STATUS_COLOR: Record<ChecklistStatus, string> = {
+  OPEN: 'bg-navy-100 text-navy-600',
+  IN_PROGRESS: 'bg-amber-100 text-amber-700',
+  DONE: 'bg-emerald-100 text-emerald-700',
+};
+
+/**
+ * Пересчёт статуса чек-листа по составу пунктов — зеркало
+ * `ChecklistsService.recalcStatus` на бэкенде (checklists.service.ts):
+ * ничего не отмечено → OPEN; отмечен хоть один пункт, но есть незакрытые
+ * обязательные → IN_PROGRESS; иначе DONE. Закрытый DONE обратно не
+ * откатывается — это соответствует серверной логике 1:1.
+ */
+function recalcStatus(prevStatus: ChecklistStatus, items: OrderChecklistItem[]): ChecklistStatus {
+  if (prevStatus === 'DONE') return 'DONE';
+  const anyDone = items.some((i) => i.isDone);
+  if (!anyDone) return 'OPEN';
+  const requiredNotDone = items.some((i) => i.required && !i.isDone);
+  return requiredNotDone ? 'IN_PROGRESS' : 'DONE';
+}
+
+/** Группировка пунктов по разделу с сохранением порядка их первого появления */
+function groupBySection(items: OrderChecklistItem[]) {
+  const order: string[] = [];
+  const map = new Map<string, OrderChecklistItem[]>();
+  for (const item of items) {
+    const key = item.section?.trim() || 'Без раздела';
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key)!.push(item);
+  }
+  return order.map((section) => ({ section, items: map.get(section)! }));
+}
+
+/**
+ * Чек-лист контроля качества конкретного заказа (ТЗ 8). Встраивается в
+ * карточку заказа. Если чек-листа ещё нет — предлагает выбрать шаблон,
+ * если есть — показывает пункты по разделам с отметкой «кто и когда».
+ */
+export function OrderChecklistCard({
+  orderId,
+  canEdit,
+}: {
+  orderId: string;
+  canEdit: boolean;
+}) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const dialog = useDialog();
+
+  const {
+    data: checklist,
+    loading,
+    error,
+    reload,
+    setData,
+  } = useFetch<OrderChecklist | null>(`/orders/${orderId}/checklist`);
+
+  const noChecklistYet = !loading && !error && !checklist;
+  const templates = useFetch<ChecklistTemplate[]>(
+    noChecklistYet ? '/checklist-templates' : null,
+  );
+
+  const [templateId, setTemplateId] = useState('');
+  const [newItemTitle, setNewItemTitle] = useState('');
+  const [newItemSection, setNewItemSection] = useState('');
+  const [newItemRequired, setNewItemRequired] = useState(false);
+
+  const applyTemplate = async () => {
+    const chosen = (templates.data ?? []).find((t) => t.id === templateId);
+    const id = tempId();
+    const optimistic: OrderChecklist = {
+      id,
+      orderId,
+      templateId: chosen?.id ?? null,
+      templateName: chosen?.name ?? 'Без шаблона',
+      status: 'OPEN',
+      items: (chosen?.items ?? []).map((it, i) => ({
+        id: `${id}:${i}`,
+        title: it.title,
+        section: it.section,
+        required: it.required,
+        sortOrder: i,
+        isDone: false,
+      })),
+    };
+    setData(optimistic);
+    try {
+      const res = await api.post<OrderChecklist>(`/orders/${orderId}/checklist`, {
+        templateId: templateId || undefined,
+      });
+      setData(res.data);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось применить шаблон');
+      setData(null);
+    }
+  };
+
+  /** Отметка/снятие отметки — оптимистично, со своим ФИО и временем; откат при ошибке */
+  const toggleItem = async (item: OrderChecklistItem) => {
+    if (!checklist) return;
+    const baseStatus = checklist.status;
+    const nextDone = !item.isDone;
+
+    const patchItem = (fields: Partial<OrderChecklistItem>) =>
+      setData((prev) => {
+        if (!prev) return prev;
+        const items = prev.items.map((i) => (i.id === item.id ? { ...i, ...fields } : i));
+        return { ...prev, items, status: recalcStatus(baseStatus, items) };
+      });
+
+    patchItem({
+      isDone: nextDone,
+      doneById: nextDone ? user?.id ?? null : null,
+      doneByName: nextDone ? user?.fullName ?? null : null,
+      doneAt: nextDone ? new Date().toISOString() : null,
+    });
+
+    try {
+      await api.patch(`/orders/${orderId}/checklist/items/${item.id}`, { isDone: nextDone });
+      // тихая сверка: сервер мог автоматически закрыть чек-лист (все
+      // обязательные пункты выполнены) — подтягиваем его актуальный статус
+      reload();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось отметить пункт');
+      patchItem({
+        isDone: item.isDone,
+        doneById: item.doneById,
+        doneByName: item.doneByName,
+        doneAt: item.doneAt,
+      });
+    }
+  };
+
+  const addCustomItem = async () => {
+    if (!checklist) return;
+    const title = newItemTitle.trim();
+    if (!title) return;
+    const baseStatus = checklist.status;
+    const localId = tempId();
+    const optimisticItem: OrderChecklistItem = {
+      id: localId,
+      title,
+      section: newItemSection.trim() || null,
+      required: newItemRequired,
+      sortOrder: checklist.items.length,
+      isDone: false,
+    };
+    setData((prev) => {
+      if (!prev) return prev;
+      const items = [...prev.items, optimisticItem];
+      return { ...prev, items, status: recalcStatus(baseStatus, items) };
+    });
+    setNewItemTitle('');
+    setNewItemSection('');
+    setNewItemRequired(false);
+
+    try {
+      const res = await api.post<OrderChecklistItem>(`/orders/${orderId}/checklist/items`, {
+        title,
+        section: optimisticItem.section ?? undefined,
+        required: newItemRequired,
+      });
+      setData((prev) => {
+        if (!prev) return prev;
+        const items = prev.items.map((i) => (i.id === localId ? res.data : i));
+        return { ...prev, items, status: recalcStatus(baseStatus, items) };
+      });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось добавить пункт');
+      setData((prev) => {
+        if (!prev) return prev;
+        const items = prev.items.filter((i) => i.id !== localId);
+        return { ...prev, items, status: recalcStatus(baseStatus, items) };
+      });
+    }
+  };
+
+  const removeItem = async (item: OrderChecklistItem) => {
+    if (!checklist) return;
+    const ok = await dialog.confirm({
+      title: 'Удалить пункт?',
+      message: `«${item.title}» будет удалён из чек-листа без возможности восстановления.`,
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+    const baseStatus = checklist.status;
+    setData((prev) => {
+      if (!prev) return prev;
+      const items = prev.items.filter((i) => i.id !== item.id);
+      return { ...prev, items, status: recalcStatus(baseStatus, items) };
+    });
+    try {
+      await api.delete(`/orders/${orderId}/checklist/items/${item.id}`);
+      reload();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось удалить пункт');
+      reload();
+    }
+  };
+
+  const complete = async () => {
+    if (!checklist) return;
+    const before = checklist;
+    setData((prev) =>
+      prev ? { ...prev, status: 'DONE', completedAt: new Date().toISOString() } : prev,
+    );
+    try {
+      const res = await api.post<OrderChecklist>(`/orders/${orderId}/checklist/complete`);
+      setData(res.data);
+      toast.success('Чек-лист закрыт');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось закрыть чек-лист');
+      setData(before);
+    }
+  };
+
+  const totalCount = checklist?.items.length ?? 0;
+  const doneCount = checklist?.items.filter((i) => i.isDone).length ?? 0;
+  const requiredNotDone = checklist?.items.filter((i) => i.required && !i.isDone).length ?? 0;
+
+  return (
+    <div className="card p-4 sm:p-5">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <ClipboardList className="h-4 w-4 shrink-0 text-navy-500" />
+        <h3 className="font-semibold text-navy-900">Чек-лист качества</h3>
+        {checklist && <Badge className={STATUS_COLOR[checklist.status]}>{STATUS_LABEL[checklist.status]}</Badge>}
+      </div>
+
+      {error && (
+        <ErrorState text="Не удалось загрузить чек-лист заказа" onRetry={reload} />
+      )}
+
+      {!error && loading && !checklist && <Spinner />}
+
+      {!error && noChecklistYet && (
+        <div className="space-y-3">
+          <p className="text-sm text-navy-500">
+            У заказа ещё нет чек-листа контроля качества.
+          </p>
+          {canEdit ? (
+            templates.error ? (
+              <ErrorState text="Не удалось загрузить шаблоны" onRetry={templates.reload} />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="input min-w-[14rem] flex-1"
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                  disabled={templates.loading && !templates.data}
+                >
+                  <option value="">Без шаблона (пустой список)</option>
+                  {(templates.data ?? [])
+                    .filter((t) => t.isActive)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} · {t.items.length} пунктов
+                      </option>
+                    ))}
+                </select>
+                <button onClick={applyTemplate} className="btn-primary shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Применить
+                </button>
+              </div>
+            )
+          ) : (
+            <EmptyState text="Чек-лист по этому заказу пока не создан" />
+          )}
+        </div>
+      )}
+
+      {!error && checklist && (
+        <div className="space-y-4">
+          {/* Прогресс */}
+          <div className="rounded-xl bg-navy-50/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-sm">
+              <span className="font-medium text-navy-800">
+                {doneCount} из {totalCount} выполнено
+              </span>
+              {requiredNotDone > 0 ? (
+                <span className="font-medium text-amber-700">
+                  Осталось обязательных: {requiredNotDone}
+                </span>
+              ) : totalCount > 0 ? (
+                <span className="font-medium text-emerald-700">Все обязательные выполнены</span>
+              ) : null}
+            </div>
+            {totalCount > 0 && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy-100">
+                <div
+                  className="h-full rounded-full bg-navy-500 transition-all"
+                  style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Пункты по разделам */}
+          {totalCount === 0 ? (
+            <EmptyState text="Пунктов пока нет — добавьте вручную ниже" />
+          ) : (
+            <div className="space-y-4">
+              {groupBySection(checklist.items).map((group) => (
+                <div key={group.section}>
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-navy-400">
+                    {group.section}
+                  </div>
+                  <div className="space-y-1.5">
+                    {group.items.map((item) => (
+                      <ChecklistItemRow
+                        key={item.id}
+                        item={item}
+                        canEdit={canEdit}
+                        onToggle={() => toggleItem(item)}
+                        onRemove={() => removeItem(item)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Добавить свой пункт */}
+          {canEdit && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-navy-100 pt-3">
+              <input
+                className="input min-w-[10rem] flex-[2]"
+                placeholder="Текст нового пункта"
+                value={newItemTitle}
+                maxLength={300}
+                onChange={(e) => setNewItemTitle(e.target.value)}
+              />
+              <input
+                className="input min-w-[8rem] flex-1"
+                placeholder="Раздел (необязательно)"
+                value={newItemSection}
+                maxLength={120}
+                onChange={(e) => setNewItemSection(e.target.value)}
+              />
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-navy-600">
+                <input
+                  type="checkbox"
+                  checked={newItemRequired}
+                  onChange={(e) => setNewItemRequired(e.target.checked)}
+                  className="h-4 w-4 accent-navy-500"
+                />
+                Обязательный
+              </label>
+              <button
+                onClick={addCustomItem}
+                disabled={!newItemTitle.trim() || totalCount >= 100}
+                className="btn-ghost shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                Добавить пункт
+              </button>
+            </div>
+          )}
+
+          {/* Закрытие чек-листа */}
+          {canEdit && checklist.status !== 'DONE' && (
+            <button
+              onClick={complete}
+              disabled={requiredNotDone > 0 || totalCount === 0}
+              className="btn-primary w-full"
+              title={
+                requiredNotDone > 0
+                  ? 'Сначала отметьте все обязательные пункты'
+                  : undefined
+              }
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Закрыть чек-лист
+            </button>
+          )}
+          {checklist.status === 'DONE' && (
+            <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              Чек-лист закрыт{checklist.completedAt ? ` · ${formatDateTimeTz(checklist.completedAt)}` : ''}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChecklistItemRow({
+  item,
+  canEdit,
+  onToggle,
+  onRemove,
+}: {
+  item: OrderChecklistItem;
+  canEdit: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+}) {
+  const pending = item.required && !item.isDone;
+  return (
+    <div
+      className={`flex items-start gap-2.5 rounded-xl border p-2.5 ${
+        pending ? 'border-amber-200 bg-amber-50/40' : 'border-navy-100'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={canEdit ? onToggle : undefined}
+        disabled={!canEdit}
+        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+          item.isDone ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-navy-300 bg-white'
+        } ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
+        aria-label={item.isDone ? 'Снять отметку выполнения' : 'Отметить выполненным'}
+      >
+        {item.isDone && <Check className="h-3.5 w-3.5" />}
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <div className={`text-sm ${item.isDone ? 'text-navy-400 line-through' : 'text-navy-900'}`}>
+          {item.title}
+          {item.required && (
+            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+              Обязательно
+            </span>
+          )}
+        </div>
+        {item.isDone && item.doneByName && (
+          <div className="mt-0.5 text-xs text-navy-400">
+            Отметил(а) {item.doneByName}
+            {item.doneAt ? ` · ${formatDateTimeTz(item.doneAt)}` : ''}
+          </div>
+        )}
+      </div>
+
+      {canEdit && (
+        <button
+          onClick={onRemove}
+          className="shrink-0 rounded-lg p-1 text-navy-300 hover:bg-red-50 hover:text-red-600"
+          title="Удалить пункт"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}

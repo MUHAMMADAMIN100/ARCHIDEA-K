@@ -1,15 +1,22 @@
 import type {
+  AuditAction,
   CleaningType,
   ClientTag,
   DirtLevel,
   FunnelStage,
   LeadSource,
+  FinanceCategory,
+  FinanceKind,
   Order,
+  ProposalStatus,
+  ReminderStatus,
   ReportStatus,
   ScheduleType,
+  ShiftGroupStatus,
   TaskPriority,
   TaskStatus,
   TaskType,
+  TrashType,
 } from '../types';
 
 export const STAGE_LABEL: Record<FunnelStage, string> = {
@@ -199,4 +206,207 @@ export function formatDateTime(s?: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Словари разделов, добавленных по ТЗ
+// ═══════════════════════════════════════════════════════════
+
+
+// ── Финансы (ТЗ 7) ──
+
+export const FINANCE_KIND_LABEL: Record<FinanceKind, string> = {
+  INCOME: 'Доход',
+  EXPENSE: 'Расход',
+};
+
+export const FINANCE_KIND_COLOR: Record<FinanceKind, string> = {
+  INCOME: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  EXPENSE: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
+export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
+  ORDER_PAYMENT: 'Оплата заказа',
+  OTHER_INCOME: 'Прочий доход',
+  SALARY: 'Зарплата',
+  BONUS: 'Премии',
+  SUPPLIES: 'Расходные материалы',
+  TRANSPORT: 'Транспорт',
+  RENT: 'Аренда',
+  MARKETING: 'Реклама и продвижение',
+  TAX: 'Налоги и сборы',
+  OTHER_EXPENSE: 'Прочий расход',
+};
+
+/** Какие статьи допустимы для дохода и для расхода — форма не даёт их перепутать */
+export const CATEGORIES_BY_KIND: Record<FinanceKind, FinanceCategory[]> = {
+  INCOME: ['ORDER_PAYMENT', 'OTHER_INCOME'],
+  EXPENSE: [
+    'SALARY',
+    'BONUS',
+    'SUPPLIES',
+    'TRANSPORT',
+    'RENT',
+    'MARKETING',
+    'TAX',
+    'OTHER_EXPENSE',
+  ],
+};
+
+// ── Журнал изменений (ТЗ 2) ──
+
+export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
+  CREATE: 'Создание',
+  UPDATE: 'Изменение',
+  DELETE: 'В корзину',
+  RESTORE: 'Восстановление',
+  PURGE: 'Удалено навсегда',
+  STAGE_CHANGE: 'Смена этапа',
+};
+
+export const AUDIT_ACTION_COLOR: Record<AuditAction, string> = {
+  CREATE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  UPDATE: 'bg-sky-50 text-sky-700 border-sky-200',
+  DELETE: 'bg-amber-50 text-amber-700 border-amber-200',
+  RESTORE: 'bg-teal-50 text-teal-700 border-teal-200',
+  PURGE: 'bg-rose-50 text-rose-700 border-rose-200',
+  STAGE_CHANGE: 'bg-violet-50 text-violet-700 border-violet-200',
+};
+
+export const AUDIT_ENTITY_LABEL: Record<string, string> = {
+  ORDER: 'Заказ',
+  CLIENT: 'Клиент',
+  USER: 'Сотрудник',
+  SHIFT_GROUP: 'Выезд',
+  SHIFT: 'Смена',
+  SERVICE: 'Услуга',
+  TASK: 'Задача',
+  CLEANER: 'Клинер',
+  REPORT: 'Ведомость',
+  FINANCE: 'Финансы',
+  BONUS: 'Премия',
+  PROPOSAL: 'КП',
+  CHECKLIST: 'Чек-лист',
+  REMINDER: 'Напоминание',
+};
+
+// ── Коммерческие предложения (ТЗ 9) ──
+
+export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {
+  DRAFT: 'Черновик',
+  SENT: 'Отправлено',
+  ACCEPTED: 'Принято',
+  REJECTED: 'Отклонено',
+};
+
+export const PROPOSAL_STATUS_COLOR: Record<ProposalStatus, string> = {
+  DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
+  SENT: 'bg-sky-50 text-sky-700 border-sky-200',
+  ACCEPTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  REJECTED: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
+// ── Напоминания (ТЗ 10.1) ──
+
+export const REMINDER_STATUS_LABEL: Record<ReminderStatus, string> = {
+  PENDING: 'Ожидает',
+  SENT: 'Напомнили',
+  DONE: 'Выполнено',
+  CANCELLED: 'Отменено',
+};
+
+export const REMINDER_STATUS_COLOR: Record<ReminderStatus, string> = {
+  PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
+  SENT: 'bg-sky-50 text-sky-700 border-sky-200',
+  DONE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  CANCELLED: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+// ── Смены-выезды (ТЗ 4) ──
+
+export const SHIFT_GROUP_STATUS_LABEL: Record<ShiftGroupStatus, string> = {
+  PLANNED: 'Запланирован',
+  IN_PROGRESS: 'В работе',
+  CLOSED: 'Закрыт',
+};
+
+export const SHIFT_GROUP_STATUS_COLOR: Record<ShiftGroupStatus, string> = {
+  PLANNED: 'bg-slate-100 text-slate-700 border-slate-200',
+  IN_PROGRESS: 'bg-sky-50 text-sky-700 border-sky-200',
+  CLOSED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+};
+
+// ── Корзина (ТЗ 1.3 и 6) ──
+
+export const TRASH_TYPE_LABEL: Record<TrashType, string> = {
+  order: 'Заказы',
+  client: 'Клиенты',
+  task: 'Задачи',
+  cleaner: 'Клинеры',
+  user: 'Сотрудники',
+  report: 'Ведомости',
+  financeEntry: 'Финансы',
+  bonus: 'Премии',
+  tariff: 'Услуги',
+  extraService: 'Доп. услуги',
+  proposal: 'КП',
+  reminder: 'Напоминания',
+  shiftGroup: 'Выезды',
+};
+
+/** Разделы корзины, которые видит только тот, кому доступны финансы */
+export const TRASH_FINANCIAL_TYPES: TrashType[] = [
+  'report',
+  'financeEntry',
+  'bonus',
+];
+
+// ── Человеческие подписи полей в истории изменений ──
+
+export const AUDIT_FIELD_LABEL: Record<string, string> = {
+  stage: 'Этап воронки',
+  finalPrice: 'Итоговая сумма',
+  estimatedPrice: 'Предварительная сумма',
+  pricePerSqm: 'Цена за единицу',
+  isManualPrice: 'Сумма задана вручную',
+  area: 'Площадь',
+  seats: 'Посадочных мест',
+  address: 'Адрес',
+  cleaners: 'Команда',
+  members: 'Состав группы',
+  managerId: 'Ответственный менеджер',
+  preferences: 'Предпочтения',
+  serviceKey: 'Услуга',
+  cleaningType: 'Вид уборки',
+  dirtLevel: 'Степень загрязнения',
+  scheduledDate: 'Дата уборки',
+  inspectionDate: 'Дата осмотра',
+  rejectionReason: 'Причина отказа',
+  fullName: 'ФИО',
+  phone: 'Телефон',
+  login: 'Логин',
+  role: 'Роль',
+  isActive: 'Активен',
+  canManageOps: 'Расширенный доступ',
+  canManageTasks: 'Полный доступ к задачам',
+  rate: 'Ставка',
+  amount: 'Сумма',
+  category: 'Статья',
+  status: 'Статус',
+  title: 'Название',
+  passwordHash: 'Пароль',
+};
+
+export function auditFieldLabel(field: string): string {
+  return AUDIT_FIELD_LABEL[field] ?? field;
+}
+
+/** Значение поля в истории: пустое — прочерк, дата — по-человечески */
+export function formatAuditValue(value: string | null): string {
+  if (value === null || value === '') return '—';
+  if (value === '***') return 'скрыто';
+  // ISO-дата → привычный формат
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTime(value);
+  if (value === 'да' || value === 'нет') return value;
+  return value;
 }

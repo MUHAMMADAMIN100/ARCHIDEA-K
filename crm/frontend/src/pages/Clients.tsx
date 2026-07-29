@@ -1,18 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Download, Search } from 'lucide-react';
+import { Plus, Download, Repeat2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import {
-  Spinner,
-  PageHeader,
-  Badge,
-  Modal,
-  EmptyState,
-  ErrorState,
-} from '../components/ui';
+import { PageHeader, Badge, Modal } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { Column, DataTable, SearchInput } from '../components/common';
 import {
   TAG_LABEL,
   TAG_COLOR,
@@ -39,6 +33,8 @@ import type {
 const TAGS: ClientTag[] = ['VIP', 'REGULAR', 'POTENTIAL', 'REFUSED'];
 const SOURCES: LeadSource[] = ['SITE', 'INSTAGRAM', 'CALL', 'RECOMMENDATION'];
 
+type OrdersFilter = 'all' | 'repeat' | 'none';
+
 /** Данные заявки при добавлении клиента (если создаём заявку в воронке) */
 export interface NewOrderInput {
   cleaningType: CleaningType;
@@ -55,19 +51,28 @@ export function Clients() {
   const [tag, setTag] = useState('');
   const [source, setSource] = useState('');
   const [sort, setSort] = useState<'recent' | 'name'>('recent');
+  // ТЗ 9.4 — повторные клиенты видны и фильтруются отдельно
+  const [ordersFilter, setOrdersFilter] = useState<OrdersFilter>('all');
   const [showAdd, setShowAdd] = useState(false);
+  const toast = useToast();
 
   const query = new URLSearchParams();
   if (search) query.set('search', search);
   if (tag) query.set('tag', tag);
   if (source) query.set('source', source);
   query.set('sort', sort);
+  if (ordersFilter === 'repeat') query.set('repeat', 'true');
 
   const { data, loading, error, reload, setData } = useFetch<Client[]>(
     `/clients?${query.toString()}`,
-    { deps: [search, tag, source, sort], pollMs: 15000 },
+    { deps: [search, tag, source, sort, ordersFilter], pollMs: 15000 },
   );
-  const toast = useToast();
+
+  // «Без заказов» бэкенд не фильтрует отдельным параметром — считаем на клиенте
+  // по уже загруженному списку, дублировать эндпоинт ради одного среза незачем
+  const rows = (data ?? []).filter((c) =>
+    ordersFilter === 'none' ? (c._count?.orders ?? 0) === 0 : true,
+  );
 
   // оптимистично: клиент появляется в списке сразу; при необходимости
   // создаём и заявку в воронке (этап «Новая заявка»)
@@ -121,20 +126,6 @@ export function Clients() {
     }
   };
 
-  // Пагинация по 10 строк
-  const PER_PAGE = 10;
-  const [page, setPage] = useState(1);
-  useEffect(() => {
-    setPage(1);
-  }, [search, tag, source, sort]);
-  const total = data?.length ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PER_PAGE));
-  const currentPage = Math.min(page, pageCount);
-  const pageData = (data ?? []).slice(
-    (currentPage - 1) * PER_PAGE,
-    currentPage * PER_PAGE,
-  );
-
   const exportCsv = async () => {
     const res = await api.get('/clients/export', { responseType: 'blob' });
     const url = URL.createObjectURL(res.data);
@@ -144,6 +135,89 @@ export function Clients() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const columns: Column<Client>[] = [
+    {
+      key: 'client',
+      title: 'Клиент',
+      render: (c) => (
+        <div>
+          <div className="flex items-center gap-1.5 font-semibold text-navy-900">
+            {c.fullName}
+            {c.isRepeat && (
+              <Badge className="bg-teal-100 text-teal-700">
+                <Repeat2 className="mr-0.5 -ml-0.5 inline h-3 w-3" />
+                Повторный
+              </Badge>
+            )}
+          </div>
+          <div className="text-xs text-navy-400">{c.phone}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'source',
+      title: 'Источник',
+      hideOnMobile: true,
+      render: (c) => <span className="text-navy-600">{SOURCE_LABEL[c.source]}</span>,
+    },
+    {
+      key: 'tags',
+      title: 'Теги',
+      hideOnMobile: true,
+      render: (c) => (
+        <div className="flex flex-wrap gap-1">
+          {c.tags.length === 0 ? (
+            <span className="text-navy-300">—</span>
+          ) : (
+            c.tags.map((t) => (
+              <Badge key={t} className={TAG_COLOR[t]}>
+                {TAG_LABEL[t]}
+              </Badge>
+            ))
+          )}
+        </div>
+      ),
+    },
+    ...(userSeesAll(user)
+      ? [
+          {
+            key: 'manager',
+            title: 'Менеджер',
+            hideOnMobile: true,
+            render: (c: Client) => (
+              <span className="text-navy-600">{c.manager?.fullName ?? '—'}</span>
+            ),
+          } as Column<Client>,
+        ]
+      : []),
+    {
+      key: 'orders',
+      title: 'Заказов (оплачено)',
+      numeric: true,
+      render: (c) => (
+        <span className="text-navy-700">
+          {c._count?.orders ?? 0}
+          {(c.paidOrdersCount ?? 0) > 0 && (
+            <span className="ml-1 text-xs text-emerald-600">
+              ({c.paidOrdersCount} опл.)
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'lastOrderAt',
+      title: 'Последний заказ',
+      hideOnMobile: true,
+      render: (c) => <span className="text-navy-400">{formatDate(c.lastOrderAt)}</span>,
+    },
+    {
+      key: 'lastContactAt',
+      title: 'Контакт',
+      render: (c) => <span className="text-navy-400">{formatDate(c.lastContactAt)}</span>,
+    },
+  ];
 
   return (
     <div>
@@ -166,14 +240,8 @@ export function Clients() {
 
       {/* Фильтры */}
       <div className="card mb-4 flex flex-wrap items-center gap-3 p-3">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300" />
-          <input
-            className="input !pl-9"
-            placeholder="Поиск по имени или телефону"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="min-w-[200px] flex-1">
+          <SearchInput value={search} onChange={setSearch} placeholder="Поиск по имени или телефону" />
         </div>
         <select className="input max-w-[180px]" value={tag} onChange={(e) => setTag(e.target.value)}>
           <option value="">Все теги</option>
@@ -191,121 +259,28 @@ export function Clients() {
           <option value="recent">Сначала недавние</option>
           <option value="name">По имени</option>
         </select>
+        <select
+          className="input max-w-[200px]"
+          value={ordersFilter}
+          onChange={(e) => setOrdersFilter(e.target.value as OrdersFilter)}
+        >
+          <option value="all">Все клиенты</option>
+          <option value="repeat">Только повторные</option>
+          <option value="none">Без заказов</option>
+        </select>
       </div>
 
-      {!data && error && !loading ? (
-        <ErrorState onRetry={reload} />
-      ) : loading || !data ? (
-        <Spinner />
-      ) : data.length === 0 ? (
-        <EmptyState text="Клиенты не найдены" />
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-navy-50 text-left text-xs uppercase tracking-wide text-navy-400">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Клиент</th>
-                  <th className="px-4 py-3 font-semibold">Телефон</th>
-                  <th className="px-4 py-3 font-semibold">Источник</th>
-                  <th className="px-4 py-3 font-semibold">Теги</th>
-                  {userSeesAll(user) && (
-                    <th className="px-4 py-3 font-semibold">Менеджер</th>
-                  )}
-                  <th className="px-4 py-3 font-semibold">Заказов</th>
-                  <th className="px-4 py-3 font-semibold">Контакт</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-50">
-                {pageData.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => navigate(`/clients/${c.id}`)}
-                    className="cursor-pointer hover:bg-navy-50"
-                  >
-                    <td className="px-4 py-3 font-semibold text-navy-900">
-                      {c.fullName}
-                    </td>
-                    <td className="px-4 py-3 text-navy-600">{c.phone}</td>
-                    <td className="px-4 py-3 text-navy-600">
-                      {SOURCE_LABEL[c.source]}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {c.tags.map((t) => (
-                          <Badge key={t} className={TAG_COLOR[t]}>
-                            {TAG_LABEL[t]}
-                          </Badge>
-                        ))}
-                      </div>
-                    </td>
-                    {userSeesAll(user) && (
-                      <td className="px-4 py-3 text-navy-600">
-                        {c.manager?.fullName ?? '—'}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-navy-600">
-                      {c._count?.orders ?? 0}
-                    </td>
-                    <td className="px-4 py-3 text-navy-400">
-                      {formatDate(c.lastContactAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Пагинация */}
-          {pageCount > 1 && (
-            <div className="flex items-center justify-between border-t border-navy-50 px-4 py-3 text-sm">
-              <span className="text-navy-400">
-                Стр. {currentPage} из {pageCount} · всего {total}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                  className="rounded-lg border border-navy-200 px-3 py-1.5 text-navy-600 transition hover:bg-navy-50 disabled:opacity-40"
-                >
-                  Назад
-                </button>
-                {Array.from({ length: pageCount }, (_, i) => i + 1)
-                  .filter(
-                    (p) =>
-                      p === 1 ||
-                      p === pageCount ||
-                      Math.abs(p - currentPage) <= 1,
-                  )
-                  .map((p, idx, arr) => (
-                    <span key={p} className="flex items-center">
-                      {idx > 0 && arr[idx - 1] !== p - 1 && (
-                        <span className="px-1 text-navy-300">…</span>
-                      )}
-                      <button
-                        onClick={() => setPage(p)}
-                        className={`min-w-[34px] rounded-lg px-2.5 py-1.5 font-medium transition ${
-                          p === currentPage
-                            ? 'bg-navy-500 text-white'
-                            : 'border border-navy-200 text-navy-600 hover:bg-navy-50'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    </span>
-                  ))}
-                <button
-                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  disabled={currentPage >= pageCount}
-                  className="rounded-lg border border-navy-200 px-3 py-1.5 text-navy-600 transition hover:bg-navy-50 disabled:opacity-40"
-                >
-                  Вперёд
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(c) => c.id}
+        loading={loading}
+        error={error}
+        onRetry={reload}
+        onRowClick={(c) => navigate(`/clients/${c.id}`)}
+        perPage={15}
+        emptyText="Клиенты не найдены — измените фильтры или добавьте нового клиента"
+      />
 
       {showAdd && (
         <AddClientModal

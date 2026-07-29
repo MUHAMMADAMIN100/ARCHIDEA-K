@@ -35,11 +35,46 @@ export interface AuthUser {
   role: Role;
   /** расширенный доступ: видит всё как директор, но без финансов */
   canManageOps?: boolean;
+  /** ТЗ 1.2 — полный доступ к модулю задач (все задачи компании) */
+  canManageTasks?: boolean;
 }
 
 /** Видит ли пользователь данные всей компании (директор или ops-менеджер) */
 export function userSeesAll(u?: AuthUser | null): boolean {
   return !!u && (u.role === 'DIRECTOR' || u.canManageOps === true);
+}
+
+/** Ведёт ли пользователь ВСЕ задачи компании, а не только свои (ТЗ 1.2) */
+export function userManagesTasks(u?: AuthUser | null): boolean {
+  return userSeesAll(u) || u?.canManageTasks === true;
+}
+
+/**
+ * Книга доходов и расходов, премии — только руководитель.
+ * Это деньги компании целиком, а не «свои» операции сотрудника.
+ */
+export function userSeesFinance(u?: AuthUser | null): boolean {
+  return u?.role === 'DIRECTOR';
+}
+
+/**
+ * Ops-менеджер: видит всё как директор, но БЕЗ денег.
+ *
+ * Отдельная проверка нужна там, где раздел закрыт именно от него, а обычному
+ * менеджеру доступен — например, свои платёжные ведомости и выплаты.
+ * Путать это с userSeesFinance нельзя: иначе менеджер, удаливший собственную
+ * ведомость, не увидит её в корзине и не сможет восстановить.
+ */
+export function userIsOpsOnly(u?: AuthUser | null): boolean {
+  return !!u && u.canManageOps === true && u.role !== 'DIRECTOR';
+}
+
+/** Корзина: директор и менеджеры; безвозвратная очистка — только директор */
+export function userSeesTrash(u?: AuthUser | null): boolean {
+  return !!u;
+}
+export function userCanPurge(u?: AuthUser | null): boolean {
+  return u?.role === 'DIRECTOR';
 }
 
 export interface Manager {
@@ -52,6 +87,11 @@ export interface Manager {
   duties?: string | null;
   mainTask?: string | null;
   isActive: boolean;
+  canManageOps?: boolean;
+  canManageTasks?: boolean;
+  acceptsLeads?: boolean;
+  telegramChatId?: string | null;
+  telegramEnabled?: boolean;
 }
 
 export interface Cleaner {
@@ -81,6 +121,8 @@ export interface Shift {
   cleanerId: string;
   rate: number;
   note?: string | null;
+  /** выезд, который породил эту оплачиваемую смену (ТЗ 4) */
+  groupId?: string | null;
   cleaner?: {
     id: string;
     fullName: string;
@@ -111,12 +153,21 @@ export interface PayrollRow {
   shifts: number;
   accrued: number;
   fines: number;
+  /** ТЗ 7.2 — начисленные премии за период */
+  bonuses?: number;
   total: number;
+  isActive?: boolean;
 }
 
 export interface PayrollSummary {
   rows: PayrollRow[];
-  totals: { shifts: number; accrued: number; fines: number; total: number };
+  totals: {
+    shifts: number;
+    accrued: number;
+    fines: number;
+    bonuses?: number;
+    total: number;
+  };
 }
 
 export interface Client {
@@ -127,11 +178,18 @@ export interface Client {
   source: LeadSource;
   tags: ClientTag[];
   notes?: string;
+  /** ТЗ 10.2 — постоянные предпочтения клиента */
+  preferences?: string | null;
   lastContactAt: string;
   managerId?: string;
   manager?: { id: string; fullName: string } | null;
   _count?: { orders: number };
   orders?: Order[];
+  // ── Повторный клиент (ТЗ 9.4) ──
+  isRepeat?: boolean;
+  paidOrdersCount?: number;
+  lastOrderAt?: string | null;
+  deletedAt?: string | null;
 }
 
 export interface Order {
@@ -141,6 +199,8 @@ export interface Order {
   stage: FunnelStage;
   source: LeadSource;
   cleaningType: CleaningType;
+  /** ключ услуги (ТЗ 1.1) — может быть услугой, заведённой директором */
+  serviceKey?: string | null;
   dirtLevel?: DirtLevel | null;
   area: number;
   seats?: number | null;
@@ -157,12 +217,24 @@ export interface Order {
   rejectionReason?: string | null;
   inspectionDate?: string | null;
   scheduledDate?: string | null;
+  /** ТЗ 5 — сумма задана вручную, автоматический пересчёт её не трогает */
+  isManualPrice?: boolean;
   isLarge: boolean;
   createdAt: string;
   closedAt?: string | null;
-  client?: { id: string; fullName: string; phone: string };
+  deletedAt?: string | null;
+  client?: {
+    id: string;
+    fullName: string;
+    phone: string;
+    preferences?: string | null;
+    isRepeat?: boolean;
+    paidOrdersCount?: number;
+  };
   manager?: { id: string; fullName: string } | null;
   cleaners?: { id: string; fullName: string }[];
+  /** ТЗ 3.2 — выезды по заказу: кто, когда и куда ездил */
+  shiftGroups?: ShiftGroupBrief[];
 }
 
 export interface BoardColumn {
@@ -280,17 +352,383 @@ export interface Analytics {
 
 export interface Tariff {
   id: string;
-  key: CleaningType;
+  /** строка, а не перечисление: директор заводит новые услуги (ТЗ 1.1) */
+  key: string;
   title: string;
+  description?: string | null;
   pricePerSqm: number; // legacy = priceMedium
   priceLight: number;
   priceMedium: number;
   priceHeavy: number;
   hasLevels: boolean;
-  unit: string; // «м²» или «место»
+  unit: string; // «м²», «место», «шт»
+  /** базовая услуга: ключ и единицу менять нельзя, удалять нельзя */
+  isSystem?: boolean;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export interface ExtraService {
+  id: string;
+  key: string;
+  title: string;
+  price: number;
+  hasQty: boolean;
+  isSystem?: boolean;
+  isActive?: boolean;
+  sortOrder?: number;
 }
 
 export interface Tariffs {
   tariffs: Tariff[];
-  extras: { id: string; key: string; title: string; price: number; hasQty: boolean }[];
+  extras: ExtraService[];
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Смены-выезды (ТЗ 4)
+// ═══════════════════════════════════════════════════════════
+
+export type ShiftGroupStatus = 'PLANNED' | 'IN_PROGRESS' | 'CLOSED';
+
+export interface ShiftGroupMember {
+  id: string;
+  cleanerId: string;
+  fullName: string;
+  role: string; // «Бригадир» / «Клинер»
+  rate?: number;
+}
+
+/** Краткий вид выезда — то, что показывается в карточке заказа */
+export interface ShiftGroupBrief {
+  id: string;
+  date: string;
+  address: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  status: ShiftGroupStatus;
+  brigadeName?: string | null;
+  brigadierName?: string | null;
+  managerName?: string | null;
+  closedAt?: string | null;
+  members: ShiftGroupMember[];
+}
+
+export interface ShiftGroup extends ShiftGroupBrief {
+  orderId?: string | null;
+  brigadeId?: string | null;
+  brigadierId?: string | null;
+  managerId?: string | null;
+  note?: string | null;
+  closedByName?: string | null;
+  order?: {
+    id: string;
+    address?: string | null;
+    client?: { id: string; fullName: string; phone: string } | null;
+  } | null;
+  shifts?: { id: string; cleanerId: string; rate: number }[];
+  createdAt?: string;
+  deletedAt?: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Финансы (ТЗ 7)
+// ═══════════════════════════════════════════════════════════
+
+export type FinanceKind = 'INCOME' | 'EXPENSE';
+export type FinanceSource = 'AUTO' | 'MANUAL';
+export type FinanceCategory =
+  | 'ORDER_PAYMENT'
+  | 'OTHER_INCOME'
+  | 'SALARY'
+  | 'BONUS'
+  | 'SUPPLIES'
+  | 'TRANSPORT'
+  | 'RENT'
+  | 'MARKETING'
+  | 'TAX'
+  | 'OTHER_EXPENSE';
+
+export interface FinanceEntry {
+  id: string;
+  kind: FinanceKind;
+  category: FinanceCategory;
+  amount: number;
+  date: string;
+  title: string;
+  comment?: string | null;
+  source: FinanceSource;
+  orderId?: string | null;
+  clientId?: string | null;
+  shiftGroupId?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+  order?: { id: string; client?: { fullName: string } | null } | null;
+}
+
+export interface FinanceSummary {
+  income: number;
+  expense: number;
+  profit: number;
+  byCategory: { category: FinanceCategory; kind: FinanceKind; amount: number }[];
+  series?: { date: string; income: number; expense: number }[];
+}
+
+/** Премия — только ручное начисление (ТЗ 7.2) */
+export interface Bonus {
+  id: string;
+  cleanerId?: string | null;
+  userId?: string | null;
+  recipientName: string;
+  amount: number;
+  reason: string;
+  periodFrom?: string | null;
+  periodTo?: string | null;
+  createdByName: string;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Журнал изменений (ТЗ 2)
+// ═══════════════════════════════════════════════════════════
+
+export type AuditAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'RESTORE'
+  | 'PURGE'
+  | 'STAGE_CHANGE';
+
+export interface AuditChange {
+  field: string;
+  label: string;
+  before: string | null;
+  after: string | null;
+}
+
+export interface AuditEntry {
+  id: string;
+  entity: string;
+  entityId: string;
+  entityTitle: string;
+  action: AuditAction;
+  summary?: string | null;
+  changes?: AuditChange[] | null;
+  actorId?: string | null;
+  actorName: string;
+  createdAt: string;
+}
+
+export interface AuditPage {
+  items: AuditEntry[];
+  nextCursor: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Чек-листы (ТЗ 8)
+// ═══════════════════════════════════════════════════════════
+
+export type ChecklistStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
+
+export interface ChecklistTemplateItem {
+  id: string;
+  title: string;
+  section?: string | null;
+  required: boolean;
+  sortOrder: number;
+}
+
+export interface ChecklistTemplate {
+  id: string;
+  name: string;
+  cleaningType?: CleaningType | null;
+  serviceKey?: string | null;
+  isActive: boolean;
+  items: ChecklistTemplateItem[];
+  createdAt?: string;
+}
+
+export interface OrderChecklistItem extends ChecklistTemplateItem {
+  isDone: boolean;
+  doneById?: string | null;
+  doneByName?: string | null;
+  doneAt?: string | null;
+  comment?: string | null;
+}
+
+export interface OrderChecklist {
+  id: string;
+  orderId: string;
+  templateId?: string | null;
+  templateName: string;
+  status: ChecklistStatus;
+  completedAt?: string | null;
+  items: OrderChecklistItem[];
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Коммерческие предложения (ТЗ 9)
+// ═══════════════════════════════════════════════════════════
+
+export type ProposalStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED';
+
+export interface ProposalTemplate {
+  id: string;
+  name: string;
+  intro?: string | null;
+  body: string;
+  conditions?: string | null;
+  validDays: number;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface ProposalItem {
+  title: string;
+  volume?: number | null;
+  unitPrice?: number | null;
+  amount?: number | null;
+}
+
+export interface Proposal {
+  id: string;
+  number: number;
+  status: ProposalStatus;
+  clientId: string;
+  orderId?: string | null;
+  templateId?: string | null;
+  templateName: string;
+  clientName: string;
+  clientPhone?: string | null;
+  address?: string | null;
+  area?: number | null;
+  pricePerSqm?: number | null;
+  total: number;
+  discount: number;
+  items?: ProposalItem[] | null;
+  bodySnapshot: string;
+  validUntil?: string | null;
+  /** ТЗ 9.2 — кто отправил КП клиенту */
+  sentByName?: string | null;
+  sentAt?: string | null;
+  createdByName: string;
+  createdAt: string;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Напоминания (ТЗ 10.1)
+// ═══════════════════════════════════════════════════════════
+
+export type ReminderStatus = 'PENDING' | 'SENT' | 'DONE' | 'CANCELLED';
+export type ReminderSource = 'MANUAL' | 'PREORDER';
+
+export interface Reminder {
+  id: string;
+  clientId: string;
+  orderId?: string | null;
+  title: string;
+  note?: string | null;
+  remindAt: string;
+  status: ReminderStatus;
+  source: ReminderSource;
+  assigneeId: string;
+  assigneeName: string;
+  createdByName: string;
+  sentAt?: string | null;
+  doneAt?: string | null;
+  createdAt: string;
+  client?: { id: string; fullName: string; phone: string } | null;
+}
+
+export interface ReminderCounts {
+  pending: number;
+  overdue: number;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Корзина (ТЗ 1.3 и 6)
+// ═══════════════════════════════════════════════════════════
+
+export type TrashType =
+  | 'order'
+  | 'client'
+  | 'task'
+  | 'cleaner'
+  | 'user'
+  | 'report'
+  | 'financeEntry'
+  | 'bonus'
+  | 'tariff'
+  | 'extraService'
+  | 'proposal'
+  | 'reminder'
+  | 'shiftGroup';
+
+export interface TrashItem {
+  type: TrashType;
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  deletedAt: string;
+  deletedBy?: string | null;
+  deleteReason?: string | null;
+  purgeAt?: string | null;
+}
+
+export type TrashCounts = Partial<Record<TrashType, number>> & { total: number };
+
+// ═══════════════════════════════════════════════════════════
+//  Аналитика за период — GET /analytics/full (ТЗ 3.3)
+// ═══════════════════════════════════════════════════════════
+
+export type AnalyticsPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+
+/**
+ * Ответ `/analytics/full`. В отличие от старой сводки дашборда здесь ВСЕ
+ * разрезы (воронка, типы уборки, источники, выручка) посчитаны за ОДИН И ТОТ
+ * ЖЕ период — `period`/`from`/`to` описывают его границы. Раньше конверсия
+ * считалась за всю историю, а выручка — за выбранный период, из-за чего
+ * цифры на одном экране не сходились между собой.
+ */
+export interface AnalyticsFull extends Omit<Analytics, 'revenue'> {
+  period: AnalyticsPeriod;
+  from: string | null;
+  to: string | null;
+  revenue?: {
+    day: number;
+    week: number;
+    month: number;
+    quarter: number;
+    /** выручка ровно за выбранный период — то, с чем нужно сверять остальные разрезы */
+    period: number;
+  };
+  /** Сверка: расхождения должны быть видны сразу, а не теряться в цифрах */
+  reconciliation?: {
+    paidOrdersInPeriod: number;
+    ordersWithoutPrice: number;
+    paidWithoutCloseDate: number;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Довесок к ShiftGroup — архивный слепок при закрытии (ТЗ 4)
+// ═══════════════════════════════════════════════════════════
+
+/** Неизменяемая копия данных выезда на момент закрытия смены */
+export interface ShiftGroupSnapshot {
+  address: string;
+  date: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  brigadeName?: string | null;
+  brigadierName?: string | null;
+  managerName?: string | null;
+  orderId?: string | null;
+  members: { cleanerId: string; fullName: string; role: string; rate: number }[];
+}
+
+export interface ShiftGroup {
+  closedSnapshot?: ShiftGroupSnapshot | null;
 }

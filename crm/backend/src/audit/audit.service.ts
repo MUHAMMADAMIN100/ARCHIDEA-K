@@ -3,6 +3,7 @@ import { AuditAction, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { can } from '../common/permissions';
+import { momentRange } from '../common/time/dushanbe';
 import {
   AuditChange,
   AuditEntity,
@@ -160,10 +161,12 @@ export class AuditService {
     }
 
     if (q.from || q.to) {
-      const range: Prisma.DateTimeFilter = {};
-      if (q.from) range.gte = new Date(`${q.from}T00:00:00.000Z`);
-      if (q.to) range.lte = new Date(`${q.to}T23:59:59.999Z`);
-      where.createdAt = range;
+      /*
+       * Границы периода считаем по Душанбе: интерфейс присылает календарные
+       * даты в местном понимании сотрудника. Если трактовать их как UTC,
+       * записи за первые пять часов суток попадали бы в соседний день.
+       */
+      where.createdAt = momentRange(q.from, q.to);
     }
 
     const search = q.search?.trim();

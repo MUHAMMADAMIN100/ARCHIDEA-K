@@ -49,6 +49,20 @@ export function mutateCache<T>(url: string, updater: (prev: T) => T) {
   cache.set(url, updater(cache.get(url) as T));
 }
 
+/**
+ * Сбросить кэш по префиксу адреса — данные подтянутся заново при следующем заходе.
+ *
+ * Нужно там, где одна операция меняет данные СРАЗУ НЕСКОЛЬКИХ разделов и
+ * пересчитать их локально нечем: перевод заказа в «Оплачено» создаёт запись
+ * в финансах и меняет аналитику, закрытие смены — начисляет выплаты.
+ * Без сброса пользователь увидел бы устаревшие цифры до перезагрузки страницы.
+ */
+export function invalidate(prefix: string) {
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(prefix)) cache.delete(key);
+  }
+}
+
 type Updater<T> = T | null | ((prev: T | null) => T | null);
 
 /**

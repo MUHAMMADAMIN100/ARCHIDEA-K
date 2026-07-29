@@ -21,10 +21,16 @@ import {
   X,
   UserCircle,
   ChevronDown,
+  Trash2,
+  Coins,
+  History,
+  ListChecks,
+  FileSignature,
+  BellRing,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
-import { userSeesAll } from '../types';
+import { userManagesTasks, userSeesAll } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -34,22 +40,65 @@ interface NavItem {
   roles?: Role[]; // если не указано — доступно всем
   finance?: boolean; // финансовый раздел — скрыт от ops-менеджеров
   seesAll?: boolean; // только расширенный доступ (директор + ops-менеджер)
+  tasksAll?: boolean; // полный доступ к задачам (ТЗ 1.2 — включая Ироду)
 }
 
-const NAV: NavItem[] = [
-  { to: '/', label: 'Дашборд', icon: LayoutDashboard },
-  { to: '/funnel', label: 'Воронка', icon: Filter },
-  { to: '/clients', label: 'Клиенты', icon: Users },
-  { to: '/tasks', label: 'Задачи', icon: CheckSquare },
-  { to: '/calendar', label: 'Календарь', icon: CalendarRange, seesAll: true },
-  { to: '/schedule', label: 'Расписание', icon: CalendarDays },
-  { to: '/team', label: 'Команда', icon: UsersRound },
-  { to: '/shifts', label: 'Смены и выплаты', icon: Wallet, finance: true },
-  { to: '/reports', label: 'Отчёты', icon: FileText, finance: true },
-  { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
-  { to: '/tariffs', label: 'Тарифы', icon: Tags, roles: ['DIRECTOR'] },
-  { to: '/users', label: 'Сотрудники', icon: UserCog, roles: ['DIRECTOR'] },
-  { to: '/security', label: 'Безопасность', icon: ShieldCheck, roles: ['DIRECTOR'] },
+/**
+ * Разделов стало пятнадцать — плоским списком в них уже не сориентироваться,
+ * поэтому меню сгруппировано по смыслу работы.
+ */
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Работа',
+    items: [
+      { to: '/', label: 'Дашборд', icon: LayoutDashboard },
+      { to: '/funnel', label: 'Воронка', icon: Filter },
+      { to: '/clients', label: 'Клиенты', icon: Users },
+      { to: '/tasks', label: 'Задачи', icon: CheckSquare },
+      // календарь задач — вместе с доступом к задачам, иначе доступ Ироды
+      // получается наполовину нерабочим
+      { to: '/calendar', label: 'Календарь', icon: CalendarRange, tasksAll: true },
+      { to: '/schedule', label: 'Расписание', icon: CalendarDays },
+    ],
+  },
+  {
+    title: 'Операции',
+    items: [
+      { to: '/team', label: 'Команда', icon: UsersRound },
+      { to: '/shifts', label: 'Смены и выезды', icon: Wallet },
+      { to: '/checklists', label: 'Чек-листы', icon: ListChecks },
+    ],
+  },
+  {
+    title: 'Продажи',
+    items: [
+      { to: '/offers', label: 'Коммерческие предложения', icon: FileSignature },
+      { to: '/reminders', label: 'Напоминания', icon: BellRing },
+    ],
+  },
+  {
+    title: 'Финансы',
+    items: [
+      { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'] },
+      { to: '/reports', label: 'Ведомости', icon: FileText, finance: true },
+      { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Управление',
+    items: [
+      { to: '/tariffs', label: 'Услуги и цены', icon: Tags, roles: ['DIRECTOR'] },
+      { to: '/users', label: 'Сотрудники', icon: UserCog, roles: ['DIRECTOR'] },
+      { to: '/history', label: 'История изменений', icon: History, seesAll: true },
+      { to: '/trash', label: 'Корзина', icon: Trash2 },
+      { to: '/security', label: 'Безопасность', icon: ShieldCheck, roles: ['DIRECTOR'] },
+    ],
+  },
 ];
 
 export function Layout() {
@@ -71,12 +120,17 @@ export function Layout() {
 
   // ops-менеджер (canManageOps) видит всё как директор, но БЕЗ финансовых разделов
   const isOps = !!user?.canManageOps && user.role !== 'DIRECTOR';
-  const items = NAV.filter((i) => {
+  const visible = (i: NavItem) => {
     if (i.roles && !(user && i.roles.includes(user.role))) return false;
     if (i.finance && isOps) return false;
     if (i.seesAll && !userSeesAll(user)) return false;
+    if (i.tasksAll && !userManagesTasks(user)) return false;
     return true;
-  });
+  };
+  const groups = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter(visible),
+  })).filter((g) => g.items.length > 0);
 
   // Прогрев кэша разделов после входа — переходы будут мгновенными.
   // На мобильном критично: НЕ греем на медленной/эконом-сети и разносим
@@ -102,6 +156,8 @@ export function Layout() {
       '/brigades',
       '/reports',
       '/users/managers',
+      '/reminders/counts',
+      '/trash/counts',
     ];
     if (user.role === 'DIRECTOR') urls.push('/tariffs', '/users');
 
@@ -155,24 +211,33 @@ export function Layout() {
           </span>
         </div>
 
-        <nav className="mt-2 flex-1 space-y-1 overflow-y-auto px-3 py-2">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-white text-navy-900'
-                    : 'text-white hover:bg-white/15'
-                }`
-              }
-            >
-              <item.icon className="h-[18px] w-[18px]" />
-              {item.label}
-            </NavLink>
+        <nav className="mt-2 flex-1 overflow-y-auto px-3 py-2">
+          {groups.map((group) => (
+            <div key={group.title} className="mb-3 last:mb-0">
+              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                {group.title}
+              </div>
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    onClick={() => setMobileOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-white text-navy-900'
+                          : 'text-white hover:bg-white/15'
+                      }`
+                    }
+                  >
+                    <item.icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 

@@ -9,15 +9,30 @@ import {
   Box,
   Flame,
   Shirt,
+  Plus,
+  Pencil,
+  History as HistoryIcon,
+  Trash2,
+  Eye,
+  EyeOff,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
-import { Spinner, PageHeader } from '../components/ui';
+import { Spinner, PageHeader, Modal, Badge, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
-import type { CleaningType, Tariff, Tariffs as TariffsData } from '../types';
+import { useDialog } from '../components/Dialog';
+import { Tabs } from '../components/common';
+import { HistoryPanel } from '../components/HistoryPanel';
+import type { ExtraService, Tariff, Tariffs as TariffsData } from '../types';
 
-const TYPE_META: Partial<Record<CleaningType, { icon: LucideIcon; desc: string }>> = {
+/**
+ * Ключ услуги теперь произвольная строка (ТЗ 1.1 — директор заводит новые
+ * услуги), а не жёсткий enum CleaningType. Словари ниже — просто подсказки
+ * оформления для трёх «базовых» услуг; для остальных используется запасная
+ * иконка/описание, иначе сборка падала на индексации по string (см. отчёт).
+ */
+const TYPE_META: Record<string, { icon: LucideIcon; desc: string }> = {
   GENERAL: {
     icon: Sparkles,
     desc: 'Глубокая уборка всей площади до блеска, даже в труднодоступных местах',
@@ -31,6 +46,7 @@ const TYPE_META: Partial<Record<CleaningType, { icon: LucideIcon; desc: string }
     desc: 'Чистка мягкой мебели от пятен и запахов — цена за посадочное место',
   },
 };
+const DEFAULT_TYPE_META = { icon: Sparkles, desc: '' };
 
 const EXTRA_META: Record<string, { icon: LucideIcon }> = {
   windows: { icon: LayoutGrid },
@@ -47,15 +63,27 @@ const LEVELS: { key: 'priceLight' | 'priceMedium' | 'priceHeavy'; label: string 
 
 /** Только цифры, без ведущих нулей; пустая строка допустима */
 const sanitize = (v: string) => v.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+const toInt = (v: string) => Math.round(Number(v || 0));
 
 type PriceMap = Record<string, { light: string; medium: string; heavy: string }>;
 
+/** Что сейчас редактируем модалкой создания/правки услуги */
+type TariffModalState = { item: Tariff | null } | null;
+type ExtraModalState = { item: ExtraService | null } | null;
+
 export function Tariffs() {
   const toast = useToast();
-  const { data, loading, reload, setData } = useFetch<TariffsData>('/tariffs');
+  const dialog = useDialog();
+  // /tariffs/manage — полный список, включая скрытые (для страницы управления);
+  // калькулятор лендинга продолжает ходить в публичный /tariffs
+  const { data, loading, error, reload, setData } = useFetch<TariffsData>('/tariffs/manage');
+
   // Цены храним строками — чтобы поле можно было очистить и не было «прилипшего» нуля
   const [prices, setPrices] = useState<PriceMap>({});
   const [extraPrices, setExtraPrices] = useState<Record<string, string>>({});
+  const [tariffModal, setTariffModal] = useState<TariffModalState>(null);
+  const [extraModal, setExtraModal] = useState<ExtraModalState>(null);
+  const [historyKey, setHistoryKey] = useState<{ key: string; title: string } | null>(null);
 
   // заполняем поля ОДИН раз при первой загрузке — фоновые обновления
   // (фокус окна и т.п.) не должны затирать вводимые цены
@@ -81,12 +109,13 @@ export function Tariffs() {
     }
   }, [data]);
 
+  if (error) return <ErrorState onRetry={reload} />;
   if (loading || !data) return <Spinner />;
 
   const saveTariff = (t: Tariff) => {
     const p = prices[t.key];
     if (!p) return;
-    // у услуги без уровней (мебель) одна цена — во все три поля
+    // у услуги без уровней (мебель и т.п.) одна цена — во все три поля
     const light = Number(p.light || 0);
     const medium = t.hasLevels ? Number(p.medium || 0) : light;
     const heavy = t.hasLevels ? Number(p.heavy || 0) : light;
@@ -141,11 +170,82 @@ export function Tariffs() {
     });
   };
 
+  /** Скрыть/показать услугу — быстрое действие прямо с карточки, без модалки */
+  const toggleTariffActive = async (t: Tariff) => {
+    const nextActive = !t.isActive;
+    setData((d) =>
+      d ? { ...d, tariffs: d.tariffs.map((x) => (x.key === t.key ? { ...x, isActive: nextActive } : x)) } : d,
+    );
+    try {
+      await api.patch(`/tariffs/tariff/${t.key}`, { isActive: nextActive });
+      toast.success(nextActive ? 'Услуга снова видна в заказах' : 'Услуга скрыта');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось изменить видимость услуги');
+      reload();
+    }
+  };
+
+  const toggleExtraActive = async (e: ExtraService) => {
+    const nextActive = !e.isActive;
+    setData((d) =>
+      d ? { ...d, extras: d.extras.map((x) => (x.key === e.key ? { ...x, isActive: nextActive } : x)) } : d,
+    );
+    try {
+      await api.patch(`/tariffs/extra/${e.key}`, { isActive: nextActive });
+      toast.success(nextActive ? 'Доп. услуга снова видна' : 'Доп. услуга скрыта');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Не удалось изменить видимость');
+      reload();
+    }
+  };
+
+  const removeTariff = async (t: Tariff) => {
+    const ok = await dialog.confirm({
+      title: `Удалить услугу «${t.title}»?`,
+      message: 'Услуга будет перемещена в корзину. Её можно восстановить в разделе «Корзина» в течение 90 дней.',
+      confirmText: 'В корзину',
+      danger: true,
+    });
+    if (!ok) return;
+    setData((d) => (d ? { ...d, tariffs: d.tariffs.filter((x) => x.key !== t.key) } : d));
+    try {
+      await api.delete(`/tariffs/tariff/${t.key}`);
+      toast.success('Услуга перенесена в корзину');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось удалить услугу');
+      reload();
+    }
+  };
+
+  const removeExtra = async (e: ExtraService) => {
+    const ok = await dialog.confirm({
+      title: `Удалить доп. услугу «${e.title}»?`,
+      message: 'Доп. услуга будет перемещена в корзину. Её можно восстановить в разделе «Корзина» в течение 90 дней.',
+      confirmText: 'В корзину',
+      danger: true,
+    });
+    if (!ok) return;
+    setData((d) => (d ? { ...d, extras: d.extras.filter((x) => x.key !== e.key) } : d));
+    try {
+      await api.delete(`/tariffs/extra/${e.key}`);
+      toast.success('Доп. услуга перенесена в корзину');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Не удалось удалить доп. услугу');
+      reload();
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title="Управление тарифами"
-        subtitle="Эти цены автоматически отражаются в калькуляторе на сайте"
+        subtitle="Эти цены автоматически отражаются в калькуляторе на сайте и в карточке заказа"
+        action={
+          <button className="btn-primary" onClick={() => setTariffModal({ item: null })}>
+            <Plus className="h-4 w-4" />
+            Добавить услугу
+          </button>
+        }
       />
 
       {/* Услуги */}
@@ -154,7 +254,7 @@ export function Tariffs() {
       </h3>
       <div className="mb-8 grid gap-4 lg:grid-cols-3">
         {data.tariffs.map((t) => {
-          const meta = TYPE_META[t.key];
+          const meta = TYPE_META[t.key] ?? DEFAULT_TYPE_META;
           const p = prices[t.key] ?? { light: '', medium: '', heavy: '' };
           const dirty = t.hasLevels
             ? p.light !== String(t.priceLight) ||
@@ -162,21 +262,22 @@ export function Tariffs() {
               p.heavy !== String(t.priceHeavy)
             : p.light !== String(t.priceLight);
           return (
-            <div key={t.key} className="card flex flex-col p-5">
-              <div className="flex items-center gap-3">
+            <div key={t.key} className={`card flex flex-col p-5 ${!t.isActive ? 'opacity-60' : ''}`}>
+              <div className="flex items-start gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-100 text-navy-600">
-                  {(() => {
-                    const Icon = meta?.icon ?? Sparkles;
-                    return <Icon className="h-5 w-5" />;
-                  })()}
+                  <meta.icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-bold leading-tight text-navy-900">
-                    {t.title}
-                  </h4>
-                  {meta?.desc && (
-                    <p className="mt-0.5 text-xs text-navy-400">{meta.desc}</p>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h4 className="font-bold leading-tight text-navy-900">{t.title}</h4>
+                    {t.isSystem && (
+                      <Badge className="border border-navy-200 bg-navy-50 text-navy-500">Базовая</Badge>
+                    )}
+                    {!t.isActive && (
+                      <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Скрыта</Badge>
+                    )}
+                  </div>
+                  {meta.desc && <p className="mt-0.5 text-xs text-navy-400">{meta.desc}</p>}
                 </div>
               </div>
 
@@ -259,28 +360,85 @@ export function Tariffs() {
                   </>
                 )}
               </button>
+
+              <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-navy-100 pt-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  onClick={() => setTariffModal({ item: t })}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Редактировать
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  onClick={() => setHistoryKey({ key: t.key, title: t.title })}
+                >
+                  <HistoryIcon className="h-3.5 w-3.5" />
+                  История
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  onClick={() => toggleTariffActive(t)}
+                >
+                  {t.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {t.isActive ? 'Скрыть' : 'Показать'}
+                </button>
+                {t.isSystem ? (
+                  <span
+                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-300"
+                    title="Базовая услуга — на неё завязаны лендинг и старые заказы, удалить нельзя. Можно только скрыть."
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+                    onClick={() => removeTariff(t)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
 
       {/* Доп. услуги */}
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-400">
-        Дополнительные услуги — фиксированная цена
-      </h3>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-400">
+          Дополнительные услуги — фиксированная цена
+        </h3>
+        <button className="btn-ghost text-sm" onClick={() => setExtraModal({ item: null })}>
+          <Plus className="h-4 w-4" />
+          Добавить доп. услугу
+        </button>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {data.extras.map((e) => {
           const dirty = (extraPrices[e.key] ?? '') !== String(e.price);
           const Icon = EXTRA_META[e.key]?.icon ?? Box;
           return (
-            <div key={e.key} className="card flex flex-col p-5">
+            <div key={e.key} className={`card flex flex-col p-5 ${!e.isActive ? 'opacity-60' : ''}`}>
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-100 text-navy-600">
                   <Icon className="h-5 w-5" />
                 </span>
-                <h4 className="min-w-0 flex-1 font-bold leading-tight text-navy-900">
-                  {e.title}
-                </h4>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h4 className="font-bold leading-tight text-navy-900">{e.title}</h4>
+                    {e.isSystem && (
+                      <Badge className="border border-navy-200 bg-navy-50 text-navy-500">Базовая</Badge>
+                    )}
+                    {!e.isActive && (
+                      <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Скрыта</Badge>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <label className="mb-1.5 mt-4 block text-xs font-medium text-navy-500">
@@ -322,10 +480,471 @@ export function Tariffs() {
                   </>
                 )}
               </button>
+
+              <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-navy-100 pt-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  onClick={() => setExtraModal({ item: e })}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Изменить
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  onClick={() => toggleExtraActive(e)}
+                >
+                  {e.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {e.isActive ? 'Скрыть' : 'Показать'}
+                </button>
+                {e.isSystem ? (
+                  <span
+                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-300"
+                    title="Базовая доп. услуга — удалить нельзя, можно только скрыть."
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+                    onClick={() => removeExtra(e)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
+
+      {tariffModal && (
+        <TariffModal
+          tariff={tariffModal.item}
+          onClose={() => setTariffModal(null)}
+          onSaved={() => {
+            setTariffModal(null);
+            reload();
+          }}
+        />
+      )}
+
+      {extraModal && (
+        <ExtraModal
+          extra={extraModal.item}
+          onClose={() => setExtraModal(null)}
+          onSaved={() => {
+            setExtraModal(null);
+            reload();
+          }}
+        />
+      )}
+
+      {historyKey && (
+        <Modal open onClose={() => setHistoryKey(null)} title={`История: ${historyKey.title}`}>
+          <HistoryPanel entity="SERVICE" entityId={historyKey.key} />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Создание / правка услуги
+// ═══════════════════════════════════════════════════════════
+
+type ServiceTab = 'edit' | 'history';
+
+function TariffModal({
+  tariff,
+  onClose,
+  onSaved,
+}: {
+  tariff: Tariff | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const isEdit = !!tariff;
+  const [tab, setTab] = useState<ServiceTab>('edit');
+  const [key, setKey] = useState(tariff?.key ?? '');
+  const [title, setTitle] = useState(tariff?.title ?? '');
+  const [description, setDescription] = useState(tariff?.description ?? '');
+  const [unit, setUnit] = useState(tariff?.unit ?? 'м²');
+  const [hasLevels, setHasLevels] = useState(tariff?.hasLevels ?? true);
+  const [light, setLight] = useState(String(tariff?.priceLight ?? ''));
+  const [medium, setMedium] = useState(String(tariff?.priceMedium ?? ''));
+  const [heavy, setHeavy] = useState(String(tariff?.priceHeavy ?? ''));
+  const [sortOrder, setSortOrder] = useState(String(tariff?.sortOrder ?? 100));
+  const [isActive, setIsActive] = useState(tariff?.isActive ?? true);
+  const [saving, setSaving] = useState(false);
+
+  const canSubmit = title.trim().length >= 2 && (isEdit || /^[A-Z][A-Z0-9_]*$/.test(key.trim()));
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSaving(true);
+    const mediumNum = toInt(medium);
+    const payload = {
+      title: title.trim(),
+      description: description.trim() || undefined,
+      unit: unit.trim() || 'м²',
+      hasLevels,
+      priceLight: hasLevels ? toInt(light) : mediumNum,
+      priceMedium: mediumNum,
+      priceHeavy: hasLevels ? toInt(heavy) : mediumNum,
+      sortOrder: toInt(sortOrder),
+      isActive,
+    };
+    try {
+      if (isEdit && tariff) {
+        // у базовой услуги ключ и единицу измерения бэкенд менять не даёт —
+        // просто не отправляем unit, если это базовая услуга
+        await api.patch(`/tariffs/tariff/${tariff.key}`, {
+          ...payload,
+          unit: tariff.isSystem ? undefined : payload.unit,
+        });
+        toast.success('Услуга обновлена');
+      } else {
+        await api.post('/tariffs/tariff', { key: key.trim(), ...payload });
+        toast.success('Услуга добавлена');
+      }
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось сохранить услугу');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={isEdit ? `Услуга: ${tariff!.title}` : 'Новая услуга'} wide>
+      <div className="space-y-4">
+        {isEdit && (
+          <Tabs
+            items={[
+              { value: 'edit', label: 'Изменить' },
+              { value: 'history', label: 'История' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        )}
+
+        {tab === 'history' && isEdit ? (
+          <HistoryPanel entity="SERVICE" entityId={tariff!.key} />
+        ) : (
+          <div className="space-y-3">
+            {!isEdit && (
+              <div>
+                <label className="label">Ключ услуги *</label>
+                <input
+                  className="input font-mono uppercase"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value.toUpperCase())}
+                  placeholder="DEEP_CLEANING"
+                  maxLength={40}
+                />
+                <p className="mt-1 text-xs text-navy-400">
+                  Только латинские заглавные буквы, цифры и подчёркивание, например DEEP_CLEANING.
+                  После создания ключ изменить нельзя.
+                </p>
+              </div>
+            )}
+            {isEdit && tariff!.isSystem && (
+              <p className="rounded-lg bg-navy-50 px-3 py-2 text-xs text-navy-500">
+                Это базовая услуга — ключ и единица измерения зафиксированы: на них завязаны
+                калькулятор на сайте и уже оформленные заказы.
+              </p>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Название *</label>
+                <input
+                  className="input"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={120}
+                  placeholder="Например: Мытьё окон под ключ"
+                />
+              </div>
+              <div>
+                <label className="label">Единица измерения</label>
+                <input
+                  className="input"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  maxLength={20}
+                  placeholder="м², место, шт"
+                  disabled={isEdit && tariff!.isSystem}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Описание</label>
+              <textarea
+                className="input min-h-[60px] resize-none"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={500}
+                placeholder="Короткое описание для карточки услуги"
+              />
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-navy-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-navy-500"
+                checked={hasLevels}
+                onChange={(e) => setHasLevels(e.target.checked)}
+              />
+              Цена различается по степени загрязнения
+            </label>
+
+            {hasLevels ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="label">Лёгкая</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="input"
+                    value={light}
+                    onChange={(e) => setLight(sanitize(e.target.value))}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="label">Средняя</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="input"
+                    value={medium}
+                    onChange={(e) => setMedium(sanitize(e.target.value))}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="label">Тяжёлая</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="input"
+                    value={heavy}
+                    onChange={(e) => setHeavy(sanitize(e.target.value))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="label">Цена</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="input"
+                  value={medium}
+                  onChange={(e) => setMedium(sanitize(e.target.value))}
+                  placeholder="0"
+                />
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Порядок в списке</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="input"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(sanitize(e.target.value))}
+                />
+              </div>
+              <label className="flex items-center gap-2 self-end pb-2 text-sm text-navy-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-navy-500"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
+                Показывать в заказах и на сайте
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={onClose} className="btn-ghost">
+                Отмена
+              </button>
+              <button onClick={submit} disabled={!canSubmit || saving} className="btn-primary">
+                {saving ? 'Сохранение…' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Создание / правка доп. услуги
+// ═══════════════════════════════════════════════════════════
+
+function ExtraModal({
+  extra,
+  onClose,
+  onSaved,
+}: {
+  extra: ExtraService | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const isEdit = !!extra;
+  const [tab, setTab] = useState<ServiceTab>('edit');
+  const [key, setKey] = useState(extra?.key ?? '');
+  const [title, setTitle] = useState(extra?.title ?? '');
+  const [price, setPrice] = useState(String(extra?.price ?? ''));
+  const [hasQty, setHasQty] = useState(extra?.hasQty ?? false);
+  const [sortOrder, setSortOrder] = useState(String(extra?.sortOrder ?? 100));
+  const [isActive, setIsActive] = useState(extra?.isActive ?? true);
+  const [saving, setSaving] = useState(false);
+
+  const canSubmit = title.trim().length >= 2 && (isEdit || /^[a-z][a-z0-9_]*$/.test(key.trim()));
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSaving(true);
+    const payload = {
+      title: title.trim(),
+      price: toInt(price),
+      hasQty,
+      sortOrder: toInt(sortOrder),
+      isActive,
+    };
+    try {
+      if (isEdit && extra) {
+        await api.patch(`/tariffs/extra/${extra.key}`, payload);
+        toast.success('Доп. услуга обновлена');
+      } else {
+        await api.post('/tariffs/extra', { key: key.trim(), ...payload });
+        toast.success('Доп. услуга добавлена');
+      }
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось сохранить доп. услугу');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={isEdit ? `Доп. услуга: ${extra!.title}` : 'Новая доп. услуга'}>
+      <div className="space-y-4">
+        {isEdit && (
+          <Tabs
+            items={[
+              { value: 'edit', label: 'Изменить' },
+              { value: 'history', label: 'История' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        )}
+
+        {tab === 'history' && isEdit ? (
+          <HistoryPanel entity="SERVICE" entityId={extra!.key} />
+        ) : (
+          <div className="space-y-3">
+            {!isEdit && (
+              <div>
+                <label className="label">Ключ доп. услуги *</label>
+                <input
+                  className="input font-mono"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value.toLowerCase())}
+                  placeholder="dry_cleaning"
+                  maxLength={40}
+                />
+                <p className="mt-1 text-xs text-navy-400">
+                  Только латинские строчные буквы, цифры и подчёркивание, например dry_cleaning.
+                  После создания ключ изменить нельзя.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="label">Название *</label>
+              <input
+                className="input"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={120}
+                placeholder="Например: Химчистка ковра"
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Цена</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="input"
+                  value={price}
+                  onChange={(e) => setPrice(sanitize(e.target.value))}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="label">Порядок в списке</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="input"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(sanitize(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-navy-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-navy-500"
+                checked={hasQty}
+                onChange={(e) => setHasQty(e.target.checked)}
+              />
+              Цена умножается на количество (например мытьё окон за штуку)
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-navy-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-navy-500"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              Показывать в заказах и на сайте
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={onClose} className="btn-ghost">
+                Отмена
+              </button>
+              <button onClick={submit} disabled={!canSubmit || saving} className="btn-primary">
+                {saving ? 'Сохранение…' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
