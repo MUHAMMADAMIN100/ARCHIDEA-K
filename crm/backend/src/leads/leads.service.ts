@@ -14,6 +14,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ClientsService } from '../clients/clients.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { escapeHtml } from '../telegram/telegram.util';
 import { NOT_DELETED } from '../common/soft-delete';
 import { parseDate } from '../common/time/dushanbe';
 import { LeadIntakeDto } from './dto/intake.dto';
@@ -41,6 +43,7 @@ export class LeadsService {
     private prisma: PrismaService,
     private clients: ClientsService,
     private notifications: NotificationsService,
+    private telegram: TelegramService,
   ) {}
 
   /** Приём заявки с лендинга: дедуп клиента, создание заказа, авто-назначение, уведомление */
@@ -173,6 +176,30 @@ export class LeadsService {
         orderId: order.id,
       });
     }
+
+    /*
+     * Уведомление в рабочий чат Telegram (ТЗ 10.2). Раньше его слал сам браузер
+     * посетителя, из-за чего токен бота лежал в публичном бандле сайта.
+     * Теперь сообщение ставится в очередь на сервере: даже если Telegram
+     * недоступен, заявка уже сохранена и уйдёт при следующей попытке.
+     */
+    const volume =
+      cleaningType === CleaningType.FURNITURE
+        ? `${dto.calculator?.seats ?? 0} мест`
+        : `${dto.calculator?.area ?? 0} м²`;
+    const lines = [
+      '<b>Новая заявка с сайта</b>',
+      `Клиент: ${escapeHtml(client.fullName)}`,
+      `Телефон: ${escapeHtml(client.phone)}`,
+      dto.contact.address ? `Адрес: ${escapeHtml(dto.contact.address)}` : null,
+      `Объём: ${volume}`,
+      `Расчёт: ${clamp(dto.total)} сомони`,
+      dto.quiz?.comment ? `Комментарий: ${escapeHtml(dto.quiz.comment)}` : null,
+    ].filter(Boolean);
+    await this.telegram.enqueueToCompanyChat(lines.join('\n'), {
+      kind: 'lead',
+      refId: order.id,
+    });
 
     this.logger.log(`Новая заявка: ${client.fullName} (${order.id})`);
     return { ok: true, orderId: order.id };

@@ -1,61 +1,22 @@
-import { buildOrderText } from './message';
 import type { OrderPayload } from '../types';
 
 /**
- * Отправка заявки.
+ * Отправка заявки с сайта.
  *
- * Основной канал — Telegram-бот компании (Bot API).
- * Токен и chat_id берутся из переменных окружения (.env):
- *   VITE_TELEGRAM_BOT_TOKEN
- *   VITE_TELEGRAM_CHAT_ID
+ * Единственный канал — собственный серверный обработчик /api/lead, который
+ * передаёт заявку в CRM. Уведомление в Telegram компании уходит уже оттуда,
+ * с сервера.
  *
- * ⚠️ Примечание по безопасности: вызов Bot API напрямую с фронтенда
- * раскрывает токен в браузере. Для продакшена рекомендуется проксировать
- * запрос через серверную функцию (тот самый будущий CRM-бэкенд).
- * Здесь оставлен задел: функция sendToCrm() — точка подключения CRM.
+ * Раньше браузер сам дёргал Telegram Bot API, и токен бота вкомпилировался
+ * в публичный бандл: его мог прочитать любой посетитель сайта и через getUpdates
+ * читать все заявки — с именами, телефонами и адресами клиентов, — а через
+ * setWebhook увести поток заявок себе. Теперь ни токена, ни ключей
+ * в коде страницы нет вообще.
  */
-
-const BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN as string | undefined;
-const CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID as string | undefined;
 
 export interface SubmitResult {
   ok: boolean;
   error?: string;
-}
-
-async function sendToTelegram(text: string): Promise<SubmitResult> {
-  // Если токен не настроен — не падаем, а логируем (режим демо/разработки).
-  if (!BOT_TOKEN || !CHAT_ID) {
-    console.warn(
-      '[Telegram] Токен не настроен. Заявка не отправлена в Telegram.\n' +
-        'Добавьте VITE_TELEGRAM_BOT_TOKEN и VITE_TELEGRAM_CHAT_ID в .env\n\n' +
-        text,
-    );
-    // Возвращаем ok:true, чтобы пользователь в демо-режиме видел успех.
-    return { ok: true };
-  }
-
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: CHAT_ID,
-          text,
-          disable_web_page_preview: true,
-        }),
-      },
-    );
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return { ok: false, error: data?.description || `HTTP ${res.status}` };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
 }
 
 /**
@@ -107,15 +68,14 @@ async function sendToCrm(
   }
 }
 
-/** Пытается доставить заявку по всем настроенным каналам. */
+/**
+ * Пытается доставить заявку.
+ * null означает «CRM не подключена на сервере» — в этом случае считать заявку
+ * потерянной нельзя, но и доставленной тоже: кладём её в очередь на повтор.
+ */
 async function trySend(order: OrderPayload, honeypot: string): Promise<boolean> {
-  const text = buildOrderText(order);
-  const [tg, crm] = await Promise.all([
-    sendToTelegram(text),
-    sendToCrm(order, honeypot),
-  ]);
-  const crmOk = crm === null ? true : crm; // не настроена — не считаем ошибкой
-  return tg.ok && crmOk;
+  const crm = await sendToCrm(order, honeypot);
+  return crm === true;
 }
 
 // ── Очередь повторной отправки (чтобы НЕ терять заявки при сбое сети) ──

@@ -21,9 +21,25 @@
  * Скрипт идемпотентен: повторный запуск ничего не портит.
  */
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 
 const BASELINE = '0_init';
+
+/** Имена миграций из каталога, по возрастанию — как их применяет Prisma */
+function listMigrations() {
+  const dir = path.join(__dirname, '..', 'prisma', 'migrations');
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Запуск Prisma CLI напрямую, а НЕ через npx.
@@ -137,7 +153,31 @@ async function inspect() {
     '[db-deploy] Деловых данных в базе нет — привожу схему напрямую, ' +
       'чтобы сервис поднялся. Историю миграций нужно будет восстановить.',
   );
-  prisma(['db', 'push', '--skip-generate', '--accept-data-loss']);
+
+  const pushed = prisma(['db', 'push', '--skip-generate', '--accept-data-loss'], {
+    allowFail: true,
+  });
+
+  if (!pushed) {
+    /*
+     * Обычный push не всегда справляется: например, смену типа колонки
+     * с перечисления на текст он выполнить не может и просит сброс.
+     * База без деловых данных — сбрасываем и создаём схему заново.
+     * Справочники, сотрудники и бригады система восстанавливает сама
+     * при старте (setup и tariffs), пароли берутся из SEED_PW_<ЛОГИН>.
+     */
+    console.warn(
+      '[db-deploy] Прямое обновление схемы невозможно — пересоздаю схему с нуля.',
+    );
+    prisma(['db', 'push', '--skip-generate', '--force-reset']);
+
+    // история миграций после сброса пуста: отмечаем все имеющиеся миграции
+    // применёнными, иначе следующий деплой снова попробует их накатить
+    for (const name of listMigrations()) {
+      prisma(['migrate', 'resolve', '--applied', name], { allowFail: true });
+    }
+  }
+
   console.log('[db-deploy] Схема приведена к текущему состоянию.');
 })().catch((e) => {
   console.error('[db-deploy] Ошибка развёртывания схемы:', e.message || e);

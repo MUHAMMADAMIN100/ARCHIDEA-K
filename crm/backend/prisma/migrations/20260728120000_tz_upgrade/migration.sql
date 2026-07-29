@@ -100,10 +100,11 @@ ADD COLUMN     "sortOrder" INTEGER NOT NULL DEFAULT 0;
 -- Tariff.key: enum CleaningType -> TEXT (ТЗ 1.1 — директор заводит новые услуги).
 -- ВАЖНО: Prisma по умолчанию генерирует DROP COLUMN + ADD COLUMN, что стёрло бы
 -- ключи всех существующих услуг. Заменено на преобразование типа с сохранением
--- значений; уникальный индекс пересоздаётся под новый тип.
+-- значений. Уникальный индекс снимаем здесь, а создаётся он заново ниже,
+-- в общей секции CreateIndex — создавать его тут же нельзя, иначе он появится
+-- дважды и миграция упадёт с ошибкой «relation already exists».
 DROP INDEX IF EXISTS "Tariff_key_key";
 ALTER TABLE "Tariff" ALTER COLUMN "key" TYPE TEXT USING "key"::text;
-CREATE UNIQUE INDEX "Tariff_key_key" ON "Tariff"("key");
 
 -- Базовые услуги: ключ и единицу измерения менять нельзя, удалять нельзя —
 -- на них завязаны калькулятор лендинга и старые заказы.
