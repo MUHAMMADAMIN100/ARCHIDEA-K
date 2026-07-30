@@ -270,7 +270,7 @@ export function Team() {
                     return (
                       <div
                         key={c.id}
-                        className={`flex items-center gap-3 rounded-xl border p-2.5 ${
+                        className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 sm:gap-3 sm:p-2.5 ${
                           isLeader
                             ? 'border-amber-200 bg-amber-50/60'
                             : 'border-navy-100'

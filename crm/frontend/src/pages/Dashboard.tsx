@@ -134,8 +134,8 @@ export function Dashboard() {
 
       {/* Доход — приходит только руководителю (финансы) */}
       {data.revenueMonth !== undefined && (
-        <div className="mt-4 card flex items-center justify-between border-0 bg-navy-gradient p-6 text-white">
-          <div className="flex items-center gap-4">
+        <div className="mt-4 card flex flex-col items-start gap-4 border-0 bg-navy-gradient p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-center gap-4">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
               <Wallet className="h-6 w-6 text-white" />
             </span>
@@ -151,13 +151,16 @@ export function Dashboard() {
                   })
                 }
                 title="Из каких заказов сложился доход"
-                className="text-3xl font-extrabold underline decoration-dotted underline-offset-4 decoration-white/50 transition hover:decoration-white"
+                className="text-2xl font-extrabold underline decoration-dotted underline-offset-4 decoration-white/50 transition hover:decoration-white sm:text-3xl"
               >
                 {formatPrice(data.revenueMonth)}
               </button>
             </div>
           </div>
-          <Link to="/analytics" className="btn bg-white/10 text-white hover:bg-white/20">
+          <Link
+            to="/analytics"
+            className="btn w-full justify-center bg-white/10 text-white hover:bg-white/20 sm:w-auto"
+          >
             Подробная аналитика
             <ArrowRight className="h-4 w-4" />
           </Link>
