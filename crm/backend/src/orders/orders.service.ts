@@ -756,17 +756,25 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Автостатус клиента («Отказник» при отказе, «Постоянный» после повторных
+   * оплат). Статус у клиента ОДИН, и автоматика не смеет перетирать ручной:
+   * VIP и «Потенциальный» ставит человек — если они стоят, событие ничего
+   * не меняет. Автоматический статус другим автоматическим заменяется.
+   */
   private async addClientTag(clientId: string, tag: ClientTag) {
+    const MANUAL: ClientTag[] = [ClientTag.VIP, ClientTag.POTENTIAL];
     const client = await this.prisma.client.findUnique({
       where: { id: clientId },
       select: { tags: true },
     });
-    if (client && !client.tags.includes(tag)) {
-      await this.prisma.client.update({
-        where: { id: clientId },
-        data: { tags: { set: [...client.tags, tag] } },
-      });
-    }
+    if (!client) return;
+    if (client.tags.some((t) => MANUAL.includes(t))) return;
+    if (client.tags.length === 1 && client.tags[0] === tag) return;
+    await this.prisma.client.update({
+      where: { id: clientId },
+      data: { tags: { set: [tag] } },
+    });
   }
 
   /**

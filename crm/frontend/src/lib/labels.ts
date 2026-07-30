@@ -78,6 +78,21 @@ export const DIRT_LABEL: Record<DirtLevel, string> = {
 
 export const DIRT_ORDER: DirtLevel[] = ['LIGHT', 'MEDIUM', 'HEAVY'];
 
+/**
+ * Ключ услуги → базовый вид уборки для бэкенда.
+ * Своя услуга директора получает GENERAL: реальную услугу определяет
+ * serviceKey, он приоритетнее (см. orders.service.ts).
+ */
+export function cleaningTypeForKey(key: string): CleaningType {
+  const base: CleaningType[] = [
+    'MAINTENANCE',
+    'GENERAL',
+    'POST_RENOVATION',
+    'FURNITURE',
+  ];
+  return (base as string[]).includes(key) ? (key as CleaningType) : 'GENERAL';
+}
+
 /** «60 м²» / «3 места» — объём работ по типу услуги */
 export function formatVolume(
   o: Pick<Order, 'cleaningType' | 'area' | 'seats'>,

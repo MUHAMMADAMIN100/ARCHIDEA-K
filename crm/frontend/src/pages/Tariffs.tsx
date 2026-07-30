@@ -771,18 +771,10 @@ function TariffModal({
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="label">Порядок в списке</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="input"
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(sanitize(e.target.value))}
-                />
-              </div>
-              <label className="flex items-center gap-2 self-end pb-2 text-sm text-navy-700">
+            {/* «Порядок в списке» убран из формы: технический параметр,
+                который только путал — порядок задаётся по умолчанию */}
+            <div>
+              <label className="flex items-center gap-2 text-sm text-navy-700">
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-navy-500"
@@ -902,16 +894,7 @@ function ExtraModal({
                   placeholder="0"
                 />
               </div>
-              <div>
-                <label className="label">Порядок в списке</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="input"
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(sanitize(e.target.value))}
-                />
-              </div>
+              {/* «Порядок в списке» убран: технический параметр, который путал */}
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm text-navy-700">

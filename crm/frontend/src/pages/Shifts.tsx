@@ -1447,23 +1447,37 @@ function FinesSection() {
       ) : (
         <div className="space-y-2">
           {fines.map((f) => (
+            /*
+              Имя, сумма и кнопка — в первой строке, причина и дата — во второй.
+              Раньше всё стояло в один ряд: на телефоне имени доставалось
+              несколько десятков пикселей, и «Зулайхо» рассыпалась по букве
+              на строку.
+            */
             <div
               key={f.id}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-red-100 bg-red-50/40 px-3.5 py-2.5"
+              className="rounded-xl border border-red-100 bg-red-50/40 px-3.5 py-2.5"
             >
-              <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
-              <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium text-navy-900">{f.cleaner?.fullName}</span>
-                <span className="ml-2 text-sm text-navy-500">{f.reason}</span>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy-900">
+                  {f.cleaner?.fullName}
+                </span>
+                <span className="shrink-0 text-sm font-bold text-red-600">
+                  − {formatPrice(f.amount)}
+                </span>
+                <button
+                  onClick={() => removeFine(f)}
+                  className="shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-100 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
-              <span className="shrink-0 text-xs text-navy-400">{formatDate(f.date)}</span>
-              <span className="shrink-0 text-sm font-bold text-red-600">− {formatPrice(f.amount)}</span>
-              <button
-                onClick={() => removeFine(f)}
-                className="shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-100 hover:text-red-600"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="mt-1 flex items-baseline justify-between gap-3 pl-6">
+                <span className="min-w-0 text-sm text-navy-500">{f.reason}</span>
+                <span className="shrink-0 text-xs text-navy-400">
+                  {formatDate(f.date)}
+                </span>
+              </div>
             </div>
           ))}
         </div>

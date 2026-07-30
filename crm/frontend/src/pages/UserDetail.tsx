@@ -23,10 +23,14 @@ import {
   Modal,
   EmptyState,
   PasswordInput,
+  ErrorState,
 } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { NameInput, PhoneInput } from '../components/ContactFields';
-import { formatDate } from '../lib/labels';
+import { formatDate, formatPrice, STAGE_LABEL, STAGE_COLOR } from '../lib/labels';
+import { monthRange } from '../lib/date';
+import { Period, PeriodFilter, StatCard } from '../components/common';
+import { DetailModal, DetailTable } from '../components/Drilldown';
 import type { Role } from '../types';
 
 interface UserDetailData {
@@ -288,6 +292,8 @@ export function UserDetail() {
         ))}
       </div>
 
+      <PeriodAnalytics userId={id!} fullName={data.fullName} />
+
       <Modal
         open={!!list}
         onClose={() => setList(null)}
@@ -543,5 +549,175 @@ function EditUserModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+/** Ответ /users/:id/analytics — показатели сотрудника за период */
+interface UserPeriodAnalytics {
+  total: number;
+  paid: number;
+  rejected: number;
+  conversion: number;
+  revenue: number;
+  average: number;
+  discounts: number;
+  tasksDone: number;
+  remindersDone: number;
+  orders: {
+    id: string;
+    stage: string;
+    createdAt: string;
+    price: number;
+    client: { id: string; fullName: string; phone: string } | null;
+  }[];
+}
+
+/**
+ * Работа сотрудника за период — основа для расчёта зарплаты.
+ *
+ * Считается по когорте: заказы, ПРИНЯТЫЕ в периоде, и сколько из них дошло
+ * до оплаты — личная конверсия без смешения чужих месяцев. Задачи и
+ * напоминания — для ролей, где продажи не главное (логист, маркетолог).
+ */
+function PeriodAnalytics({
+  userId,
+  fullName,
+}: {
+  userId: string;
+  fullName: string;
+}) {
+  const [period, setPeriod] = useState<Period>(() => monthRange());
+  const [showOrders, setShowOrders] = useState(false);
+
+  const query = new URLSearchParams();
+  if (period.from) query.set('from', period.from);
+  if (period.to) query.set('to', period.to);
+
+  const { data, loading, error, reload } = useFetch<UserPeriodAnalytics>(
+    `/users/${userId}/analytics?${query.toString()}`,
+    { deps: [userId, period.from, period.to] },
+  );
+
+  return (
+    <div className="mt-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-400">
+          Работа за период
+        </h3>
+        <PeriodFilter value={period} onChange={setPeriod} />
+      </div>
+
+      {error ? (
+        <ErrorState onRetry={reload} />
+      ) : loading && !data ? (
+        <Spinner />
+      ) : data ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Принял обращений"
+              value={data.total}
+              title="Все заказы сотрудника за период"
+              onClick={() => setShowOrders(true)}
+            />
+            <StatCard
+              label="Оплачено"
+              value={data.paid}
+              tone="positive"
+              hint={`конверсия ${data.conversion}%`}
+              title="Оплаченные из принятых за период"
+              onClick={() => setShowOrders(true)}
+            />
+            <StatCard
+              label="Выручка"
+              value={formatPrice(data.revenue)}
+              tone="positive"
+              hint={data.paid ? `средний чек ${formatPrice(data.average)}` : undefined}
+              title="Сумма оплаченных заказов сотрудника"
+              onClick={() => setShowOrders(true)}
+            />
+            <StatCard
+              label="Задачи и напоминания"
+              value={`${data.tasksDone} · ${data.remindersDone}`}
+              hint="выполнено задач · отработано напоминаний"
+            />
+          </div>
+
+          {showOrders && (
+            <DetailModal
+              title={`Заказы за период — ${fullName}`}
+              subtitle={
+                period.from && period.to
+                  ? `${formatDate(period.from)} — ${formatDate(period.to)}`
+                  : 'за всё время'
+              }
+              onClose={() => setShowOrders(false)}
+            >
+              <DetailTable
+                rows={data.orders}
+                rowKey={(o: UserPeriodAnalytics['orders'][number]) => o.id}
+                emptyText="Заказов за период нет"
+                columns={[
+                  {
+                    key: 'client',
+                    header: 'Клиент',
+                    cell: (o: UserPeriodAnalytics['orders'][number]) => (
+                      <div>
+                        <div className="font-medium text-navy-900">
+                          {o.client?.fullName ?? '—'}
+                        </div>
+                        <div className="text-xs text-navy-400">
+                          {o.client?.phone ?? ''}
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'stage',
+                    header: 'Этап',
+                    cell: (o: UserPeriodAnalytics['orders'][number]) => (
+                      <Badge
+                        className={
+                          STAGE_COLOR[o.stage as keyof typeof STAGE_COLOR] ??
+                          'bg-navy-100 text-navy-600'
+                        }
+                      >
+                        {STAGE_LABEL[o.stage as keyof typeof STAGE_LABEL] ?? o.stage}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: 'date',
+                    header: 'Принят',
+                    cell: (o: UserPeriodAnalytics['orders'][number]) => (
+                      <span className="text-navy-500">{formatDate(o.createdAt)}</span>
+                    ),
+                  },
+                  {
+                    key: 'price',
+                    header: 'Сумма',
+                    align: 'right',
+                    cell: (o: UserPeriodAnalytics['orders'][number]) => formatPrice(o.price),
+                  },
+                ]}
+                footer={
+                  data.orders.length > 0 ? (
+                    <tr className="border-t border-navy-100 font-bold text-navy-900">
+                      <td className="px-3 py-2" colSpan={3}>
+                        Итого оплачено
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-green-700">
+                        {formatPrice(data.revenue)}
+                      </td>
+                    </tr>
+                  ) : undefined
+                }
+              />
+            </DetailModal>
+          )}
+        </>
+      ) : null}
+    </div>
   );
 }

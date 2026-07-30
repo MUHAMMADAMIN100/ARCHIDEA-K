@@ -718,7 +718,8 @@ function CleanerModal({
           />
         </div>
         <PhoneInput value={phone} onChange={setPhone} />
-        <div className="grid grid-cols-2 gap-3">
+        {/* на телефоне два поля в ряд не влезают — подпись ломалась в три строки */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Ставка, сомони/смена</label>
             <input

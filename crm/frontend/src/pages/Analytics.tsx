@@ -16,12 +16,17 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, ErrorState } from '../components/ui';
 import { Period, PeriodFilter, StatCard } from '../components/common';
-import { DrillValue } from '../components/Drilldown';
+import {
+  DetailModal,
+  DetailStats,
+  DetailTable,
+  DrillValue,
+} from '../components/Drilldown';
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
-import { formatPrice } from '../lib/labels';
+import { formatPrice, SHIFT_GROUP_STATUS_LABEL } from '../lib/labels';
 import { formatDateTz, monthRange } from '../lib/date';
 import { userSeesAll } from '../types';
-import type { AnalyticsFull } from '../types';
+import type { AnalyticsFull, ShiftGroupStatus } from '../types';
 
 const COLORS = ['#0063a8', '#0078c9', '#2a93da', '#5fb1e8', '#95cdf0'];
 
@@ -34,6 +39,8 @@ interface Drill {
   subtitle?: string;
   metric: string;
   key?: string;
+  /** выезды бригады и смены клинера — не заказы, у них свой вид расшифровки */
+  mode?: 'orders' | 'visits' | 'shifts';
 }
 
 
@@ -64,7 +71,7 @@ function BreakdownCard<T>({
   emptyText: string;
 }) {
   return (
-    <div className="card p-4 sm:p-5">
+    <div className="card min-w-0 p-4 sm:p-5">
       <h3 className="font-bold text-navy-900">{title}</h3>
       {hint && <p className="mt-0.5 mb-3 text-xs text-navy-400">{hint}</p>}
       {rows.length === 0 ? (
@@ -349,10 +356,10 @@ export function Analytics() {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
             {/* Доход по дням — финансы, только руководителю */}
             {data.revenueSeries && (
-              <div className="card p-5 lg:col-span-2">
+              <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
                 <h3 className="mb-1 font-bold text-navy-900">Доход за 14 дней</h3>
                 <p className="mb-3 text-xs text-navy-400">{HINT}</p>
                 <ResponsiveContainer width="100%" height={260}>
@@ -382,7 +389,7 @@ export function Analytics() {
             )}
 
             {/* Заказы по типам уборки — за выбранный период */}
-            <div className="card p-5">
+            <div className="card min-w-0 overflow-hidden p-5">
               <h3 className="mb-1 font-bold text-navy-900">Заказы по типам уборки</h3>
               <p className="mb-3 text-xs text-navy-400">{HINT}</p>
               {data.byType.length === 0 ? (
@@ -417,7 +424,7 @@ export function Analytics() {
             </div>
 
             {/* Источники заявок — за выбранный период */}
-            <div className="card p-5">
+            <div className="card min-w-0 overflow-hidden p-5">
               <h3 className="mb-1 font-bold text-navy-900">Источники заявок</h3>
               <p className="mb-3 text-xs text-navy-400">{HINT}</p>
               {data.sources.length === 0 ? (
@@ -534,7 +541,7 @@ export function Analytics() {
                   ]}
                 />
 
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid min-w-0 gap-4 lg:grid-cols-2">
                   <BreakdownCard
                     title="Услуги за период"
                     hint="По оплаченным заказам"
@@ -543,7 +550,27 @@ export function Analytics() {
                     emptyText="Оплаченных заказов за период нет"
                     columns={[
                       { key: 'label', header: 'Услуга', cell: (r) => r.label },
-                      { key: 'count', header: 'Заказов', align: 'right', cell: (r) => r.count },
+                      {
+                        key: 'count',
+                        header: 'Заказов',
+                        align: 'right',
+                        cell: (r) => (
+                          <DrillValue
+                            align="right"
+                            title="Заказы этой услуги за период"
+                            onClick={() =>
+                              setDrill({
+                                title: `Услуга — ${r.label}`,
+                                subtitle: rangeLabel,
+                                metric: 'serviceOrders',
+                                key: r.key,
+                              })
+                            }
+                          >
+                            {r.count}
+                          </DrillValue>
+                        ),
+                      },
                       ...(isDirector
                         ? [
                             {
@@ -565,7 +592,27 @@ export function Analytics() {
                     emptyText="Доп. услуги за период не брали"
                     columns={[
                       { key: 'label', header: 'Услуга', cell: (r) => r.label },
-                      { key: 'count', header: 'Раз взяли', align: 'right', cell: (r) => r.count },
+                      {
+                        key: 'count',
+                        header: 'Раз взяли',
+                        align: 'right',
+                        cell: (r) => (
+                          <DrillValue
+                            align="right"
+                            title="Заказы, где брали эту доп. услугу"
+                            onClick={() =>
+                              setDrill({
+                                title: `Доп. услуга — ${r.label}`,
+                                subtitle: rangeLabel,
+                                metric: 'extraOrders',
+                                key: r.key,
+                              })
+                            }
+                          >
+                            {r.count}
+                          </DrillValue>
+                        ),
+                      },
                       ...(isDirector
                         ? [
                             {
@@ -600,8 +647,50 @@ export function Analytics() {
                           </span>
                         ),
                       },
-                      { key: 'visits', header: 'Выездов', align: 'right', cell: (r) => r.visits },
-                      { key: 'shifts', header: 'Смен', align: 'right', cell: (r) => r.shifts },
+                      {
+                        key: 'visits',
+                        header: 'Выездов',
+                        align: 'right',
+                        cell: (r) => (
+                          <DrillValue
+                            align="right"
+                            title="Все выезды бригады: дата, адрес, состав"
+                            onClick={() =>
+                              setDrill({
+                                title: `Выезды — ${r.name}`,
+                                subtitle: rangeLabel,
+                                metric: 'brigadeVisits',
+                                key: r.id ?? 'none',
+                                mode: 'visits',
+                              })
+                            }
+                          >
+                            {r.visits}
+                          </DrillValue>
+                        ),
+                      },
+                      {
+                        key: 'shifts',
+                        header: 'Смен',
+                        align: 'right',
+                        cell: (r) => (
+                          <DrillValue
+                            align="right"
+                            title="Из каких выездов сложились смены"
+                            onClick={() =>
+                              setDrill({
+                                title: `Смены — ${r.name}`,
+                                subtitle: rangeLabel,
+                                metric: 'brigadeVisits',
+                                key: r.id ?? 'none',
+                                mode: 'visits',
+                              })
+                            }
+                          >
+                            {r.shifts}
+                          </DrillValue>
+                        ),
+                      },
                       ...(isDirector
                         ? [
                             {
@@ -623,7 +712,28 @@ export function Analytics() {
                     emptyText="Смен за период не было"
                     columns={[
                       { key: 'name', header: 'Клинер', cell: (r) => r.name },
-                      { key: 'shifts', header: 'Смен', align: 'right', cell: (r) => r.shifts },
+                      {
+                        key: 'shifts',
+                        header: 'Смен',
+                        align: 'right',
+                        cell: (r) => (
+                          <DrillValue
+                            align="right"
+                            title="Каждая смена: день, адрес, ставка"
+                            onClick={() =>
+                              setDrill({
+                                title: `Смены — ${r.name}`,
+                                subtitle: rangeLabel,
+                                metric: 'cleanerShifts',
+                                key: r.id,
+                                mode: 'shifts',
+                              })
+                            }
+                          >
+                            {r.shifts}
+                          </DrillValue>
+                        ),
+                      },
                       ...(isDirector
                         ? [
                             {
@@ -645,7 +755,27 @@ export function Analytics() {
                     emptyText="Оплаченных заказов за период нет"
                     columns={[
                       { key: 'name', header: 'Клиент', cell: (r) => r.name },
-                      { key: 'count', header: 'Заказов', align: 'right', cell: (r) => r.count },
+                      {
+                        key: 'count',
+                        header: 'Заказов',
+                        align: 'right',
+                        cell: (r) => (
+                          <DrillValue
+                            align="right"
+                            title="Оплаченные заказы клиента за период"
+                            onClick={() =>
+                              setDrill({
+                                title: `Клиент — ${r.name}`,
+                                subtitle: rangeLabel,
+                                metric: 'clientOrders',
+                                key: r.id,
+                              })
+                            }
+                          >
+                            {r.count}
+                          </DrillValue>
+                        ),
+                      },
                       ...(isDirector
                         ? [
                             {
@@ -704,7 +834,7 @@ export function Analytics() {
             )}
 
             {data.managerWorkload && (
-              <div className="card p-5 lg:col-span-2">
+              <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
                 <h3 className="mb-1 font-bold text-navy-900">Загруженность сотрудников</h3>
                 <p className="mb-3 text-xs text-navy-400">
                   Текущая нагрузка (не зависит от периода выше): сколько заказов сейчас в работе
@@ -763,18 +893,180 @@ export function Analytics() {
         </>
       )}
 
-      {drill && (
-        <OrdersDrilldownModal
-          title={drill.title}
-          subtitle={drill.subtitle}
-          metric={drill.metric}
-          drillKey={drill.key}
-          from={period.from}
-          to={period.to}
-          showMoney={isDirector}
-          onClose={() => setDrill(null)}
-        />
-      )}
+      {drill &&
+        (drill.mode === 'visits' || drill.mode === 'shifts' ? (
+          <WorkDrillModal
+            drill={drill}
+            from={period.from}
+            to={period.to}
+            showMoney={isDirector}
+            onClose={() => setDrill(null)}
+          />
+        ) : (
+          <OrdersDrilldownModal
+            title={drill.title}
+            subtitle={drill.subtitle}
+            metric={drill.metric}
+            drillKey={drill.key}
+            from={period.from}
+            to={period.to}
+            showMoney={isDirector}
+            onClose={() => setDrill(null)}
+          />
+        ))}
     </div>
+  );
+}
+
+
+/** Строка расшифровки выезда или смены (metric brigadeVisits / cleanerShifts) */
+interface WorkDrillRow {
+  id: string;
+  date: string;
+  address: string;
+  startTime?: string | null;
+  status: ShiftGroupStatus;
+  managerName?: string | null;
+  brigadeName?: string | null;
+  members?: string[];
+  shifts?: number;
+  role?: string | null;
+  rate?: number | null;
+  accrued?: number | null;
+}
+
+/**
+ * Расшифровка «26 смен — какие именно»: каждый выезд бригады или смена
+ * клинера с датой, адресом и составом. Заказами это не является, поэтому
+ * у неё свой вид, а не таблица заказов.
+ */
+function WorkDrillModal({
+  drill,
+  from,
+  to,
+  showMoney,
+  onClose,
+}: {
+  drill: Drill;
+  from?: string;
+  to?: string;
+  showMoney: boolean;
+  onClose: () => void;
+}) {
+  const query = new URLSearchParams({ metric: drill.metric });
+  if (drill.key) query.set('key', drill.key);
+  if (from) query.set('from', from);
+  if (to) query.set('to', to);
+
+  const { data, loading, error, reload } = useFetch<{
+    kind: 'visits' | 'shifts';
+    rows: WorkDrillRow[];
+  }>(`/analytics/drilldown?${query.toString()}`, {
+    deps: [drill.metric, drill.key, from, to],
+  });
+
+  const rows = data?.rows ?? [];
+  const isVisits = drill.mode === 'visits';
+  const accruedTotal = rows.reduce(
+    (sum, r) => sum + (isVisits ? (r.accrued ?? 0) : (r.rate ?? 0)),
+    0,
+  );
+
+  return (
+    <DetailModal title={drill.title} subtitle={drill.subtitle} onClose={onClose}>
+      {error ? (
+        <ErrorState onRetry={reload} />
+      ) : (
+        <>
+          <DetailStats
+            items={[
+              { label: isVisits ? 'Выездов' : 'Смен', value: rows.length },
+              ...(isVisits
+                ? [
+                    {
+                      label: 'Смен',
+                      value: rows.reduce((sum, r) => sum + (r.shifts ?? 0), 0),
+                    },
+                  ]
+                : []),
+              ...(showMoney
+                ? [
+                    {
+                      label: 'Начислено',
+                      value: formatPrice(accruedTotal),
+                      tone: 'success' as const,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+
+          <DetailTable
+            rows={rows}
+            loading={loading}
+            rowKey={(r: WorkDrillRow) => r.id}
+            emptyText={isVisits ? 'Выездов за период нет' : 'Смен за период нет'}
+            columns={[
+              {
+                key: 'date',
+                header: 'Дата',
+                cell: (r: WorkDrillRow) => (
+                  <div>
+                    <div className="font-medium text-navy-900">
+                      {formatDateTz(r.date)}
+                    </div>
+                    {r.startTime && (
+                      <div className="text-xs text-navy-400">{r.startTime}</div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'address',
+                header: 'Адрес',
+                cell: (r: WorkDrillRow) => (
+                  <div>
+                    <div className="text-navy-800">{r.address}</div>
+                    <div className="text-xs text-navy-400">
+                      {SHIFT_GROUP_STATUS_LABEL[r.status] ?? r.status}
+                      {isVisits && r.managerName ? ` · ${r.managerName}` : ''}
+                      {!isVisits && r.brigadeName ? ` · ${r.brigadeName}` : ''}
+                    </div>
+                  </div>
+                ),
+              },
+              isVisits
+                ? {
+                    key: 'members',
+                    header: 'Состав',
+                    cell: (r: WorkDrillRow) => (
+                      <span className="text-sm text-navy-600">
+                        {(r.members ?? []).join(', ') || '—'}
+                      </span>
+                    ),
+                  }
+                : {
+                    key: 'role',
+                    header: 'Роль',
+                    cell: (r: WorkDrillRow) => (
+                      <span className="text-navy-600">{r.role ?? '—'}</span>
+                    ),
+                  },
+              ...(showMoney
+                ? [
+                    {
+                      key: 'money',
+                      header: isVisits ? 'Начислено' : 'Ставка',
+                      align: 'right' as const,
+                      cell: (r: WorkDrillRow) =>
+                        formatPrice(isVisits ? (r.accrued ?? 0) : (r.rate ?? 0)),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        </>
+      )}
+    </DetailModal>
   );
 }

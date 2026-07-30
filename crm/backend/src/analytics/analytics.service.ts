@@ -1,5 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
-import { FunnelStage, LeadSource, Prisma, Role } from '@prisma/client';
+import {
+  CleaningType,
+  FunnelStage,
+  LeadSource,
+  Prisma,
+  Role,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AuthUser,
@@ -568,6 +574,81 @@ export class AnalyticsService {
     const periodScope: Prisma.OrderWhereInput = hasRange
       ? { ...scope, createdAt: range }
       : scope;
+
+    /*
+     * Выезды бригады и смены клинера — не заказы, у них свой ответ.
+     * «26 смен» в разрезе должно раскрываться в конкретные дни и адреса.
+     */
+    if (metric === 'brigadeVisits' || metric === 'cleanerShifts') {
+      if (!seesAll(user)) {
+        throw new ForbiddenException('Доступно руководству');
+      }
+      const dayRange = hasRange
+        ? rangeUTC(
+            range.gte ? dayKey(range.gte) : undefined,
+            range.lte ? dayKey(range.lte) : undefined,
+          )
+        : undefined;
+      const groups = await this.prisma.shiftGroup.findMany({
+        where: {
+          ...NOT_DELETED,
+          ...(dayRange ? { date: dayRange } : {}),
+          ...(metric === 'brigadeVisits'
+            ? { brigadeId: key === 'none' ? null : key }
+            : { members: { some: { cleanerId: key } } }),
+        },
+        select: {
+          id: true,
+          date: true,
+          address: true,
+          startTime: true,
+          status: true,
+          brigadeName: true,
+          managerName: true,
+          members: {
+            select: { cleanerId: true, fullName: true, rate: true, role: true },
+          },
+        },
+        orderBy: { date: 'desc' },
+        take: 300,
+      });
+      const showMoney = user.role === Role.DIRECTOR;
+      if (metric === 'brigadeVisits') {
+        return {
+          metric,
+          key: key ?? null,
+          kind: 'visits',
+          rows: groups.map((g) => ({
+            id: g.id,
+            date: g.date,
+            address: g.address,
+            startTime: g.startTime,
+            status: g.status,
+            managerName: g.managerName,
+            members: g.members.map((m) => m.fullName),
+            shifts: g.members.length,
+            accrued: showMoney
+              ? g.members.reduce((sum, m) => sum + m.rate, 0)
+              : null,
+          })),
+        };
+      }
+      // смены конкретного клинера: день, адрес, роль и ставка на выезде
+      const rows = groups.map((g) => {
+        const me = g.members.find((m) => m.cleanerId === key);
+        return {
+          id: g.id,
+          date: g.date,
+          address: g.address,
+          startTime: g.startTime,
+          status: g.status,
+          brigadeName: g.brigadeName,
+          role: me?.role ?? null,
+          rate: showMoney ? (me?.rate ?? null) : null,
+        };
+      });
+      return { metric, key: key ?? null, kind: 'shifts', rows };
+    }
     // выручка — по дате закрытия
     const paidInRange: Prisma.OrderWhereInput = {
       ...scope,
@@ -611,6 +692,58 @@ export class AnalyticsService {
           closedAt: this.rangeOf('month'),
         };
         break;
+      /*
+       * Разрезы за период: услуга, доп. услуга и клиент раскрываются в те же
+       * оплаченные заказы, из которых сложилась их строка. Условие — то же,
+       * что в breakdowns(): stage PAID + closedAt в диапазоне.
+       */
+      case 'serviceOrders': {
+        const paidScope: Prisma.OrderWhereInput = {
+          ...scope,
+          stage: FunnelStage.PAID,
+          ...(hasRange ? { closedAt: range } : {}),
+        };
+        const isBaseType = (Object.values(CleaningType) as string[]).includes(
+          key ?? '',
+        );
+        where = {
+          ...paidScope,
+          OR: [
+            { serviceKey: key },
+            ...(isBaseType
+              ? [{ serviceKey: null, cleaningType: key as CleaningType }]
+              : []),
+          ],
+        };
+        break;
+      }
+      case 'clientOrders':
+        where = {
+          ...scope,
+          stage: FunnelStage.PAID,
+          ...(hasRange ? { closedAt: range } : {}),
+          clientId: key,
+        };
+        break;
+      case 'extraOrders': {
+        // extras — JSON «ключ → количество»: отбираем в памяти, где ключ выбран
+        const paid = await this.prisma.order.findMany({
+          where: {
+            ...scope,
+            stage: FunnelStage.PAID,
+            ...(hasRange ? { closedAt: range } : {}),
+          },
+          select: { id: true, extras: true },
+        });
+        const ids = paid
+          .filter((o) => {
+            const chosen = (o.extras as Record<string, number> | null) ?? null;
+            return !!chosen && Number(chosen[key ?? '']) > 0;
+          })
+          .map((o) => o.id);
+        where = { id: { in: ids } };
+        break;
+      }
       case 'conversionPaid':
         where = { ...periodScope, stage: FunnelStage.PAID };
         break;

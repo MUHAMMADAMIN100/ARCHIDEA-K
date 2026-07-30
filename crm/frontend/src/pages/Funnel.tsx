@@ -14,6 +14,8 @@ import { useDialog } from '../components/Dialog';
 import { Spinner, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { OrderModal } from '../components/OrderModal';
+import { AddClientModal, type NewOrderInput } from './Clients';
+import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
   STAGE_COLOR,
@@ -187,6 +189,8 @@ export function Funnel() {
     },
   );
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
+  // «Добавить клиента» прямо из воронки — та же форма, что в «Клиентах»
+  const [showAddClient, setShowAddClient] = useState(false);
   // счётчик над колонкой — не просто число: по клику показываем сам список
   const [stageDrill, setStageDrill] = useState<BoardColumn | null>(null);
 
@@ -318,6 +322,12 @@ export function Funnel() {
     <div>
       <PageHeader
         title="Воронка продаж"
+        action={
+          <button onClick={() => setShowAddClient(true)} className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Добавить клиента
+          </button>
+        }
         subtitle={
           isTouch
             ? 'Меняйте этап стрелками или нажмите карточку для деталей'

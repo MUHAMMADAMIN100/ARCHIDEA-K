@@ -14,6 +14,7 @@ import {
 } from '../common/decorators/current-user.decorator';
 import { seesAllTasks } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { momentRange } from '../common/time/dushanbe';
 import { CreateUserDto } from './dto/create-user.dto';
 
 /**
@@ -224,6 +225,91 @@ export class UsersService {
       }));
     }
     return [];
+  }
+
+  /**
+   * Показатели сотрудника за период — основа для расчёта зарплаты.
+   *
+   * Считаем по когорте обращений: заказы, СОЗДАННЫЕ в периоде и закреплённые
+   * за сотрудником. «Оплачено» — сколько из них дошло до оплаты: так видна
+   * личная конверсия, а не смешение чужих месяцев. Плюс выполненные задачи
+   * и отработанные напоминания — для ролей, где продажи не главное.
+   */
+  async periodAnalytics(
+    requester: AuthUser,
+    id: string,
+    from?: string,
+    to?: string,
+  ) {
+    if (!seesAll(requester) && requester.id !== id) {
+      throw new ForbiddenException('Нет доступа к этому профилю');
+    }
+    const range = momentRange(from, to);
+    const hasRange = range.gte !== undefined || range.lte !== undefined;
+    const orderScope = {
+      ...NOT_DELETED,
+      managerId: id,
+      ...(hasRange ? { createdAt: range } : {}),
+    };
+
+    const [orders, tasksDone, remindersDone] = await Promise.all([
+      this.prisma.order.findMany({
+        where: orderScope,
+        select: {
+          id: true,
+          stage: true,
+          createdAt: true,
+          cleaningType: true,
+          area: true,
+          seats: true,
+          discount: true,
+          estimatedPrice: true,
+          finalPrice: true,
+          client: { select: { id: true, fullName: true, phone: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 300,
+      }),
+      // отметка выполнения фиксируется временем правки строки исполнителя
+      this.prisma.taskAssignment.count({
+        where: {
+          userId: id,
+          status: 'DONE',
+          ...(hasRange ? { updatedAt: range } : {}),
+          task: { deletedAt: null },
+        },
+      }),
+      this.prisma.reminder.count({
+        where: {
+          assigneeId: id,
+          status: 'DONE',
+          deletedAt: null,
+          ...(hasRange ? { doneAt: range } : {}),
+        },
+      }),
+    ]);
+
+    const price = (o: { finalPrice: number | null; estimatedPrice: number }) =>
+      o.finalPrice ?? o.estimatedPrice ?? 0;
+    const paid = orders.filter((o) => o.stage === FunnelStage.PAID);
+    const rejected = orders.filter((o) => o.stage === FunnelStage.REJECTED);
+    const revenue = paid.reduce((sum, o) => sum + price(o), 0);
+    const discounts = paid.reduce((sum, o) => sum + (o.discount ?? 0), 0);
+
+    return {
+      total: orders.length,
+      paid: paid.length,
+      rejected: rejected.length,
+      conversion: orders.length
+        ? Math.round((paid.length / orders.length) * 100)
+        : 0,
+      revenue,
+      average: paid.length ? Math.round(revenue / paid.length) : 0,
+      discounts,
+      tasksDone,
+      remindersDone,
+      orders: orders.map((o) => ({ ...o, price: price(o) })),
+    };
   }
 
   /** Полное редактирование сотрудника руководителем. */

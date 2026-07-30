@@ -49,7 +49,12 @@ export class ListFinanceEntryDto {
   @IsOptional() @Matches(DATE_RE, { message: DATE_MESSAGE }) to?: string;
   @IsOptional() @IsString() orderId?: string;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) take?: number;
+  /*
+   * 500, а не 200: расшифровка «Доход за период» берёт операции целого
+   * месяца одним запросом. С пределом 200 запрос отклонялся валидацией,
+   * и модалка показывала «Не удалось загрузить данные».
+   */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(500) take?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) skip?: number;
 }
 

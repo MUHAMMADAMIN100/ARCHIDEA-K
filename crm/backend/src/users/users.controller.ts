@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
@@ -86,6 +87,17 @@ export class UsersController {
   @Get(':id/activity')
   activity(@Param('id') id: string) {
     return this.service.activity(id);
+  }
+
+  /** Показатели сотрудника за период — для расчёта зарплаты */
+  @Get(':id/analytics')
+  periodAnalytics(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.periodAnalytics(user, id, from, to);
   }
 
   // Карточка сотрудника / профиль (руководитель — любой, сотрудник — себя)

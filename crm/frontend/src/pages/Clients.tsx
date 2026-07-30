@@ -12,6 +12,7 @@ import {
   TAG_LABEL,
   TAG_COLOR,
   SOURCE_LABEL,
+  cleaningTypeForKey,
   TYPE_LABEL,
   ACTIVE_TYPES,
   DIRT_LABEL,
@@ -46,6 +47,8 @@ type OrdersFilter = 'all' | 'repeat' | 'none';
 /** Данные заявки при добавлении клиента (если создаём заявку в воронке) */
 export interface NewOrderInput {
   cleaningType: CleaningType;
+  /** ключ услуги из справочника — своя услуга директора тоже сюда */
+  serviceKey?: string;
   dirtLevel?: DirtLevel;
   area: number;
   seats?: number;
@@ -337,7 +340,7 @@ export function Clients() {
   );
 }
 
-function AddClientModal({
+export function AddClientModal({
   onClose,
   onCreate,
   isDirector,
@@ -365,7 +368,7 @@ function AddClientModal({
   const [managerId, setManagerId] = useState('');
   // заявка в воронке
   const [makeOrder, setMakeOrder] = useState(true);
-  const [cleaningType, setCleaningType] = useState<CleaningType>('GENERAL');
+  const [serviceKey, setServiceKey] = useState('GENERAL');
   const [dirtLevel, setDirtLevel] = useState<DirtLevel>('LIGHT');
   const [area, setArea] = useState('');
   const [seats, setSeats] = useState('');
@@ -377,14 +380,24 @@ function AddClientModal({
   const { data: managers } = useFetch<Manager[]>(
     isDirector ? '/users/managers' : null,
   );
-  const isFurniture = cleaningType === 'FURNITURE';
+  /*
+   * Список услуг — из справочника, а не из зашитой тройки: услуга,
+   * заведённая директором, должна быть доступна при оформлении клиента.
+   */
+  const serviceOptions = (tariffs?.tariffs ?? []).filter(
+    (t) => t.isActive !== false,
+  );
+  const tariff = serviceOptions.find((t) => t.key === serviceKey);
+  const isFurniture = tariff
+    ? tariff.unit !== 'м²'
+    : serviceKey === 'FURNITURE';
+  const hasLevels = tariff ? tariff.hasLevels : serviceKey !== 'FURNITURE';
 
   /*
-   * ТЗ 5: цена за единицу берётся из услуги по виду уборки и степени
-   * загрязнения, сумма считается как объём × цена. Пока менеджер не правил
-   * итог руками, он пересчитывается автоматически.
+   * ТЗ 5: цена за единицу берётся из услуги по степени загрязнения,
+   * сумма считается как объём × цена. Пока менеджер не правил итог руками,
+   * он пересчитывается автоматически.
    */
-  const tariff = (tariffs?.tariffs ?? []).find((t) => t.key === cleaningType);
   const suggestedUnitPrice = !tariff
     ? 0
     : !tariff.hasLevels
@@ -417,8 +430,9 @@ function AddClientModal({
     const toInt = (s: string) => Math.round(Number(s)) || 0;
     const order: NewOrderInput | null = makeOrder
       ? {
-          cleaningType,
-          dirtLevel: isFurniture ? undefined : dirtLevel,
+          cleaningType: cleaningTypeForKey(serviceKey),
+          serviceKey,
+          dirtLevel: hasLevels ? dirtLevel : undefined,
           area: isFurniture ? 0 : toInt(area),
           seats: isFurniture ? toInt(seats) : undefined,
           estimatedPrice: toInt(price),
@@ -500,15 +514,19 @@ function AddClientModal({
               <label className="label">Услуга</label>
               <select
                 className="input"
-                value={cleaningType}
-                onChange={(e) => setCleaningType(e.target.value as CleaningType)}
+                value={serviceKey}
+                onChange={(e) => setServiceKey(e.target.value)}
               >
-                {ACTIVE_TYPES.map((t) => (
-                  <option key={t} value={t}>{TYPE_LABEL[t]}</option>
-                ))}
+                {serviceOptions.length > 0
+                  ? serviceOptions.map((t) => (
+                      <option key={t.key} value={t.key}>{t.title}</option>
+                    ))
+                  : ACTIVE_TYPES.map((t) => (
+                      <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+                    ))}
               </select>
             </div>
-            {!isFurniture && (
+            {hasLevels && (
               <div>
                 <label className="label">Степень загрязнения</label>
                 <div className="flex flex-wrap gap-2">

@@ -18,6 +18,7 @@ import {
   SOURCE_LABEL,
   STAGE_LABEL,
   STAGE_COLOR,
+  cleaningTypeForKey,
   TYPE_LABEL,
   ACTIVE_TYPES,
   DIRT_LABEL,
@@ -72,10 +73,16 @@ export function ClientCard() {
   const curTags = tags ?? data.tags;
   const curPreferences = preferences ?? data.preferences ?? '';
 
+  /*
+   * Статус клиента ОДИН. Раньше теги включались независимо, и клиент мог
+   * оказаться одновременно VIP, «Постоянным» и «Отказником» — статус
+   * переставал что-либо значить. Выбор заменяет прежний, повторный клик
+   * снимает статус совсем.
+   */
   const toggleTag = (t: ClientTag) =>
     setTags((prev) => {
       const base = prev ?? data.tags;
-      return base.includes(t) ? base.filter((x) => x !== t) : [...base, t];
+      return base.includes(t) ? [] : [t];
     });
 
   // оптимистично: правки заказа отражаются в истории сразу
@@ -95,6 +102,7 @@ export function ClientCard() {
   // оптимистично: новый заказ появляется в истории сразу
   const createOrder = (payload: {
     cleaningType: CleaningType;
+    serviceKey?: string;
     dirtLevel?: DirtLevel;
     area: number;
     seats?: number;
@@ -142,16 +150,31 @@ export function ClientCard() {
       });
   };
 
+  /*
+   * Одна кнопка на всё: предпочтения, статус и заметки уходят одним запросом.
+   * Раньше кнопок «Сохранить» было две (у предпочтений и у заметок), и
+   * человек не понимал, какая из них что сохраняет.
+   */
   const saveMeta = async () => {
     const nextNotes = curNotes;
     const nextTags = curTags;
+    const nextPrefs = curPreferences.trim() || null;
     // оптимистично применяем изменения сразу
-    setData((c) => (c ? { ...c, notes: nextNotes, tags: nextTags } : c));
+    setData((c) =>
+      c
+        ? { ...c, notes: nextNotes, tags: nextTags, preferences: nextPrefs }
+        : c,
+    );
     setNotes(null);
     setTags(null);
+    setPreferences(null);
     setSavingMeta(true);
     try {
-      await api.patch(`/clients/${id}`, { notes: nextNotes, tags: nextTags });
+      await api.patch(`/clients/${id}`, {
+        notes: nextNotes,
+        tags: nextTags,
+        preferences: nextPrefs,
+      });
       toast.success('Сохранено');
     } catch {
       toast.error('Не удалось сохранить — изменения отменены');
@@ -280,18 +303,10 @@ export function ClientCard() {
               onChange={(e) => setPreferences(e.target.value)}
               placeholder="Например: не трогать документы на столе, есть домашние животные"
             />
-            <button
-              onClick={savePreferences}
-              disabled={savingPrefs}
-              className="btn-primary mt-3 w-full"
-            >
-              <Save className="h-4 w-4" />
-              {savingPrefs ? 'Сохранение…' : 'Сохранить'}
-            </button>
           </div>
 
           <div className="card p-5">
-            <h3 className="mb-3 font-bold text-navy-900">Теги</h3>
+            <h3 className="mb-3 font-bold text-navy-900">Статус клиента</h3>
             <div className="flex flex-wrap gap-2">
               {ALL_TAGS.map((t) => (
                 <button
@@ -323,7 +338,9 @@ export function ClientCard() {
               className="btn-primary mt-3 w-full"
             >
               <Save className="h-4 w-4" />
-              {savingMeta ? 'Сохранение…' : 'Сохранить'}
+              {savingMeta
+                ? 'Сохранение…'
+                : 'Сохранить предпочтения, статус и заметки'}
             </button>
           </div>
         </div>
@@ -451,6 +468,7 @@ function AddOrderModal({
   onClose: () => void;
   onCreate: (payload: {
     cleaningType: CleaningType;
+    serviceKey?: string;
     dirtLevel?: DirtLevel;
     area: number;
     seats?: number;
@@ -462,7 +480,7 @@ function AddOrderModal({
     cleanerIds?: string[];
   }) => void;
 }) {
-  const [cleaningType, setCleaningType] = useState<CleaningType>('GENERAL');
+  const [serviceKey, setServiceKey] = useState('GENERAL');
   const [dirtLevel, setDirtLevel] = useState<DirtLevel>('LIGHT');
   const [area, setArea] = useState('');
   const [seats, setSeats] = useState('');
@@ -476,10 +494,17 @@ function AddOrderModal({
     isDirector ? '/users/managers' : null,
   );
   const { data: tariffs } = useFetch<Tariffs>('/tariffs');
-  const isFurniture = cleaningType === 'FURNITURE';
+  // список услуг — из справочника: своя услуга директора тоже должна быть здесь
+  const serviceOptions = (tariffs?.tariffs ?? []).filter(
+    (t) => t.isActive !== false,
+  );
+  const tariff = serviceOptions.find((t) => t.key === serviceKey);
+  const isFurniture = tariff
+    ? tariff.unit !== 'м²'
+    : serviceKey === 'FURNITURE';
+  const hasLevels = tariff ? tariff.hasLevels : serviceKey !== 'FURNITURE';
 
-  // цена за единицу подставляется из услуги по виду уборки и загрязнению
-  const tariff = (tariffs?.tariffs ?? []).find((t) => t.key === cleaningType);
+  // цена за единицу подставляется из услуги по степени загрязнения
   const suggestedUnitPrice = !tariff
     ? 0
     : !tariff.hasLevels
@@ -505,8 +530,9 @@ function AddOrderModal({
   const submit = () => {
     const toInt = (s: string) => Math.round(Number(s)) || 0; // бэкенд принимает только целые
     onCreate({
-      cleaningType,
-      dirtLevel: isFurniture ? undefined : dirtLevel,
+      cleaningType: cleaningTypeForKey(serviceKey),
+      serviceKey,
+      dirtLevel: hasLevels ? dirtLevel : undefined,
       area: isFurniture ? 0 : toInt(area),
       seats: isFurniture ? toInt(seats) : undefined,
       estimatedPrice: toInt(estimatedPrice),
@@ -523,13 +549,21 @@ function AddOrderModal({
       <div className="space-y-3">
         <div>
           <label className="label">Услуга</label>
-          <select className="input" value={cleaningType} onChange={(e) => setCleaningType(e.target.value as CleaningType)}>
-            {ACTIVE_TYPES.map((t) => (
-              <option key={t} value={t}>{TYPE_LABEL[t]}</option>
-            ))}
+          <select
+            className="input"
+            value={serviceKey}
+            onChange={(e) => setServiceKey(e.target.value)}
+          >
+            {serviceOptions.length > 0
+              ? serviceOptions.map((t) => (
+                  <option key={t.key} value={t.key}>{t.title}</option>
+                ))
+              : ACTIVE_TYPES.map((t) => (
+                  <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+                ))}
           </select>
         </div>
-        {!isFurniture && (
+        {hasLevels && (
           <div>
             <label className="label">Степень загрязнения</label>
             <div className="flex flex-wrap gap-2">
