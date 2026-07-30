@@ -85,28 +85,44 @@ export function Tariffs() {
   const [extraModal, setExtraModal] = useState<ExtraModalState>(null);
   const [historyKey, setHistoryKey] = useState<{ key: string; title: string } | null>(null);
 
-  // заполняем поля ОДИН раз при первой загрузке — фоновые обновления
-  // (фокус окна и т.п.) не должны затирать вводимые цены
-  const seeded = useRef(false);
+  /*
+   * Заполняем поля цен ТОЛЬКО для услуг, которых ещё нет в состоянии.
+   *
+   * Раньше засев был одноразовым (флаг seeded). Из-за этого услуга, созданная
+   * ПОСЛЕ первой загрузки страницы, оставалась с пустыми полями: в карточке
+   * было видно подсказку «0», хотя в базе лежали настоящие цены. Хуже другое —
+   * нажатие «Сохранить» на такой карточке отправляло пустое поле как ноль и
+   * действительно обнуляло цены. Отсюда и «цены не сохраняются».
+   *
+   * Уже введённые значения при этом не затираем: фоновое обновление
+   * (возврат на вкладку, поллинг) не должно сбрасывать то, что человек печатает.
+   */
   useEffect(() => {
-    if (data && !seeded.current) {
-      seeded.current = true;
-      setPrices(
-        Object.fromEntries(
-          data.tariffs.map((t) => [
-            t.key,
-            {
-              light: String(t.priceLight),
-              medium: String(t.priceMedium),
-              heavy: String(t.priceHeavy),
-            },
-          ]),
-        ),
-      );
-      setExtraPrices(
-        Object.fromEntries(data.extras.map((e) => [e.key, String(e.price)])),
-      );
-    }
+    if (!data) return;
+    setPrices((prev) => {
+      const next = { ...prev };
+      let added = false;
+      for (const t of data.tariffs) {
+        if (next[t.key]) continue;
+        next[t.key] = {
+          light: String(t.priceLight),
+          medium: String(t.priceMedium),
+          heavy: String(t.priceHeavy),
+        };
+        added = true;
+      }
+      return added ? next : prev;
+    });
+    setExtraPrices((prev) => {
+      const next = { ...prev };
+      let added = false;
+      for (const e of data.extras) {
+        if (next[e.key] !== undefined) continue;
+        next[e.key] = String(e.price);
+        added = true;
+      }
+      return added ? next : prev;
+    });
   }, [data]);
 
   if (error) return <ErrorState onRetry={reload} />;
@@ -115,10 +131,17 @@ export function Tariffs() {
   const saveTariff = (t: Tariff) => {
     const p = prices[t.key];
     if (!p) return;
+    /*
+     * Пустое поле — это «не менял», а НЕ ноль. Раньше оно уходило нулём и
+     * молча обнуляло цену услуги: заказы после этого считались по нулю.
+     * Поэтому пустое значение подменяем текущим с сервера.
+     */
+    const num = (raw: string, fallback: number) =>
+      raw.trim() === '' ? fallback : Number(raw);
     // у услуги без уровней (мебель и т.п.) одна цена — во все три поля
-    const light = Number(p.light || 0);
-    const medium = t.hasLevels ? Number(p.medium || 0) : light;
-    const heavy = t.hasLevels ? Number(p.heavy || 0) : light;
+    const light = num(p.light, t.priceLight);
+    const medium = t.hasLevels ? num(p.medium, t.priceMedium) : light;
+    const heavy = t.hasLevels ? num(p.heavy, t.priceHeavy) : light;
     // оптимистично: кнопка сразу показывает «Сохранено», запрос — в фоне
     setData((d) =>
       d
@@ -153,7 +176,10 @@ export function Tariffs() {
   };
 
   const saveExtra = (key: string) => {
-    const price = Number(extraPrices[key] || 0);
+    // пустое поле — «не менял», а не ноль (см. saveTariff)
+    const raw = extraPrices[key] ?? '';
+    const current = data.extras.find((e) => e.key === key)?.price ?? 0;
+    const price = raw.trim() === '' ? current : Number(raw);
     setData((d) =>
       d
         ? {
