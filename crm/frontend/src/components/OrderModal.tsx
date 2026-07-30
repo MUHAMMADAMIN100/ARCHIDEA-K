@@ -134,6 +134,9 @@ export function OrderModal({
   const [finalPrice, setFinalPrice] = useState('');
   const [isManualPrice, setIsManualPrice] = useState(false);
   const [preferences, setPreferences] = useState('');
+  // доп. услуги: ключ → количество; скидка в сомони
+  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
+  const [discount, setDiscount] = useState('');
   // данные заявки: раньше блок был только для чтения
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -187,8 +190,32 @@ export function OrderModal({
   const selectedTariff = serviceOptions.find((t) => t.key === serviceKey);
   const isSeatsUnit = selectedTariff ? selectedTariff.unit !== 'м²' : serviceKey === 'FURNITURE';
   const hasLevelsNow = selectedTariff ? selectedTariff.hasLevels : serviceKey !== 'FURNITURE';
+
+  /*
+   * Расчёт для показа повторяет серверный (order-pricing.ts): работы +
+   * доп. услуги − скидка. Считаем и здесь, чтобы менеджер видел итог сразу,
+   * не дожидаясь ответа сервера; авторитетным остаётся сервер.
+   */
+  const extrasCatalogue = tariffsQuery.data?.extras ?? [];
+  const extrasSum = Object.entries(selectedExtras).reduce((sum, [key, qty]) => {
+    const item = extrasCatalogue.find((e) => e.key === key);
+    if (!item) return sum;
+    const n = Math.max(0, Math.round(Number(qty) || 0));
+    if (n === 0) return sum;
+    return sum + (item.hasQty ? item.price * n : item.price);
+  }, 0);
+
   const unitLabel = selectedTariff?.unit ?? (isSeatsUnit ? 'место' : 'м²');
   const unitsNow = Number((isSeatsUnit ? editSeats : editArea) || 0);
+
+  const workSum = Math.round(Number(pricePerSqm) || 0) * unitsNow;
+  const subtotalSum = workSum + extrasSum;
+  // скидка не может быть больше стоимости — так же считает сервер
+  const discountSum = Math.min(
+    Math.max(0, Math.round(Number(discount) || 0)),
+    subtotalSum,
+  );
+  const toPaySum = subtotalSum - discountSum;
   // постоянные предпочтения клиента — вынесены в переменную, чтобы TS не
   // требовал повторного optional chaining внутри вложенного колбэка кнопки
   const clientPreferences = order?.client?.preferences ?? '';
@@ -222,6 +249,8 @@ export function OrderModal({
       setIsManualPrice(!!o.isManualPrice);
     }
     if (!skip('preferences')) setPreferences(o.preferences ?? '');
+    if (!skip('extras')) setSelectedExtras(o.extras ?? {});
+    if (!skip('discount')) setDiscount(o.discount ? String(o.discount) : '');
     if (!skip('client')) {
       setClientName(o.client?.fullName ?? '');
       setClientPhone(o.client?.phone ?? '');
@@ -436,6 +465,8 @@ export function OrderModal({
         ...(newFinalPrice != null ? { finalPrice: newFinalPrice } : {}),
         isManualPrice,
         preferences: trimmedPrefs,
+        extras: selectedExtras,
+        discount: discountSum,
         // данные заявки — правятся прямо в карточке
         source: editSource,
         comment: editComment.trim(),
@@ -828,6 +859,127 @@ export function OrderModal({
                       Заполнено по выбору клиента с сайта — можно изменить
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/*
+                Дополнительные услуги и скидка.
+                Раньше доп. услуги можно было выбрать только на сайте, а в CRM
+                их не было видно и в сумму они не входили — заказ считался
+                неверно. Скидка не вводилась вообще.
+              */}
+              <div className="space-y-3 rounded-xl border border-navy-100 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-navy-800">
+                    Дополнительные услуги
+                  </span>
+                  <span className="text-xs text-navy-400">
+                    {extrasSum > 0 ? formatPrice(extrasSum) : 'не выбраны'}
+                  </span>
+                </div>
+
+                {extrasCatalogue.length === 0 ? (
+                  <p className="text-xs text-navy-400">
+                    Справочник доп. услуг пуст — заведите их в разделе «Услуги и цены».
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {extrasCatalogue.map((e) => {
+                      const qty = selectedExtras[e.key] ?? 0;
+                      const on = qty > 0;
+                      return (
+                        <div
+                          key={e.key}
+                          className={`flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-2 ${
+                            on ? 'border-brand-400 bg-brand-50/60' : 'border-navy-100'
+                          }`}
+                        >
+                          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={(ev) => {
+                                markTouched('extras');
+                                setSelectedExtras((prev) => {
+                                  const next = { ...prev };
+                                  if (ev.target.checked) next[e.key] = 1;
+                                  else delete next[e.key];
+                                  return next;
+                                });
+                              }}
+                              className="h-4 w-4 shrink-0 accent-navy-500"
+                            />
+                            <span className="min-w-0 truncate text-sm text-navy-800">
+                              {e.title}
+                            </span>
+                          </label>
+                          <span className="shrink-0 text-xs text-navy-500">
+                            {formatPrice(e.price)}
+                            {e.hasQty ? ' / шт' : ''}
+                          </span>
+                          {/* количество — только там, где цена умножается */}
+                          {on && e.hasQty && (
+                            <input
+                              type="number"
+                              min={1}
+                              className="input h-9 w-20 shrink-0"
+                              value={qty}
+                              onChange={(ev) => {
+                                markTouched('extras');
+                                const n = Math.max(1, Math.round(Number(ev.target.value) || 1));
+                                setSelectedExtras((prev) => ({ ...prev, [e.key]: n }));
+                              }}
+                              aria-label={`Количество: ${e.title}`}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="label">Скидка, сомони</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="input"
+                      value={discount}
+                      onChange={(ev) => {
+                        markTouched('discount');
+                        setDiscount(ev.target.value);
+                      }}
+                      placeholder="0"
+                    />
+                  </div>
+                  {/* Итог: видно, из чего он сложился и сколько вычли */}
+                  <div className="rounded-xl bg-navy-50 px-3 py-2 text-sm">
+                    <div className="flex justify-between text-navy-600">
+                      <span>Работы</span>
+                      <span className="tabular-nums">{formatPrice(workSum)}</span>
+                    </div>
+                    {extrasSum > 0 && (
+                      <div className="flex justify-between text-navy-600">
+                        <span>Доп. услуги</span>
+                        <span className="tabular-nums">{formatPrice(extrasSum)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-navy-600">
+                      <span>Основная стоимость</span>
+                      <span className="tabular-nums">{formatPrice(subtotalSum)}</span>
+                    </div>
+                    {discountSum > 0 && (
+                      <div className="flex justify-between font-medium text-red-600">
+                        <span>Скидка</span>
+                        <span className="tabular-nums">− {formatPrice(discountSum)}</span>
+                      </div>
+                    )}
+                    <div className="mt-1 flex justify-between border-t border-navy-200 pt-1 font-bold text-navy-900">
+                      <span>К оплате</span>
+                      <span className="tabular-nums">{formatPrice(toPaySum)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

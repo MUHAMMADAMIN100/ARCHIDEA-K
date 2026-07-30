@@ -15,9 +15,11 @@ const MAX_PRICE = 2_000_000_000;
 
 export class CreateTariffDto {
   /**
-   * Ключ услуги. Латиница, цифры и подчёркивание — по нему услуга связывается
-   * с заказами и калькулятором лендинга, поэтому кириллицу и пробелы не берём.
+   * Ключ услуги. Не вводится руками: генерируется из названия (см.
+   * service-key.ts), потому что человеку он не нужен, а обязательное поле
+   * блокировало сохранение. Принимаем только если задан явно.
    */
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(40)
@@ -25,7 +27,7 @@ export class CreateTariffDto {
     message:
       'Ключ услуги — латинские заглавные буквы, цифры и подчёркивание (например DEEP_CLEANING)',
   })
-  key: string;
+  key?: string;
 
   @IsString()
   @MinLength(2)
@@ -136,6 +138,7 @@ export class UpdateTariffDto {
 }
 
 export class CreateExtraDto {
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(40)
@@ -143,7 +146,7 @@ export class CreateExtraDto {
     message:
       'Ключ доп. услуги — латинские строчные буквы, цифры и подчёркивание (например dry_cleaning)',
   })
-  key: string;
+  key?: string;
 
   @IsString()
   @MinLength(2)

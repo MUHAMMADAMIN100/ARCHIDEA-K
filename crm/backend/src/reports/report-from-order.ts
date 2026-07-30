@@ -26,13 +26,31 @@ export type OrderForReport = {
   managerId: string | null;
   client: { fullName: string; phone: string | null } | null;
   manager: { id: string; fullName: string } | null;
+  discount: number;
   cleaners: {
     id: string;
     fullName: string;
     rate: number;
     leaderOf?: { id: string } | null;
+    /** бригада клинера — из неё берётся ответственный бригадир */
+    brigade?: { id: string; name: string; leader: { fullName: string } | null } | null;
   }[];
 };
+
+/**
+ * Ответственный бригадир по составу команды.
+ *
+ * Сначала смотрим, нет ли среди выбранных клинеров самого бригадира. Если нет
+ * — берём руководителя бригады, из которой набрана команда: менеджер выбирает
+ * людей из бригады, а отвечает за них её бригадир. Раньше поле оставалось
+ * пустым, если бригадира не отметили в составе, и в ведомости было «—».
+ */
+export function brigadierFromOrder(order: OrderForReport): string | null {
+  const own = order.cleaners.find((c) => c.leaderOf);
+  if (own) return own.fullName;
+  const withBrigade = order.cleaners.find((c) => c.brigade?.leader?.fullName);
+  return withBrigade?.brigade?.leader?.fullName ?? null;
+}
 
 /** «45 м² по 25 с» или «6 мест по 70 с» — как на бумажном бланке */
 export function volumeLabel(order: OrderForReport): string | null {
@@ -77,10 +95,12 @@ export function reportDataFromOrder(
     address: order.address ?? null,
     workDate: order.scheduledDate ?? order.closedAt ?? order.createdAt,
     unitsLabel: volumeLabel(order),
-    discount: 0,
+    // скидка переносится из заказа — в ведомости её не вводят заново
+    discount: order.discount ?? 0,
     totalPrice: order.finalPrice ?? order.estimatedPrice ?? 0,
     managerId: ownerId,
     managerName: order.manager?.fullName ?? null,
+    brigadierName: brigadierFromOrder(order),
   };
 }
 
@@ -94,6 +114,13 @@ export const orderForReportInclude = {
       fullName: true,
       rate: true,
       leaderOf: { select: { id: true } },
+      brigade: {
+        select: {
+          id: true,
+          name: true,
+          leader: { select: { fullName: true } },
+        },
+      },
     },
   },
 } as const;

@@ -95,6 +95,8 @@ export function Clients() {
       phone: string;
       source: LeadSource;
       managerId?: string;
+      /** постоянная скидка клиента в сомони */
+      discount?: number;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -335,6 +337,8 @@ function AddClientModal({
       phone: string;
       source: LeadSource;
       managerId?: string;
+      /** постоянная скидка клиента в сомони */
+      discount?: number;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -344,6 +348,8 @@ function AddClientModal({
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [source, setSource] = useState<LeadSource>('CALL');
+  // постоянная скидка: подставляется в новые заказы клиента
+  const [discount, setDiscount] = useState('');
   const [managerId, setManagerId] = useState('');
   // заявка в воронке
   const [makeOrder, setMakeOrder] = useState(true);
@@ -409,7 +415,13 @@ function AddClientModal({
         }
       : null;
     onCreate(
-      { fullName, phone, source, managerId: managerId || undefined },
+      {
+        fullName,
+        phone,
+        source,
+        managerId: managerId || undefined,
+        discount: Math.max(0, Math.round(Number(discount) || 0)),
+      },
       managerName,
       order,
     );
@@ -421,6 +433,22 @@ function AddClientModal({
       <div className="space-y-3">
         <NameInput value={fullName} onChange={setFullName} autoFocus />
         <PhoneInput value={phone} onChange={setPhone} required />
+        <div>
+          {/*
+            Постоянная скидка клиента. Подставляется в его новые заказы,
+            в самом заказе её можно изменить — так постоянному клиенту не
+            нужно каждый раз вписывать скидку заново.
+          */}
+          <label className="label">Постоянная скидка, сомони</label>
+          <input
+            type="number"
+            min={0}
+            className="input"
+            value={discount}
+            onChange={(e) => setDiscount(e.target.value)}
+            placeholder="0 — без скидки"
+          />
+        </div>
         <div>
           <label className="label">Источник</label>
           <select className="input" value={source} onChange={(e) => setSource(e.target.value as LeadSource)}>

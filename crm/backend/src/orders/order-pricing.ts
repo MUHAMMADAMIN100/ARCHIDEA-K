@@ -31,6 +31,18 @@ export interface PricingInput {
   dirtLevel?: DirtLevel | null;
   /** Цена за единицу, если менеджер задал её вручную */
   pricePerSqm?: number | null;
+  /** Выбранные доп. услуги: ключ → количество */
+  extras?: Record<string, number> | null;
+  /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
+  discount?: number | null;
+}
+
+/** Доп. услуга из справочника — для расчёта её вклада в сумму */
+export interface PricingExtra {
+  key: string;
+  price: number;
+  /** цена умножается на количество (например, окна) */
+  hasQty: boolean;
 }
 
 export interface PricingResult {
@@ -40,8 +52,39 @@ export interface PricingResult {
   unit: string;
   /** Цена за единицу, из которой сложилась сумма */
   pricePerUnit: number;
-  /** Итог: units × pricePerUnit */
+  /** Сумма основных работ: units × pricePerUnit */
+  workTotal: number;
+  /** Сумма выбранных доп. услуг */
+  extrasTotal: number;
+  /** Стоимость до скидки: работы + доп. услуги */
+  subtotal: number;
+  /** Применённая скидка (не больше subtotal) */
+  discount: number;
+  /** Итог к оплате: subtotal − discount */
   total: number;
+}
+
+/**
+ * Сумма выбранных доп. услуг.
+ *
+ * extras хранится как «ключ услуги → количество». Услуга без количества
+ * (hasQty=false) считается один раз, даже если в данных оказалось число
+ * больше единицы: иначе опечатка удваивала бы счёт.
+ */
+export function extrasTotal(
+  extras: Record<string, number> | null | undefined,
+  catalogue: PricingExtra[] | null | undefined,
+): number {
+  if (!extras || !catalogue?.length) return 0;
+  let sum = 0;
+  for (const [key, rawQty] of Object.entries(extras)) {
+    const item = catalogue.find((e) => e.key === key);
+    if (!item) continue; // услугу удалили из справочника — в сумму не берём
+    const qty = Math.max(0, Math.round(Number(rawQty) || 0));
+    if (qty === 0) continue;
+    sum += item.hasQty ? item.price * qty : item.price;
+  }
+  return Math.min(sum, 2_000_000_000);
 }
 
 /** Цена за единицу для услуги и степени загрязнения */
@@ -81,6 +124,7 @@ export function billableUnits(
 export function calculatePrice(
   input: PricingInput,
   tariff?: PricingTariff | null,
+  extrasCatalogue?: PricingExtra[] | null,
 ): PricingResult {
   const units = billableUnits(input, tariff);
   const manual = Number(input.pricePerSqm);
@@ -90,12 +134,27 @@ export function calculatePrice(
       : unitPrice(tariff, input.dirtLevel);
 
   // ограничиваем сверху, чтобы опечатка в площади не переполнила Int
-  const total = Math.min(units * pricePerUnit, 2_000_000_000);
+  const workTotal = Math.min(units * pricePerUnit, 2_000_000_000);
+  const extras = extrasTotal(input.extras, extrasCatalogue);
+  const subtotal = Math.min(workTotal + extras, 2_000_000_000);
+
+  /*
+   * Скидка не может быть больше стоимости: иначе заказ уходил бы в минус
+   * и портил выручку. Отрицательную скидку тоже не принимаем.
+   */
+  const discount = Math.min(
+    Math.max(0, Math.round(Number(input.discount) || 0)),
+    subtotal,
+  );
 
   return {
     units,
     unit: tariff?.unit ?? 'м²',
     pricePerUnit,
-    total,
+    workTotal,
+    extrasTotal: extras,
+    subtotal,
+    discount,
+    total: subtotal - discount,
   };
 }

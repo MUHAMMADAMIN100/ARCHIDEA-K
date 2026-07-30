@@ -1,9 +1,12 @@
 import {
   IsArray,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { ClientTag, LeadSource } from '@prisma/client';
@@ -38,6 +41,13 @@ export class CreateClientDto {
   @MaxLength(2000)
   preferences?: string;
 
+  /** Постоянная скидка клиента в сомони — подставляется в новые заказы */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000_000)
+  discount?: number;
+
   @IsOptional()
   @IsArray()
   @IsEnum(ClientTag, { each: true })
@@ -60,6 +70,8 @@ export class UpdateClientDto {
    * ничего не сохраняя.
    */
   @IsOptional() @IsString() @MaxLength(2000) preferences?: string;
+  /** Постоянная скидка клиента в сомони */
+  @IsOptional() @IsInt() @Min(0) @Max(1_000_000_000) discount?: number;
   @IsOptional() @IsArray() @IsEnum(ClientTag, { each: true }) tags?: ClientTag[];
   @IsOptional() @IsString() managerId?: string;
 }

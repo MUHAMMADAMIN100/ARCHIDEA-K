@@ -569,7 +569,6 @@ function TariffModal({
   const toast = useToast();
   const isEdit = !!tariff;
   const [tab, setTab] = useState<ServiceTab>('edit');
-  const [key, setKey] = useState(tariff?.key ?? '');
   const [title, setTitle] = useState(tariff?.title ?? '');
   const [description, setDescription] = useState(tariff?.description ?? '');
   const [unit, setUnit] = useState(tariff?.unit ?? 'м²');
@@ -581,7 +580,7 @@ function TariffModal({
   const [isActive, setIsActive] = useState(tariff?.isActive ?? true);
   const [saving, setSaving] = useState(false);
 
-  const canSubmit = title.trim().length >= 2 && (isEdit || /^[A-Z][A-Z0-9_]*$/.test(key.trim()));
+  const canSubmit = title.trim().length >= 2;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -608,7 +607,7 @@ function TariffModal({
         });
         toast.success('Услуга обновлена');
       } else {
-        await api.post('/tariffs/tariff', { key: key.trim(), ...payload });
+        await api.post('/tariffs/tariff', payload);
         toast.success('Услуга добавлена');
       }
       onSaved();
@@ -637,22 +636,13 @@ function TariffModal({
           <HistoryPanel entity="SERVICE" entityId={tariff!.key} />
         ) : (
           <div className="space-y-3">
-            {!isEdit && (
-              <div>
-                <label className="label">Ключ услуги *</label>
-                <input
-                  className="input font-mono uppercase"
-                  value={key}
-                  onChange={(e) => setKey(e.target.value.toUpperCase())}
-                  placeholder="DEEP_CLEANING"
-                  maxLength={40}
-                />
-                <p className="mt-1 text-xs text-navy-400">
-                  Только латинские заглавные буквы, цифры и подчёркивание, например DEEP_CLEANING.
-                  После создания ключ изменить нельзя.
-                </p>
-              </div>
-            )}
+            {/*
+              Поле «Ключ услуги» убрано: ключ нужен системе (по нему заказ
+              связан с услугой и считает калькулятор сайта), но человеку он не
+              нужен. Пока поле было пустым, кнопка «Сохранить» оставалась
+              заблокированной — заполненные цены выглядели как «не сохраняются».
+              Теперь ключ формируется из названия на сервере.
+            */}
             {isEdit && tariff!.isSystem && (
               <p className="rounded-lg bg-navy-50 px-3 py-2 text-xs text-navy-500">
                 Это базовая услуга — ключ и единица измерения зафиксированы: на них завязаны
@@ -808,7 +798,6 @@ function ExtraModal({
   const toast = useToast();
   const isEdit = !!extra;
   const [tab, setTab] = useState<ServiceTab>('edit');
-  const [key, setKey] = useState(extra?.key ?? '');
   const [title, setTitle] = useState(extra?.title ?? '');
   const [price, setPrice] = useState(String(extra?.price ?? ''));
   const [hasQty, setHasQty] = useState(extra?.hasQty ?? false);
@@ -816,7 +805,7 @@ function ExtraModal({
   const [isActive, setIsActive] = useState(extra?.isActive ?? true);
   const [saving, setSaving] = useState(false);
 
-  const canSubmit = title.trim().length >= 2 && (isEdit || /^[a-z][a-z0-9_]*$/.test(key.trim()));
+  const canSubmit = title.trim().length >= 2;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -833,7 +822,7 @@ function ExtraModal({
         await api.patch(`/tariffs/extra/${extra.key}`, payload);
         toast.success('Доп. услуга обновлена');
       } else {
-        await api.post('/tariffs/extra', { key: key.trim(), ...payload });
+        await api.post('/tariffs/extra', payload);
         toast.success('Доп. услуга добавлена');
       }
       onSaved();
@@ -862,22 +851,7 @@ function ExtraModal({
           <HistoryPanel entity="SERVICE" entityId={extra!.key} />
         ) : (
           <div className="space-y-3">
-            {!isEdit && (
-              <div>
-                <label className="label">Ключ доп. услуги *</label>
-                <input
-                  className="input font-mono"
-                  value={key}
-                  onChange={(e) => setKey(e.target.value.toLowerCase())}
-                  placeholder="dry_cleaning"
-                  maxLength={40}
-                />
-                <p className="mt-1 text-xs text-navy-400">
-                  Только латинские строчные буквы, цифры и подчёркивание, например dry_cleaning.
-                  После создания ключ изменить нельзя.
-                </p>
-              </div>
-            )}
+            {/* ключ формируется из названия на сервере — см. service-key.ts */}
 
             <div>
               <label className="label">Название *</label>

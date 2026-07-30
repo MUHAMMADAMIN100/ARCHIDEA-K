@@ -196,6 +196,8 @@ export interface Client {
   notes?: string;
   /** ТЗ 10.2 — постоянные предпочтения клиента */
   preferences?: string | null;
+  /** Постоянная скидка клиента в сомони — подставляется в новые заказы */
+  discount?: number;
   lastContactAt: string;
   managerId?: string;
   manager?: { id: string; fullName: string } | null;
@@ -235,6 +237,10 @@ export interface Order {
   scheduledDate?: string | null;
   /** ТЗ 5 — сумма задана вручную, автоматический пересчёт её не трогает */
   isManualPrice?: boolean;
+  /** Выбранные доп. услуги: ключ услуги → количество */
+  extras?: Record<string, number> | null;
+  /** Скидка по заказу в сомони */
+  discount?: number;
   isLarge: boolean;
   createdAt: string;
   closedAt?: string | null;
@@ -256,6 +262,8 @@ export interface Order {
 export interface BoardColumn {
   stage: FunnelStage;
   label: string;
+  /** Сумма денег на этапе — считает сервер по итоговой или расчётной цене */
+  amount?: number;
   orders: Order[];
 }
 

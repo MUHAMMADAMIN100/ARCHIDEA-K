@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -36,6 +37,18 @@ export class CreateOrderDto {
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) pricePerSqm?: number;
   /** Итог, если менеджер задал его вручную (ТЗ 5) */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) finalPrice?: number;
+  /** Выбранные доп. услуги: ключ услуги → количество */
+  @IsOptional()
+  @IsObject()
+  extras?: Record<string, number>;
+
+  /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_INT)
+  discount?: number;
+
   @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
   @IsOptional() @IsString() @MaxLength(2000) preferences?: string;
@@ -79,6 +92,10 @@ export class UpdateOrderDto {
    * прийти с опечаткой, не тем источником или не тем временем.
    */
   @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
+  /** Выбранные доп. услуги: ключ услуги → количество */
+  @IsOptional() @IsObject() extras?: Record<string, number>;
+  /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) discount?: number;
   @IsOptional() @IsString() createdAt?: string;
   @IsOptional() @IsString() preferredDate?: string;
   @IsOptional() @IsString() @MaxLength(20) preferredTime?: string;

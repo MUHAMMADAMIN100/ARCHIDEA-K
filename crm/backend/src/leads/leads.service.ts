@@ -55,13 +55,29 @@ export class LeadsService {
       return { ok: true }; // тихо игнорируем бота
     }
 
-    if (!dto.contact?.phone || !dto.contact?.name) {
-      throw new BadRequestException('Не указаны имя или телефон');
+    /*
+     * Обязательные поля заявки проверяем и на сервере, а не только в форме.
+     * Форма может быть открыта из кэша старой версии, а заявку можно отправить
+     * и минуя её — без адреса и даты менеджеру нечего делать с обращением.
+     */
+    const missing: string[] = [];
+    if (!dto.contact?.name?.trim()) missing.push('имя');
+    if (!dto.contact?.phone?.trim()) missing.push('телефон');
+    if (!dto.contact?.address?.trim()) missing.push('адрес');
+    if (!dto.quiz?.date?.trim()) missing.push('дату уборки');
+    if (missing.length) {
+      throw new BadRequestException(`Заполните ${missing.join(', ')}`);
     }
+    // после проверки поля точно есть — сужаем тип для остального кода
+    const contact = {
+      name: dto.contact!.name!.trim(),
+      phone: dto.contact!.phone!.trim(),
+      address: dto.contact!.address!.trim(),
+    };
 
     // 2. Rate-limit: не чаще раза в 20 сек с одного телефона
     // ключ по каноническому номеру: «+992 90…» и «90…» — один и тот же человек
-    const phoneKey = normalizePhone(dto.contact.phone) ?? dto.contact.phone;
+    const phoneKey = normalizePhone(contact.phone) ?? contact.phone;
     const nowMs = Date.now();
     const last = this.recent.get(phoneKey);
     if (last && nowMs - last < 20_000) {
@@ -80,8 +96,8 @@ export class LeadsService {
 
     // 4. Клиент (защита от дублей по телефону)
     const { client } = await this.clients.findOrCreateByPhone({
-      fullName: dto.contact.name,
-      phone: dto.contact.phone,
+      fullName: contact.name,
+      phone: contact.phone,
       source: LeadSource.SITE,
       managerId: managerId ?? undefined,
     });
@@ -133,7 +149,7 @@ export class LeadsService {
               : clamp(dto.calculator?.area);
           return units > 0 ? Math.round(total / units) : null;
         })(),
-        address: dto.contact.address,
+        address: contact.address,
         preferredDate: preferred,
         preferredTime: dto.quiz?.time,
         /*
@@ -200,7 +216,7 @@ export class LeadsService {
       '<b>Новая заявка с сайта</b>',
       `Клиент: ${escapeHtml(client.fullName)}`,
       `Телефон: ${escapeHtml(client.phone)}`,
-      dto.contact.address ? `Адрес: ${escapeHtml(dto.contact.address)}` : null,
+      `Адрес: ${escapeHtml(contact.address)}`,
       `Объём: ${volume}`,
       `Расчёт: ${clamp(dto.total)} сомони`,
       dto.quiz?.comment ? `Комментарий: ${escapeHtml(dto.quiz.comment)}` : null,

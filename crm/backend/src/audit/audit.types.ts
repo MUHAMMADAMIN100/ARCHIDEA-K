@@ -89,6 +89,7 @@ export const FIELD_LABELS: Record<string, string> = {
   deadline: 'Срок',
   rate: 'Ставка',
   amount: 'Сумма',
+  discount: 'Скидка',
   reason: 'Причина',
   category: 'Статья',
   kind: 'Тип',

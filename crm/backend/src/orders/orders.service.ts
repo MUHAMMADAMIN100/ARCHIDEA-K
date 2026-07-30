@@ -24,7 +24,7 @@ import {
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { formatDate, parseDate } from '../common/time/dushanbe';
-import { calculatePrice, PricingTariff } from './order-pricing';
+import { calculatePrice, PricingExtra, PricingTariff } from './order-pricing';
 import {
   AssignCleanersDto,
   ChangeStageDto,
@@ -137,6 +137,17 @@ export class OrdersService {
     return found.map((c) => c.id);
   }
 
+  /**
+   * Справочник доп. услуг для расчёта. Берём активные и не удалённые:
+   * цена доп. услуги — тоже цена компании, из браузера её не принимаем.
+   */
+  private extrasCatalogue(): Promise<PricingExtra[]> {
+    return this.prisma.extraService.findMany({
+      where: { ...NOT_DELETED, isActive: true },
+      select: { key: true, price: true, hasQty: true },
+    });
+  }
+
   /** Услуга заказа для расчёта цены (ТЗ 5) */
   private async tariffFor(
     serviceKey?: string | null,
@@ -186,11 +197,23 @@ export class OrdersService {
   async board(user: AuthUser) {
     const orders = await this.list(user, {});
     const stages = Object.keys(STAGE_LABEL) as FunnelStage[];
-    return stages.map((stage) => ({
-      stage,
-      label: STAGE_LABEL[stage],
-      orders: orders.filter((o) => o.stage === stage),
-    }));
+    return stages.map((stage) => {
+      const inStage = orders.filter((o) => o.stage === stage);
+      return {
+        stage,
+        label: STAGE_LABEL[stage],
+        /*
+         * Сумма денег на этапе. Считаем по итоговой цене, а если её ещё нет —
+         * по расчётной: руководителю нужно видеть, сколько «висит» на каждом
+         * шаге воронки, а не только количество карточек.
+         */
+        amount: inStage.reduce(
+          (sum, o) => sum + (o.finalPrice ?? o.estimatedPrice ?? 0),
+          0,
+        ),
+        orders: inStage,
+      };
+    });
   }
 
   async getOne(user: AuthUser, id: string) {
@@ -226,7 +249,19 @@ export class OrdersService {
     const dirtLevel = cleaningType === 'FURNITURE' ? null : dto.dirtLevel ?? null;
 
     // Цену считаем на сервере (ТЗ 5), из браузера её не принимаем
-    const tariff = await this.tariffFor(serviceKey);
+    const [tariff, extrasList] = await Promise.all([
+      this.tariffFor(serviceKey),
+      this.extrasCatalogue(),
+    ]);
+    /*
+     * Скидка: если в заказе не задана, берём постоянную скидку клиента —
+     * так постоянному клиенту не нужно каждый раз вписывать её вручную.
+     */
+    const clientDiscount = await this.prisma.client.findUnique({
+      where: { id: dto.clientId },
+      select: { discount: true },
+    });
+    const discount = dto.discount ?? clientDiscount?.discount ?? 0;
     const priced = calculatePrice(
       {
         serviceKey,
@@ -234,8 +269,11 @@ export class OrdersService {
         seats: dto.seats,
         dirtLevel,
         pricePerSqm: dto.pricePerSqm,
+        extras: dto.extras,
+        discount,
       },
       tariff,
+      extrasList,
     );
     const isManualPrice =
       dto.finalPrice !== undefined && dto.finalPrice !== priced.total;
@@ -347,7 +385,15 @@ export class OrdersService {
     // ── Пересчёт суммы (ТЗ 5) ──
     const serviceKey =
       (data.serviceKey as string) ?? before.serviceKey ?? before.cleaningType;
-    const tariff = await this.tariffFor(serviceKey);
+    const [tariff, extrasList] = await Promise.all([
+      this.tariffFor(serviceKey),
+      this.extrasCatalogue(),
+    ]);
+    const nextExtras =
+      dto.extras !== undefined
+        ? dto.extras
+        : ((before.extras as Record<string, number> | null) ?? undefined);
+    const nextDiscount = dto.discount !== undefined ? dto.discount : before.discount;
     const priced = calculatePrice(
       {
         serviceKey,
@@ -355,9 +401,14 @@ export class OrdersService {
         seats: (data.seats as number) ?? before.seats,
         dirtLevel: (data.dirtLevel as any) ?? before.dirtLevel,
         pricePerSqm: dto.pricePerSqm ?? before.pricePerSqm,
+        extras: nextExtras,
+        discount: nextDiscount,
       },
       tariff,
+      extrasList,
     );
+    if (dto.extras !== undefined) data.extras = dto.extras;
+    if (dto.discount !== undefined) data.discount = dto.discount;
     if (dto.pricePerSqm !== undefined || priced.pricePerUnit) {
       data.pricePerSqm = priced.pricePerUnit || null;
     }

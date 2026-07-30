@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { slugFromTitle, uniqueKey } from './service-key';
 import {
   CreateExtraDto,
   CreateTariffDto,
@@ -239,14 +240,26 @@ export class TariffsService implements OnModuleInit {
   // ─────────────────────── Услуги ───────────────────────
 
   async createTariff(user: AuthUser, dto: CreateTariffDto) {
-    const key = dto.key.trim().toUpperCase();
+    /*
+     * Ключ генерируется из названия. Явно переданный ключ уважаем — так
+     * работают старые интеграции, — но обязательным его больше не считаем.
+     */
+    const key = dto.key
+      ? dto.key.trim().toUpperCase()
+      : await uniqueKey(slugFromTitle(dto.title), async (candidate) => {
+          const row = await this.prisma.tariff.findUnique({
+            where: { key: candidate },
+            select: { id: true },
+          });
+          return !!row;
+        });
 
     const clash = await this.prisma.tariff.findUnique({ where: { key } });
     if (clash) {
       throw new ConflictException(
         clash.deletedAt
-          ? 'Услуга с таким ключом лежит в корзине — восстановите её или выберите другой ключ'
-          : 'Услуга с таким ключом уже есть',
+          ? 'Услуга с таким названием лежит в корзине — восстановите её или измените название'
+          : 'Услуга с таким названием уже есть',
       );
     }
 
@@ -393,14 +406,25 @@ export class TariffsService implements OnModuleInit {
   // ──────────────────── Доп. услуги ────────────────────
 
   async createExtra(user: AuthUser, dto: CreateExtraDto) {
-    const key = dto.key.trim().toLowerCase();
+    // ключ доп. услуги тоже из названия, строчными — как в существующих данных
+    const key = dto.key
+      ? dto.key.trim().toLowerCase()
+      : (
+          await uniqueKey(slugFromTitle(dto.title), async (candidate) => {
+            const row = await this.prisma.extraService.findUnique({
+              where: { key: candidate.toLowerCase() },
+              select: { id: true },
+            });
+            return !!row;
+          })
+        ).toLowerCase();
 
     const clash = await this.prisma.extraService.findUnique({ where: { key } });
     if (clash) {
       throw new ConflictException(
         clash.deletedAt
-          ? 'Доп. услуга с таким ключом лежит в корзине — восстановите её или выберите другой ключ'
-          : 'Доп. услуга с таким ключом уже есть',
+          ? 'Доп. услуга с таким названием лежит в корзине — восстановите её или измените название'
+          : 'Доп. услуга с таким названием уже есть',
       );
     }
 

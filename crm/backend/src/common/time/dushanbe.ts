@@ -46,7 +46,16 @@ function startOfLastDays(days: number, d: Date = new Date()): Date {
 
 /** Последние 7 дней, включая сегодня (как это понимает пользователь) */
 export function startOfWeek(d: Date = new Date()): Date {
-  return startOfLastDays(7, d);
+  /*
+   * Понедельник текущей недели, а не «сегодня минус семь дней».
+   * Иначе фильтр «Неделя» и календарь показывали разные недели, и цифры
+   * в отчётах не сходились с тем, что человек видит в календаре.
+   */
+  const key = dayKey(d);
+  const dow = new Date(`${key}T00:00:00.000Z`).getUTCDay(); // 0 — воскресенье
+  const shift = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(dayUTC(key).getTime() + shift * 24 * 60 * 60 * 1000);
+  return new Date(monday.getTime() - OFFSET_MS);
 }
 
 /** Первое число текущего месяца по Душанбе */

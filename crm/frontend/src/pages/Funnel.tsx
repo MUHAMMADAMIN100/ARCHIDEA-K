@@ -39,6 +39,19 @@ function cardDate(iso: string): string {
 
 const NO_MANAGER = '__none__';
 
+/** Цвет левой рамки карточки по этапу воронки */
+const STAGE_BORDER: Record<FunnelStage, string> = {
+  NEW: 'border-l-navy-300',
+  PROCESSING: 'border-l-blue-400',
+  INSPECTION: 'border-l-amber-400',
+  OFFER: 'border-l-purple-400',
+  CONFIRMED: 'border-l-cyan-400',
+  IN_PROGRESS: 'border-l-indigo-400',
+  DONE: 'border-l-teal-400',
+  PAID: 'border-l-emerald-500',
+  REJECTED: 'border-l-red-400',
+};
+
 // Тело карточки заказа. Вынесено на уровень модуля (а не внутрь Funnel),
 // чтобы при поллинге/оптимистичных обновлениях карточки НЕ пересоздавались
 // (иначе новая ссылка на компонент → полный ремоунт всех карточек и рывок).
@@ -65,6 +78,12 @@ function OrderCardBody({
           </span>
         )}
       </div>
+      {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
+      {o.client?.phone && (
+        <div className="mt-0.5 text-xs font-medium text-brand-600">
+          +992 {o.client.phone}
+        </div>
+      )}
       <div className="mt-1 text-xs text-navy-400">
         {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
       </div>
@@ -78,11 +97,12 @@ function OrderCardBody({
       </div>
 
       {/* Менеджер и дата заявки */}
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-navy-100 pt-1.5 text-[11px] text-navy-400">
-        <span className="truncate">
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-navy-100 pt-1.5 text-[11px]">
+        <span className="shrink-0 text-navy-400">{cardDate(o.createdAt)}</span>
+        {/* чип менеджера — сразу видно, кто ведёт заказ */}
+        <span className="min-w-0 truncate rounded-md bg-navy-100 px-1.5 py-0.5 font-medium text-navy-600">
           {o.manager?.fullName ?? 'без менеджера'}
         </span>
-        <span className="shrink-0">{cardDate(o.createdAt)}</span>
       </div>
 
       {/* Мобильные контролы смены этапа — только на тач-устройствах */}
@@ -327,18 +347,37 @@ export function Funnel() {
         <div className="flex gap-4 overflow-x-auto pb-4">
           {board.map((col) => (
             <div key={col.stage} className="flex w-72 shrink-0 flex-col">
-              <div className="mb-3 flex items-center justify-between">
-                <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>
-                <span className="text-sm font-bold text-navy-400">
-                  <DrillValue
-                    tone="muted"
-                    disabled={col.orders.length === 0}
-                    title={`Все заказы на этапе «${col.label}» с суммами`}
-                    onClick={() => setStageDrill(col)}
-                  >
-                    {col.orders.length}
-                  </DrillValue>
-                </span>
+              {/*
+                Шапка этапа: название, сумма денег и количество карточек.
+                Сумма нужна руководителю не меньше количества — по ней видно,
+                сколько денег «висит» на каждом шаге воронки.
+              */}
+              <div className="mb-3 rounded-xl border border-navy-100 bg-white px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>
+                  <span className="shrink-0 text-sm font-bold text-navy-400">
+                    <DrillValue
+                      tone="muted"
+                      disabled={col.orders.length === 0}
+                      title={`Все заказы на этапе «${col.label}» с суммами`}
+                      onClick={() => setStageDrill(col)}
+                    >
+                      {col.orders.length}
+                    </DrillValue>
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-navy-500">
+                  Сумма:{' '}
+                  <span className="font-bold text-navy-800">
+                    {formatPrice(
+                      col.amount ??
+                        col.orders.reduce(
+                          (sum, o) => sum + (o.finalPrice ?? o.estimatedPrice ?? 0),
+                          0,
+                        ),
+                    )}
+                  </span>
+                </div>
               </div>
 
               <Droppable droppableId={col.stage} isDropDisabled={isTouch}>
@@ -367,7 +406,13 @@ export function Funnel() {
                               if (draggingRef.current) return;
                               setOpenOrder(o);
                             }}
-                            className={`card cursor-pointer p-3.5 text-left transition-shadow hover:shadow-lg ${
+                            /*
+                              Цветная рамка по этапу — как на образце: этап
+                              карточки виден, не читая шапку колонки.
+                            */
+                            className={`card cursor-pointer border-l-4 p-3.5 text-left transition-shadow hover:shadow-lg ${
+                              STAGE_BORDER[o.stage]
+                            } ${
                               snap.isDragging ? 'shadow-xl ring-2 ring-navy-300' : ''
                             }`}
                           >

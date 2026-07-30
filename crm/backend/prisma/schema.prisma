@@ -399,6 +399,8 @@ model Client {
   source        LeadSource  @default(SITE)
   tags          ClientTag[] @default([])
   notes         String? // комментарии и заметки менеджера
+  /// Постоянная скидка клиента в сомони — подставляется в новые заказы
+  discount      Int         @default(0)
   /// ТЗ 10.2 — постоянные предпочтения клиента (без запаха хлорки, есть кот, обувь снимать…)
   preferences   String?
   lastContactAt DateTime    @default(now())
@@ -462,7 +464,9 @@ model Order {
   hasUtilities  Boolean?
   accessMethod  AccessMethod?
   comment       String?
-  extras        Json? // выбранные доп. услуги
+  extras        Json? // выбранные доп. услуги: ключ → количество
+  /// Скидка по заказу в сомони. Вычитается из суммы работ и доп. услуг.
+  discount      Int              @default(0)
 
   // этапы воронки
   inspectionDate  DateTime? // 3. осмотр

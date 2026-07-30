@@ -22,7 +22,12 @@ export const DIRT_LEVELS: { id: DirtLevel; title: string; hint: string }[] = [
 
 /** Услуга: уборка по м² (3 цены по степени) или мебель (цена за место) */
 export interface CleaningType {
-  id: 'general' | 'post_renovation' | 'furniture';
+  /*
+   * Идентификатор — произвольная строка, а не тройка литералов: директор
+   * заводит новые услуги в CRM, и сайт обязан их показывать. Раньше тип
+   * допускал только три значения, поэтому новая услуга не могла тут появиться.
+   */
+  id: string;
   title: string;
   /** Цены по степени загрязнения (для мебели все три равны) */
   prices: Record<DirtLevel, number>;
@@ -60,7 +65,8 @@ export const CLEANING_TYPES: CleaningType[] = [
 
 /** Дополнительная услуга с фиксированной ценой */
 export interface ExtraService {
-  id: 'windows' | 'fridge' | 'oven' | 'ironing';
+  /* Как и у услуги: произвольный ключ из CRM, а не фиксированный набор */
+  id: string;
   title: string;
   /** Цена за единицу */
   price: number;

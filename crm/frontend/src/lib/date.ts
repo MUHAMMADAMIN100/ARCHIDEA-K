@@ -66,14 +66,31 @@ export const PERIOD_LABEL: Record<PeriodPreset, string> = {
   all: 'Всё время',
 };
 
-/** Диапазон дат для готового периода */
+/**
+ * Начало календарной недели (понедельник) для даты «ГГГГ-ММ-ДД».
+ *
+ * Раньше «Неделя» означала «последние 7 дней», и фильтр показывал 24–30 июля,
+ * тогда как календарь показывал ту же неделю как 27.07–02.08. Две разные
+ * недели в одной системе — источник постоянной путаницы в отчётах.
+ */
+export function startOfWeekISO(iso: string = todayISO()): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  const dow = d.getUTCDay(); // 0 — воскресенье
+  const shift = dow === 0 ? -6 : 1 - dow;
+  return addDays(iso, shift);
+}
+
+/** Диапазон дат для готового периода — полный календарный период */
 export function rangeOf(preset: PeriodPreset): { from: string; to: string } {
   const today = todayISO();
+  const year = today.slice(0, 4);
   switch (preset) {
     case 'today':
       return { from: today, to: today };
-    case 'week':
-      return { from: addDays(today, -6), to: today };
+    case 'week': {
+      const from = startOfWeekISO(today);
+      return { from, to: addDays(from, 6) };
+    }
     case 'prevMonth': {
       const prev = shiftMonth(today, -1);
       return monthRange(prev);
@@ -81,18 +98,18 @@ export function rangeOf(preset: PeriodPreset): { from: string; to: string } {
     case 'quarter': {
       const month = Number(today.slice(5, 7));
       const first = Math.floor((month - 1) / 3) * 3 + 1;
-      return {
-        from: `${today.slice(0, 4)}-${String(first).padStart(2, '0')}-01`,
-        to: today,
-      };
+      const last = first + 2;
+      const from = `${year}-${String(first).padStart(2, '0')}-01`;
+      // конец квартала — последний день третьего его месяца
+      return { from, to: monthRange(`${year}-${String(last).padStart(2, '0')}-01`).to };
     }
     case 'year':
-      return { from: `${today.slice(0, 4)}-01-01`, to: today };
+      return { from: `${year}-01-01`, to: `${year}-12-31` };
     case 'all':
       return { from: '', to: '' };
     case 'month':
     default:
-      return { from: `${today.slice(0, 7)}-01`, to: today };
+      return monthRange(today);
   }
 }
 
