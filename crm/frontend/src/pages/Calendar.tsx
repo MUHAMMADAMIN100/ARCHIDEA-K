@@ -309,11 +309,12 @@ export function Calendar() {
         </div>
 
         {/*
-          На 320 px этот ряд распирал страницу: 170 px под заголовок месяца
-          плюс две стрелки и «Сегодня» не влезали. Заголовок сжимается и
-          переносится по словам, кнопка мельче — стрелки остаются нажимаемыми.
+          На 320 px ряд «стрелки — месяц — Сегодня» не влезал: под заголовок
+          отводилось 170 px. Теперь на телефоне он занимает всю строку целиком,
+          а заголовок держится в одну линию (без nowrap он рассыпался по букве
+          на строку) и растягивается между стрелками.
         */}
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="flex w-full items-center gap-1 sm:w-auto">
           <button
             onClick={() => shift(-1)}
             className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 sm:p-2"
@@ -321,7 +322,7 @@ export function Calendar() {
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-0 flex-1 text-center text-xs font-bold text-navy-900 sm:min-w-[170px] sm:flex-none sm:text-sm">
+          <span className="flex-1 whitespace-nowrap text-center text-xs font-bold text-navy-900 sm:min-w-[170px] sm:flex-none sm:text-sm">
             {title}
           </span>
           <button
