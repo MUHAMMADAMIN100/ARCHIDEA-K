@@ -175,3 +175,22 @@ export function toDushanbeInput(d: Date | string | null | undefined): string {
   if (Number.isNaN(date.getTime())) return '';
   return new Date(date.getTime() + OFFSET_MS).toISOString().slice(0, 16);
 }
+
+/**
+ * «12.08.2026 14:30» по Душанбе — для текста уведомлений и сообщений.
+ *
+ * Сервер на Railway живёт в UTC, поэтому форматировать локальным временем
+ * процесса нельзя: человек увидел бы время со сдвигом на пять часов.
+ */
+export function formatDushanbe(d: Date): string {
+  const parts = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('day')}.${get('month')}.${get('year')} ${get('hour')}:${get('minute')}`;
+}

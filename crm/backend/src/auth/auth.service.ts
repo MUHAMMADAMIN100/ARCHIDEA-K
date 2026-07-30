@@ -166,6 +166,10 @@ export class AuthService {
         fullName: user.fullName,
         role: user.role,
         canManageOps: user.canManageOps,
+        // персональные права отдаём сразу при входе: иначе меню сразу после
+        // логина рисуется без «Задач компании» и «Корзины», пока не обновится /me
+        canManageTasks: user.canManageTasks,
+        canSeeTrash: user.canSeeTrash,
       },
     };
   }

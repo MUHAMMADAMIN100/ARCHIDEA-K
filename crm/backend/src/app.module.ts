@@ -15,7 +15,6 @@ import { CleanersModule } from './cleaners/cleaners.module';
 import { ClientsModule } from './clients/clients.module';
 import { OrdersModule } from './orders/orders.module';
 import { TasksModule } from './tasks/tasks.module';
-import { ScheduleModule as MeetingsModule } from './schedule/schedule.module';
 import { TariffsModule } from './tariffs/tariffs.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { LeadsModule } from './leads/leads.module';
@@ -51,7 +50,6 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ClientsModule,
     OrdersModule,
     TasksModule,
-    MeetingsModule,
     TariffsModule,
     AnalyticsModule,
     LeadsModule,

@@ -40,6 +40,7 @@ interface UserDetailData {
   mainTask?: string | null;
   canManageOps?: boolean;
   canManageTasks?: boolean;
+  canSeeTrash?: boolean;
   isActive: boolean;
   createdAt: string;
   stats: {
@@ -78,6 +79,7 @@ export function UserDetail() {
     role: Role;
     canManageOps: boolean;
     canManageTasks: boolean;
+    canSeeTrash: boolean;
     isActive: boolean;
     password?: string;
   }) => {
@@ -95,6 +97,7 @@ export function UserDetail() {
             role: payload.role,
             canManageOps: payload.canManageOps,
             canManageTasks: payload.canManageTasks,
+            canSeeTrash: payload.canSeeTrash,
             isActive: payload.isActive,
           }
         : d,
@@ -350,6 +353,7 @@ function EditUserModal({
     role: Role;
     canManageOps: boolean;
     canManageTasks: boolean;
+    canSeeTrash: boolean;
     isActive: boolean;
     password?: string;
   }) => void;
@@ -365,6 +369,7 @@ function EditUserModal({
   const [canManageOps, setCanManageOps] = useState(!!user.canManageOps);
   // ТЗ 1.2 — личный доступ к модулю задач (у Ироды)
   const [canManageTasks, setCanManageTasks] = useState(!!user.canManageTasks);
+  const [canSeeTrash, setCanSeeTrash] = useState(!!user.canSeeTrash);
   const [isActive, setIsActive] = useState(user.isActive);
   const [password, setPassword] = useState('');
 
@@ -380,6 +385,7 @@ function EditUserModal({
       role,
       canManageOps,
       canManageTasks,
+      canSeeTrash,
       isActive,
       ...(password ? { password } : {}),
     });
@@ -485,6 +491,24 @@ function EditUserModal({
             </span>
           </label>
         )}
+
+        {/* Корзина — персональное право: руководителей несколько, а разбирать
+            удалённое доверено конкретным людям, поэтому от роли не зависит */}
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={canSeeTrash}
+            onChange={(e) => setCanSeeTrash(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-navy-500"
+          />
+          <span className="text-sm text-navy-800">
+            <span className="font-medium">Доступ к корзине</span>
+            <span className="mt-0.5 block text-xs text-navy-500">
+              Видит удалённые записи и возвращает их. Удалять безвозвратно
+              может только руководитель с этим доступом.
+            </span>
+          </span>
+        </label>
 
         <div>
           <label className="label">Новый пароль (необязательно)</label>

@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Eye, EyeOff, X } from 'lucide-react';
 
 /** Поле ввода пароля с кнопкой «показать/скрыть» */
@@ -112,6 +113,9 @@ export function ErrorState({
   );
 }
 
+/** Сколько модалок сейчас открыто — прокрутку страницы отпускаем на последней */
+let lockCount = 0;
+
 export function Modal({
   open,
   onClose,
@@ -126,25 +130,47 @@ export function Modal({
   wide?: boolean;
 }) {
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = '';
-      };
-    }
+    if (!open) return;
+    /*
+     * Считаем открытые окна: модалка может открыться из модалки, и раньше
+     * закрытие вложенной снимало блокировку прокрутки, хотя внешняя ещё висела
+     * — страница за окном начинала ездить.
+     */
+    lockCount += 1;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      lockCount -= 1;
+      if (lockCount === 0) document.body.style.overflow = '';
+    };
   }, [open]);
 
   if (!open) return null;
-  return (
+
+  /*
+   * Через портал в body — обязательно.
+   *
+   * У оверлея есть backdrop-blur, а размытие делает элемент точкой отсчёта для
+   * вложенных position: fixed. Из-за этого модалка, открытая ИЗ другой модалки
+   * («Напомнить о звонке» из карточки заказа), считала «верх экрана» от
+   * прокрученного родителя и всплывала за пределами видимой части — человеку
+   * приходилось скроллить наверх, чтобы её найти. Портал уводит разметку в
+   * body, где отсчёт снова идёт от окна.
+   */
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/40 p-4 backdrop-blur-sm sm:p-8"
+      // items-center: окно всегда в центре экрана, как бы страница ни была прокручена
+      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/10 p-4 backdrop-blur-md sm:p-8"
       onClick={onClose}
     >
+      {/*
+       * Длинная форма прокручивается ВНУТРИ окна, а не уводит вниз весь оверлей
+       * — иначе центрирование теряется, как только содержимое выше экрана.
+       */}
       <div
-        className={`card my-auto w-full ${wide ? 'max-w-2xl' : 'max-w-md'} p-6`}
+        className={`card flex max-h-[90vh] w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} p-6`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex shrink-0 items-center justify-between">
           <h2 className="text-lg font-bold text-navy-900">{title}</h2>
           <button
             onClick={onClose}
@@ -153,8 +179,11 @@ export function Modal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        {children}
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+          {children}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

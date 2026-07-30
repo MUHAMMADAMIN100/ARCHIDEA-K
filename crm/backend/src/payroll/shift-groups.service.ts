@@ -9,7 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
-import { dayUTC, formatDate, rangeUTC } from '../common/time/dushanbe';
+import { dayKey, dayUTC, formatDate, rangeUTC } from '../common/time/dushanbe';
 import {
   CloseShiftGroupDto,
   CreateShiftGroupDto,
@@ -179,6 +179,95 @@ export class ShiftGroupsService {
       return group;
     });
 
+    return created;
+  }
+
+  /**
+   * Выезд по заказу, дошедшему до этапа «Осмотр объекта».
+   *
+   * Осмотр — это фактический выезд на объект, и раньше менеджер заводил его
+   * в «Сменах» руками, повторно вбивая адрес, дату, состав и ответственного —
+   * всё то, что уже есть в карточке заказа. Теперь выезд появляется сам.
+   *
+   * Заполняем тем, что известно на момент осмотра: адрес заказа, дату уборки
+   * (или сегодняшнюю, если не согласована), назначенную команду и менеджера
+   * заказа. Пустой адрес не повод отказать в создании — иначе выезда просто
+   * не будет, и человек про него забудет; вместо этого ставим явную пометку,
+   * которую видно в списке.
+   *
+   * Повторный заход на этап второй выезд не создаёт.
+   */
+  async createFromOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    fallbackUserId: string,
+  ): Promise<{ id: string } | null> {
+    const existing = await tx.shiftGroup.findFirst({
+      where: { orderId, ...NOT_DELETED },
+      select: { id: true },
+    });
+    if (existing) return null;
+
+    const order = await tx.order.findFirst({
+      where: { id: orderId, ...NOT_DELETED },
+      select: {
+        id: true,
+        address: true,
+        scheduledDate: true,
+        preferredDate: true,
+        preferredTime: true,
+        managerId: true,
+        manager: { select: { id: true, fullName: true } },
+        cleaners: {
+          select: {
+            id: true,
+            fullName: true,
+            rate: true,
+            brigadeId: true,
+            leaderOf: { select: { id: true } },
+          },
+        },
+      },
+    });
+    if (!order) return null;
+
+    const members = order.cleaners.map((c) => ({
+      cleanerId: c.id,
+      fullName: c.fullName,
+      rate: c.rate,
+      role: c.leaderOf ? 'Бригадир' : 'Клинер',
+    }));
+
+    // бригада и бригадир — по составу: если в команде есть бригадир, он и ведёт выезд
+    const leader = order.cleaners.find((c) => c.leaderOf);
+    const brigadeId =
+      order.cleaners.find((c) => c.brigadeId)?.brigadeId ?? null;
+    const brigade = brigadeId
+      ? await tx.brigade.findUnique({
+          where: { id: brigadeId },
+          select: { id: true, name: true },
+        })
+      : null;
+
+    const when = order.scheduledDate ?? order.preferredDate ?? new Date();
+    const created = await tx.shiftGroup.create({
+      data: {
+        date: dayUTC(dayKey(when)),
+        address: order.address?.trim() || 'Адрес не указан',
+        orderId: order.id,
+        startTime: order.preferredTime ?? null,
+        brigadeId: brigade?.id ?? null,
+        brigadeName: brigade?.name ?? null,
+        brigadierId: leader?.id ?? null,
+        brigadierName: leader?.fullName ?? null,
+        managerId: order.managerId ?? fallbackUserId,
+        managerName: order.manager?.fullName ?? null,
+        note: 'Создан автоматически на этапе «Осмотр объекта»',
+        createdById: fallbackUserId,
+        members: { create: members },
+      },
+      select: { id: true },
+    });
     return created;
   }
 

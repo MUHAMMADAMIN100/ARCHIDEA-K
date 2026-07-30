@@ -664,9 +664,11 @@ export function OrderModal({
                 </div>
                 <div>
                   <label className="label">Дата и время уборки</label>
+                  {/* узкая колонка: короткая подпись, чтобы дата и время встали в один ряд */}
                   <div className="flex gap-2">
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       <DatePicker
+                        placeholder="дд.мм.гггг"
                         value={scheduledDate}
                         onChange={(v) => {
                           markTouched('scheduledDate');
@@ -676,7 +678,7 @@ export function OrderModal({
                     </div>
                     <input
                       type="time"
-                      className="input w-28"
+                      className="input h-11 w-[7.5rem] shrink-0"
                       value={scheduledTime}
                       onChange={(e) => {
                         markTouched('scheduledDate');

@@ -25,7 +25,6 @@ export type TaskType =
   | 'VISIT'
   | 'MEETING'
   | 'PERSONAL';
-export type ScheduleType = 'INSPECTION' | 'CLEANING_VISIT' | 'MEETING';
 export type AccessMethod = 'KEYS' | 'ONSITE';
 
 export interface AuthUser {
@@ -37,6 +36,8 @@ export interface AuthUser {
   canManageOps?: boolean;
   /** ТЗ 1.2 — полный доступ к модулю задач (все задачи компании) */
   canManageTasks?: boolean;
+  /** личный доступ к корзине (не следует из роли) */
+  canSeeTrash?: boolean;
 }
 
 /** Видит ли пользователь данные всей компании (директор или ops-менеджер) */
@@ -69,12 +70,18 @@ export function userIsOpsOnly(u?: AuthUser | null): boolean {
   return !!u && u.canManageOps === true && u.role !== 'DIRECTOR';
 }
 
-/** Корзина: директор и менеджеры; безвозвратная очистка — только директор */
+/**
+ * Корзина — по личному праву, а не по роли.
+ *
+ * Руководителей в компании несколько, но разбирать удалённое доверено
+ * конкретным людям, поэтому доступ выдаётся флагом в карточке сотрудника.
+ * Очищать безвозвратно вправе только руководитель с этим доступом.
+ */
 export function userSeesTrash(u?: AuthUser | null): boolean {
-  return !!u;
+  return u?.canSeeTrash === true;
 }
 export function userCanPurge(u?: AuthUser | null): boolean {
-  return u?.role === 'DIRECTOR';
+  return userSeesTrash(u) && u?.role === 'DIRECTOR';
 }
 
 export interface Manager {
@@ -277,28 +284,32 @@ export interface Task {
   createdAt: string;
 }
 
-export interface ScheduleEvent {
-  id: string;
-  title: string;
-  type: ScheduleType;
-  date: string;
-  note?: string;
-  orderId?: string;
-  managerId: string;
-  manager?: { id: string; fullName: string };
-}
+/** Держать в согласии с enum NotificationType на бэкенде */
+export type NotificationKind =
+  | 'NEW_LEAD'
+  | 'NEW_TASK'
+  | 'TASK_STATUS_CHANGED'
+  | 'ORDER_STATUS_CHANGED'
+  | 'REPORT_SENT'
+  | 'ORDER_PREFERENCES'
+  | 'REMINDER_DUE'
+  | 'REMINDER_ASSIGNED'
+  | 'PROPOSAL_SENT'
+  | 'CHECKLIST_DONE'
+  | 'SHIFT_CLOSED'
+  | 'VISIT_PLANNED'
+  | 'BONUS_ACCRUED'
+  | 'REPORT_DRAFT_READY';
 
 export interface NotificationItem {
   id: string;
-  type:
-    | 'NEW_LEAD'
-    | 'NEW_TASK'
-    | 'TASK_STATUS_CHANGED'
-    | 'ORDER_STATUS_CHANGED'
-    | 'REPORT_SENT';
+  type: NotificationKind;
   title: string;
   message: string;
   isRead: boolean;
+  /** заполнены, когда уведомление привязано к заказу или задаче */
+  orderId?: string | null;
+  taskId?: string | null;
   createdAt: string;
 }
 

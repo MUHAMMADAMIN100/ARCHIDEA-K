@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
-import { userManagesTasks, userSeesAll } from '../types';
+import { userManagesTasks, userSeesAll, userSeesTrash } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -41,6 +41,7 @@ interface NavItem {
   finance?: boolean; // финансовый раздел — скрыт от ops-менеджеров
   seesAll?: boolean; // только расширенный доступ (директор + ops-менеджер)
   tasksAll?: boolean; // полный доступ к задачам (ТЗ 1.2 — включая Ироду)
+  trash?: boolean; // корзина — по личному праву сотрудника
 }
 
 /**
@@ -63,7 +64,6 @@ const NAV_GROUPS: NavGroup[] = [
       // календарь задач — вместе с доступом к задачам, иначе доступ Ироды
       // получается наполовину нерабочим
       { to: '/calendar', label: 'Календарь', icon: CalendarRange, tasksAll: true },
-      { to: '/schedule', label: 'Расписание', icon: CalendarDays },
     ],
   },
   {
@@ -95,7 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/tariffs', label: 'Услуги и цены', icon: Tags, roles: ['DIRECTOR'] },
       { to: '/users', label: 'Сотрудники', icon: UserCog, roles: ['DIRECTOR'] },
       { to: '/history', label: 'История изменений', icon: History, seesAll: true },
-      { to: '/trash', label: 'Корзина', icon: Trash2 },
+      { to: '/trash', label: 'Корзина', icon: Trash2, trash: true },
       { to: '/security', label: 'Безопасность', icon: ShieldCheck, roles: ['DIRECTOR'] },
     ],
   },
@@ -125,6 +125,7 @@ export function Layout() {
     if (i.finance && isOps) return false;
     if (i.seesAll && !userSeesAll(user)) return false;
     if (i.tasksAll && !userManagesTasks(user)) return false;
+    if (i.trash && !userSeesTrash(user)) return false;
     return true;
   };
   const groups = NAV_GROUPS.map((g) => ({
@@ -150,7 +151,6 @@ export function Layout() {
       '/clients?sort=recent',
       '/analytics/summary',
       '/tasks',
-      '/schedule',
       '/cleaners',
       '/cleaners/team-tasks',
       '/brigades',

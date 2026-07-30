@@ -57,6 +57,7 @@ export const FIELD_LABELS: Record<string, string> = {
   acceptsLeads: 'Получает заявки',
   canManageOps: 'Расширенный доступ',
   canManageTasks: 'Полный доступ к задачам',
+  canSeeTrash: 'Доступ к корзине',
   stage: 'Этап воронки',
   source: 'Источник',
   cleaningType: 'Вид уборки',

@@ -29,12 +29,10 @@ export type Permission =
   | 'checklists:manage' // править шаблоны чек-листов (ТЗ 8)
   | 'proposals:templates'; // править шаблоны КП (ТЗ 9.1)
 
-/** Директор — полный доступ ко всему */
+/** Директор — полный доступ ко всему, кроме корзины (её выдают отдельно) */
 const DIRECTOR: Permission[] = [
   'tasks:all',
   'services:manage',
-  'trash:view',
-  'trash:purge',
   'audit:view',
   'finance:view',
   'finance:manage',
@@ -49,22 +47,34 @@ const DIRECTOR: Permission[] = [
  */
 const OPS: Permission[] = [
   'tasks:all',
-  'trash:view',
   'audit:view',
   'checklists:manage',
   'proposals:templates',
 ];
 
 /** Обычный менеджер */
-const MANAGER: Permission[] = ['trash:view'];
+const MANAGER: Permission[] = [];
 
 export function permissionsOf(user: AuthUser | null | undefined): Permission[] {
   if (!user) return [];
-  if (user.role === Role.DIRECTOR) return DIRECTOR;
 
-  const list = new Set<Permission>(user.canManageOps ? OPS : MANAGER);
+  const base =
+    user.role === Role.DIRECTOR ? DIRECTOR : user.canManageOps ? OPS : MANAGER;
+  const list = new Set<Permission>(base);
+
   // Персональный доступ к модулю задач (ТЗ 1.2 — Ирода)
   if (user.canManageTasks) list.add('tasks:all');
+
+  /*
+   * Корзина — по персональному праву, а не по роли. Руководителей в компании
+   * несколько, но разбирать удалённое доверено конкретным людям; чистить
+   * безвозвратно вправе только руководитель, и только с этим правом.
+   */
+  if (user.canSeeTrash) {
+    list.add('trash:view');
+    if (user.role === Role.DIRECTOR) list.add('trash:purge');
+  }
+
   return [...list];
 }
 

@@ -51,6 +51,7 @@ export class UpdateUserDto {
   @IsOptional() @IsBoolean() canManageOps?: boolean;
   /** ТЗ 1.2 — полный доступ к модулю задач */
   @IsOptional() @IsBoolean() canManageTasks?: boolean;
+  @IsOptional() @IsBoolean() canSeeTrash?: boolean;
   @IsOptional() @IsBoolean() acceptsLeads?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
 

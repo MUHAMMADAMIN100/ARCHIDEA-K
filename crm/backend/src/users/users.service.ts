@@ -43,6 +43,7 @@ const SAFE_SELECT = {
   canManageOps: true,
   /** ТЗ 1.2 — полный доступ к модулю задач */
   canManageTasks: true,
+  canSeeTrash: true,
   /** ТЗ 10 — личные уведомления в Telegram */
   telegramChatId: true,
   telegramEnabled: true,
@@ -86,7 +87,15 @@ export class UsersService {
     }
     return this.prisma.user.findMany({
       where: { ...NOT_DELETED, isActive: true },
-      select: { id: true, fullName: true, position: true, role: true },
+      // isActive отдаём осознанно: клиент фильтрует список по этому полю, а без
+      // него значение приходило undefined и выпадающий список оставался пустым
+      select: {
+        id: true,
+        fullName: true,
+        position: true,
+        role: true,
+        isActive: true,
+      },
       orderBy: { fullName: 'asc' },
     });
   }
@@ -230,6 +239,7 @@ export class UsersService {
       role?: Role;
       canManageOps?: boolean;
       canManageTasks?: boolean;
+      canSeeTrash?: boolean;
       acceptsLeads?: boolean;
       isActive?: boolean;
       password?: string;
@@ -250,6 +260,9 @@ export class UsersService {
     if (dto.duties !== undefined) data.duties = dto.duties || null;
     if (dto.mainTask !== undefined) data.mainTask = dto.mainTask || null;
     if (dto.canManageOps !== undefined) data.canManageOps = dto.canManageOps;
+    if (dto.canSeeTrash !== undefined) {
+      data.canSeeTrash = dto.canSeeTrash;
+    }
     if (dto.canManageTasks !== undefined) {
       data.canManageTasks = dto.canManageTasks;
     }
@@ -302,6 +315,7 @@ export class UsersService {
         'role',
         'canManageOps',
         'canManageTasks',
+        'canSeeTrash',
         'acceptsLeads',
         'isActive',
         'passwordHash',

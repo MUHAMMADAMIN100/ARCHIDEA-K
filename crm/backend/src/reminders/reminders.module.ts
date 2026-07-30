@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { RemindersService } from './reminders.service';
 import { RemindersController } from './reminders.controller';
 import { RemindersScheduler } from './reminders.scheduler';
@@ -10,6 +11,7 @@ import { RemindersScheduler } from './reminders.scheduler';
  * внедряют его, чтобы создать Reminder(source=PREORDER) прямо из карточки заказа.
  */
 @Module({
+  imports: [NotificationsModule],
   providers: [RemindersService, RemindersScheduler],
   controllers: [RemindersController],
   exports: [RemindersService],

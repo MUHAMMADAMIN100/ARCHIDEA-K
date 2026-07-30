@@ -29,12 +29,15 @@ const TEAM: {
   acceptsLeads: boolean;
   /** ТЗ 1.2 — полный доступ к модулю задач всей компании */
   canManageTasks?: boolean;
+  /** доступ к корзине — персональное право (см. permissions.ts) */
+  canSeeTrash?: boolean;
 }[] = [
   {
     login: 'anisa',
     fullName: 'Аниса Мукими',
     role: Role.DIRECTOR,
     acceptsLeads: false,
+    canSeeTrash: true,
     position: 'Директор',
     duties: [
       'Стратегическое управление компанией',
@@ -51,6 +54,7 @@ const TEAM: {
     fullName: 'Администратор',
     role: Role.DIRECTOR,
     acceptsLeads: false,
+    canSeeTrash: true,
     position: 'Основатель',
     duties: [
       'Полный доступ ко всем разделам системы',
@@ -133,11 +137,10 @@ const TEAM: {
   {
     login: 'iroda',
     fullName: 'Ирода',
-    role: Role.MANAGER,
+    role: Role.DIRECTOR,
     acceptsLeads: false,
-    // ТЗ 1.2: ведёт задачи всей компании, оставаясь менеджером
     canManageTasks: true,
-    position: 'Менеджер',
+    position: 'Руководитель',
     duties: [
       'Ведение задач всей компании',
       'Назначение и контроль исполнителей',
@@ -236,17 +239,26 @@ export class SetupService implements OnApplicationBootstrap {
    * блокировка после неудачных попыток, аккаунт активируется, а sessionEpoch
    * увеличивается — все ранее выданные токены перестают действовать.
    *
-   * ВАЖНО: флаг разовый. Пока он включён, при каждом рестарте пароли
-   * возвращаются к значениям из окружения, то есть смена пароля сотрудником
-   * внутри CRM будет откатываться. Снимите флаг сразу после проверки входа.
+   * Спасаем ТОЛЬКО аккаунты, в которые ещё ни разу не входили.
+   *
+   * Раньше синхронизация срабатывала на каждом рестарте, пока флаг стоит в
+   * окружении. Последствия были ощутимые: при каждом деплое росла версия
+   * сессии, и люди в разгар работы получали «Сессия устарела, войдите заново»
+   * — например, на кнопке «Создать клиента». А пароль, изменённый сотрудником
+   * внутри CRM, откатывался к значению из окружения.
+   *
+   * Признак «аккаунтом уже пользуются» — хотя бы один успешный вход в журнале.
+   * Такой аккаунт трогать нельзя: пароль в нём знают, а живые сессии рвать
+   * нечем. Чтобы принудительно сменить пароль, есть кнопка «Сбросить пароль»
+   * в разделе «Команда» — она и предназначена для этого.
    */
   private async syncPasswords() {
     const flag = (process.env.SEED_RESET_PASSWORDS || '').trim().toLowerCase();
     if (flag !== 'true' && flag !== '1') return;
 
     this.logger.warn(
-      'SEED_RESET_PASSWORDS включён — пароли сотрудников синхронизируются с ' +
-        'переменными окружения. Снимите флаг после того, как убедитесь, что вход работает.',
+      'SEED_RESET_PASSWORDS включён — пароли будут заданы только тем ' +
+        'сотрудникам, которые ещё ни разу не входили. Действующие сессии не рвутся.',
     );
 
     for (const t of TEAM) {
@@ -262,6 +274,20 @@ export class SetupService implements OnApplicationBootstrap {
           // паролем, либо логин отличается от ожидаемого
           continue;
         }
+
+        // в аккаунт уже успешно входили — пароль известен, не вмешиваемся
+        const usedBefore = await this.prisma.loginAttempt.findFirst({
+          where: { login: t.login, success: true },
+          select: { id: true },
+        });
+        if (usedBefore) {
+          this.logger.log(`Пропущен @${t.login}: аккаунтом уже пользуются`);
+          continue;
+        }
+
+        // пароль уже совпадает с окружением — записывать нечего, и главное
+        // незачем поднимать версию сессии
+        if (await bcrypt.compare(raw, user.passwordHash)) continue;
 
         await this.prisma.user.update({
           where: { id: user.id },
@@ -329,6 +355,10 @@ export class SetupService implements OnApplicationBootstrap {
             duties: t.duties.join('\n'),
             mainTask: t.mainTask,
             acceptsLeads: t.acceptsLeads,
+            // персональные права из справочника: без них новый сотрудник
+            // создавался с доступом по умолчанию, а не с описанным в TEAM
+            canManageTasks: t.canManageTasks ?? false,
+            canSeeTrash: t.canSeeTrash ?? false,
           },
         });
         this.logger.log(`Сотрудник создан: ${t.fullName} (@${t.login})`);

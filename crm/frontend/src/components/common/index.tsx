@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { EmptyState, ErrorState, Spinner } from '../ui';
 import { useFetch } from '../../api/hooks';
 import {
@@ -324,16 +324,24 @@ export function CleanerPicker({
             {g.items.map((c) => {
               const active = value.includes(c.id);
               return (
+                /*
+                 * Выбранный клинер должен читаться с одного взгляда: состав
+                 * бригады набирают быстро и на глаз. Прежняя подсветка почти не
+                 * отличалась от обычного чипа, поэтому здесь голубая рамка с
+                 * обводкой, заливка и галочка — три признака сразу.
+                 */
                 <button
                   key={c.id}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => toggle(c.id)}
-                  className={`rounded-lg border px-2.5 py-1.5 text-sm transition ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition ${
                     active
-                      ? 'border-brand-400 bg-brand-50 text-brand-800'
-                      : 'border-navy-100 text-navy-600 hover:border-brand-200'
+                      ? 'border-brand-500 bg-brand-100 font-medium text-brand-900 ring-2 ring-brand-200'
+                      : 'border-navy-100 text-navy-600 hover:border-brand-300 hover:bg-brand-50/40'
                   }`}
                 >
+                  {active && <Check className="h-3.5 w-3.5 shrink-0" />}
                   {c.fullName}
                 </button>
               );
@@ -367,6 +375,7 @@ export function UserPicker({
     );
   }
 
+  // /users/assignable уже возвращает только действующих сотрудников без клинеров
   const list = (data ?? []).filter((u) => (onlyActive ? u.isActive : true));
   return (
     <select
@@ -377,7 +386,7 @@ export function UserPicker({
       <option value="">{placeholder}</option>
       {list.map((u) => (
         <option key={u.id} value={u.id}>
-          {u.fullName}
+          {u.position ? `${u.fullName} — ${u.position}` : u.fullName}
         </option>
       ))}
     </select>

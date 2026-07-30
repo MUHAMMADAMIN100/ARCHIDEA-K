@@ -98,9 +98,11 @@ enum NotificationType {
   REPORT_SENT // менеджер отправил платёжную ведомость (руководителю)
   ORDER_PREFERENCES // заказ с учётом предпочтений клиента (ТЗ 10.2)
   REMINDER_DUE // пора перезвонить клиенту (ТЗ 10.1)
+  REMINDER_ASSIGNED // руководитель поставил напоминание на сотрудника
   PROPOSAL_SENT // коммерческое предложение отправлено (ТЗ 9.2)
   CHECKLIST_DONE // чек-лист по заказу закрыт (ТЗ 8)
   SHIFT_CLOSED // смена закрыта (ТЗ 4)
+  VISIT_PLANNED // выезд на осмотр создан автоматически из заказа
   BONUS_ACCRUED // начислена премия (ТЗ 7.2)
   REPORT_DRAFT_READY // по оплаченному заказу подготовлен черновик ведомости
 }
@@ -192,12 +194,6 @@ enum ReportStatus {
   ACCEPTED // принят основателем (смены/штрафы разнесены в выплаты)
 }
 
-enum ScheduleType {
-  INSPECTION // осмотр объекта
-  CLEANING_VISIT // выезд команды на уборку
-  MEETING // встреча
-}
-
 // ───────────────────────── MODELS ─────────────────────────
 
 /// Пользователь системы (Руководитель или Менеджер)
@@ -216,6 +212,9 @@ model User {
   /// ТЗ 1.2 — полный доступ к модулю задач: видит, создаёт, назначает и правит
   /// ВСЕ задачи компании, а не только свои (у Ироды)
   canManageTasks Boolean @default(false)
+  /// Доступ к корзине — персональное право, а НЕ следствие роли.
+  /// Руководителей несколько, а разбирать удалённое доверено не всем.
+  canSeeTrash  Boolean  @default(false)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -246,7 +245,6 @@ model User {
   tasksAssigned Task[]           @relation("TaskAssignee")
   tasksCreated  Task[]           @relation("TaskCreator")
   taskAssignments TaskAssignment[] @relation("TaskAssignments")
-  schedule      ScheduleEvent[]
   notifications Notification[]
   reports       Report[]        @relation("ReportManager")
 
@@ -540,20 +538,6 @@ model TaskAssignment {
 }
 
 /// Событие расписания менеджера (осмотры, выезды, встречи)
-model ScheduleEvent {
-  id        String       @id @default(cuid())
-  title     String
-  type      ScheduleType @default(MEETING)
-  date      DateTime
-  note      String?
-  orderId   String?
-  manager   User         @relation(fields: [managerId], references: [id], onDelete: Cascade)
-  managerId String
-  createdAt DateTime     @default(now())
-
-  @@index([managerId, date])
-}
-
 /// Журнал попыток входа — видно, кто и когда заходил и были ли атаки
 model LoginAttempt {
   id        String   @id @default(cuid())

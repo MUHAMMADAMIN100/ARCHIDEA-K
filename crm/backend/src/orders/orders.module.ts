@@ -4,6 +4,7 @@ import { OrdersController } from './orders.controller';
 import { FinanceModule } from '../finance/finance.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { ReportsModule } from '../reports/reports.module';
+import { PayrollModule } from '../payroll/payroll.module';
 
 @Module({
   // Финансы — автодоход при переходе заказа в «Оплачено» (ТЗ 7.1),
@@ -11,7 +12,8 @@ import { ReportsModule } from '../reports/reports.module';
   // Финансы — автодоход при переходе в «Оплачено» (ТЗ 7.1),
   // Telegram — уведомление о предпочтениях клиента (ТЗ 10.2),
   // Отчёты — черновик платёжной ведомости по оплаченному заказу
-  imports: [FinanceModule, TelegramModule, ReportsModule],
+  // Выезды — автоматический выезд бригады на этапе «Осмотр объекта»
+  imports: [FinanceModule, TelegramModule, ReportsModule, PayrollModule],
   providers: [OrdersService],
   controllers: [OrdersController],
   exports: [OrdersService],

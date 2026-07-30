@@ -6,7 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { userManagesTasks, userSeesAll } from './types';
+import { userManagesTasks, userSeesAll, userSeesTrash } from './types';
 import type { Role } from './types';
 
 // Разделы грузятся по требованию (code-splitting) — тяжёлые библиотеки
@@ -18,7 +18,6 @@ const Clients = lazyWithRetry(() => import('./pages/Clients').then((m) => ({ def
 const ClientCard = lazyWithRetry(() => import('./pages/ClientCard').then((m) => ({ default: m.ClientCard })));
 const Tasks = lazyWithRetry(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })));
 const Calendar = lazyWithRetry(() => import('./pages/Calendar').then((m) => ({ default: m.Calendar })));
-const Schedule = lazyWithRetry(() => import('./pages/Schedule').then((m) => ({ default: m.Schedule })));
 const Team = lazyWithRetry(() => import('./pages/Team').then((m) => ({ default: m.Team })));
 const Shifts = lazyWithRetry(() => import('./pages/Shifts').then((m) => ({ default: m.Shifts })));
 const Reports = lazyWithRetry(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
@@ -74,6 +73,16 @@ function SeesAllOnly({ children }: { children: JSX.Element }) {
 }
 
 /**
+ * Корзина закрыта не только в меню, но и по адресу: иначе раздел
+ * открывался бы прямой ссылкой у любого, кто её знает.
+ */
+function TrashOnly({ children }: { children: JSX.Element }) {
+  const { user } = useAuth();
+  if (user && !userSeesTrash(user)) return <Navigate to="/" replace />;
+  return children;
+}
+
+/**
  * Полный доступ к модулю задач (ТЗ 1.2).
  * Директор, ops-менеджер и сотрудники с личным флагом canManageTasks (Ирода).
  */
@@ -125,7 +134,6 @@ export default function App() {
               </TasksAccessOnly>
             }
           />
-          <Route path="/schedule" element={<Schedule />} />
           <Route path="/team" element={<Team />} />
           {/* Смены и выезды — операционный раздел: адрес, состав группы,
               кто куда ездил. Денежные вкладки внутри скрыты от ops-менеджера
@@ -161,8 +169,15 @@ export default function App() {
             }
           />
           {/* ── Разделы, добавленные по ТЗ ── */}
-          {/* Корзина: директор и менеджеры; безвозвратная очистка внутри — только директору */}
-          <Route path="/trash" element={<Trash />} />
+          {/* Корзина — по личному праву сотрудника; очистка внутри — только руководителю */}
+          <Route
+            path="/trash"
+            element={
+              <TrashOnly>
+                <Trash />
+              </TrashOnly>
+            }
+          />
           {/* Книга доходов и расходов — только руководителю: это деньги
               компании целиком. Раньше пункт был открыт менеджерам, и они
               упирались в 403 на уже показанной им странице. */}

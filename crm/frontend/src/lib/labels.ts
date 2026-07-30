@@ -7,11 +7,11 @@ import type {
   LeadSource,
   FinanceCategory,
   FinanceKind,
+  NotificationKind,
   Order,
   ProposalStatus,
   ReminderStatus,
   ReportStatus,
-  ScheduleType,
   ShiftGroupStatus,
   TaskPriority,
   TaskStatus,
@@ -187,12 +187,6 @@ export const REPORT_STATUS_COLOR: Record<ReportStatus, string> = {
   DRAFT: 'bg-navy-100 text-navy-600',
   SENT: 'bg-amber-100 text-amber-700',
   ACCEPTED: 'bg-green-100 text-green-700',
-};
-
-export const SCHEDULE_LABEL: Record<ScheduleType, string> = {
-  INSPECTION: 'Осмотр объекта',
-  CLEANING_VISIT: 'Выезд команды',
-  MEETING: 'Встреча',
 };
 
 export function formatPrice(v?: number | null): string {
@@ -420,4 +414,46 @@ export function formatAuditValue(value: string | null): string {
   if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTime(value);
   if (value === 'да' || value === 'нет') return value;
   return value;
+}
+
+// ─── Уведомления ───
+
+/**
+ * Куда ведёт уведомление из колокольчика.
+ *
+ * Уведомление без перехода — тупик: человек прочитал «статус заказа изменён»
+ * и дальше ищет этот заказ руками. Поэтому каждый тип знает свою страницу, а
+ * заказ и задача открываются адресно, по идентификатору из уведомления.
+ */
+export function notificationTarget(n: {
+  type: NotificationKind;
+  orderId?: string | null;
+  taskId?: string | null;
+}): string | null {
+  switch (n.type) {
+    case 'NEW_LEAD':
+    case 'ORDER_STATUS_CHANGED':
+    case 'ORDER_PREFERENCES':
+      return n.orderId ? `/funnel?order=${n.orderId}` : '/funnel';
+    case 'NEW_TASK':
+    case 'TASK_STATUS_CHANGED':
+      return '/tasks';
+    case 'REMINDER_DUE':
+    case 'REMINDER_ASSIGNED':
+      return '/reminders';
+    case 'REPORT_SENT':
+    case 'REPORT_DRAFT_READY':
+      return '/reports';
+    case 'PROPOSAL_SENT':
+      return '/offers';
+    case 'CHECKLIST_DONE':
+      return n.orderId ? `/funnel?order=${n.orderId}` : '/checklists';
+    case 'SHIFT_CLOSED':
+    case 'VISIT_PLANNED':
+      return '/shifts';
+    case 'BONUS_ACCRUED':
+      return '/finance';
+    default:
+      return null;
+  }
 }

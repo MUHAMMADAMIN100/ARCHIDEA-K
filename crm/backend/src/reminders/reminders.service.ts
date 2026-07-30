@@ -4,15 +4,27 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditAction, Prisma, ReminderSource, ReminderStatus } from '@prisma/client';
+import {
+  AuditAction,
+  NotificationType,
+  Prisma,
+  ReminderSource,
+  ReminderStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
-import { momentRange, parseDate, startOfDay } from '../common/time/dushanbe';
+import {
+  formatDushanbe,
+  momentRange,
+  parseDate,
+  startOfDay,
+} from '../common/time/dushanbe';
 import { CreateReminderDto, ReminderQueryDto, UpdateReminderDto } from './dto/reminder.dto';
 
 const clientSelect = { id: true, fullName: true, phone: true } as const;
@@ -24,7 +36,34 @@ export class RemindersService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private notifications: NotificationsService,
   ) {}
+
+  /**
+   * Сообщить сотруднику, что напоминание поставили на него.
+   *
+   * Без этого назначение было односторонним: руководитель выбирал исполнителя,
+   * а тот узнавал о поручении только когда сам заходил в «Напоминания».
+   * Себе не пишем — человек и так знает, что только что создал.
+   */
+  private async notifyAssignee(params: {
+    assigneeId: string;
+    authorId: string;
+    authorName: string;
+    clientName: string;
+    title: string;
+    remindAt: Date;
+    orderId?: string | null;
+  }) {
+    if (params.assigneeId === params.authorId) return;
+    await this.notifications.notify({
+      userId: params.assigneeId,
+      type: NotificationType.REMINDER_ASSIGNED,
+      title: 'Вам поставили напоминание',
+      message: `${params.clientName} · ${params.title} · ${formatDushanbe(params.remindAt)} · от ${params.authorName}`,
+      orderId: params.orderId ?? undefined,
+    });
+  }
 
   /** Менеджер видит и ведёт только свои напоминания; директор и ops-менеджер — все (ТЗ 10.1) */
   async list(user: AuthUser, q: ReminderQueryDto) {
@@ -113,8 +152,8 @@ export class RemindersService {
     const title = dto.title.trim();
     if (!title) throw new BadRequestException('Укажите название напоминания');
 
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.reminder.create({
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.reminder.create({
         data: {
           clientId: client.id,
           orderId: dto.orderId ?? null,
@@ -131,13 +170,26 @@ export class RemindersService {
       await this.audit.log(tx, {
         user,
         entity: 'REMINDER',
-        entityId: created.id,
-        entityTitle: `Напоминание — ${client.fullName}: ${created.title}`,
+        entityId: row.id,
+        entityTitle: `Напоминание — ${client.fullName}: ${row.title}`,
         action: AuditAction.CREATE,
         summary: `Исполнитель: ${assignee.fullName}`,
       });
-      return created;
+      return row;
     });
+
+    // вне транзакции: не доставленное уведомление не должно откатывать само поручение
+    await this.notifyAssignee({
+      assigneeId: assignee.id,
+      authorId: user.id,
+      authorName: user.fullName,
+      clientName: client.fullName,
+      title: created.title,
+      remindAt: created.remindAt,
+      orderId: created.orderId,
+    });
+
+    return created;
   }
 
   /** Правка своих напоминаний. Смена даты/интервала откладывает и возвращает в очередь (снятое SENT → PENDING) */
@@ -172,15 +224,15 @@ export class RemindersService {
       data.assigneeName = assignee.fullName;
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.reminder.update({ where: { id }, data });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.reminder.update({ where: { id }, data });
       await this.audit.log(tx, {
         user,
         entity: 'REMINDER',
         entityId: id,
-        entityTitle: `Напоминание — ${existing.assigneeName}: ${updated.title}`,
+        entityTitle: `Напоминание — ${existing.assigneeName}: ${row.title}`,
         action: AuditAction.UPDATE,
-        changes: this.audit.diff(existing, updated, [
+        changes: this.audit.diff(existing, row, [
           'title',
           'note',
           'remindAt',
@@ -188,8 +240,27 @@ export class RemindersService {
           'status',
         ]),
       });
-      return updated;
+      return row;
     });
+
+    // поручение передали другому — новый исполнитель должен об этом узнать
+    if (updated.assigneeId !== existing.assigneeId) {
+      const client = await this.prisma.client.findUnique({
+        where: { id: updated.clientId },
+        select: { fullName: true },
+      });
+      await this.notifyAssignee({
+        assigneeId: updated.assigneeId,
+        authorId: user.id,
+        authorName: user.fullName,
+        clientName: client?.fullName ?? 'клиент',
+        title: updated.title,
+        remindAt: updated.remindAt,
+        orderId: updated.orderId,
+      });
+    }
+
+    return updated;
   }
 
   /** Отметка «выполнено» — менеджер позвонил клиенту */

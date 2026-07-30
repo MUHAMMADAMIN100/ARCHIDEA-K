@@ -15,6 +15,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { FinanceService } from '../finance/finance.service';
 import { ReportsService } from '../reports/reports.service';
+import { ShiftGroupsService } from '../payroll/shift-groups.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { escapeHtml } from '../telegram/telegram.util';
 import {
@@ -99,6 +100,7 @@ export class OrdersService {
     private finance: FinanceService,
     private telegram: TelegramService,
     private reports: ReportsService,
+    private shiftGroups: ShiftGroupsService,
   ) {}
 
   private scopeWhere(user: AuthUser): Prisma.OrderWhereInput {
@@ -114,7 +116,7 @@ export class OrdersService {
   }
 
   /**
-   * Проверяем, что все переданные клинеры существуют,活ны и не в корзине.
+   * Проверяем, что все переданные клинеры существуют, активны и не в корзине.
    * Раньше несуществующий идентификатор доходил до Prisma и превращался
    * в 500-ю ошибку вместо понятного сообщения.
    */
@@ -451,6 +453,7 @@ export class OrdersService {
     }
 
     let draftReport: { id: string } | null = null;
+    let autoVisit: { id: string } | null = null;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.order.update({
@@ -496,6 +499,16 @@ export class OrdersService {
         draftReport = await this.reports.createFromOrder(tx, res.id, user.id);
       }
 
+      /*
+       * Осмотр объекта — это выезд на объект, поэтому он сразу появляется в
+       * «Сменах и выездах» с адресом, датой, составом команды и менеджером.
+       * Раньше менеджер заводил его руками, повторно вбивая то, что уже есть
+       * в заказе. Повторный заход на этап второй выезд не создаёт.
+       */
+      if (dto.stage === FunnelStage.INSPECTION) {
+        autoVisit = await this.shiftGroups.createFromOrder(tx, res.id, user.id);
+      }
+
       await this.audit.log(tx, {
         user,
         entity: 'ORDER',
@@ -530,6 +543,23 @@ export class OrdersService {
         type: NotificationType.REPORT_DRAFT_READY,
         title: 'Готов черновик платёжной ведомости',
         message: `${updated.client.fullName} · ${updated.finalPrice ?? updated.estimatedPrice} сомони — проверьте и отправьте основателю`,
+        orderId: updated.id,
+      });
+    }
+
+    /*
+     * Выезд создан сам — говорим об этом ответственному. Иначе автоматика
+     * незаметна: человек не знает, что в «Сменах» уже есть запись, и заводит
+     * вторую руками.
+     */
+    if (autoVisit) {
+      await this.notifications.notify({
+        userId: updated.managerId ?? user.id,
+        type: NotificationType.VISIT_PLANNED,
+        title: 'Выезд на осмотр добавлен в «Смены»',
+        message: `${updated.client.fullName} · ${
+          updated.address?.trim() || 'адрес не указан'
+        } — проверьте дату, время и состав команды`,
         orderId: updated.id,
       });
     }

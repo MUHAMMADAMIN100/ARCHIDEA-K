@@ -62,9 +62,16 @@ export function DatePicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-navy-200 bg-white px-3.5 py-2.5 text-sm transition-colors hover:border-navy-400 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-100"
+        className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-navy-200 bg-white px-3.5 text-sm transition-colors hover:border-navy-400 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-100"
       >
-        <span className={selected ? 'text-navy-900' : 'text-navy-300'}>
+        {/*
+         * truncate обязателен: в узкой колонке подпись вроде «Выберите дату»
+         * переносилась на вторую строку и кнопка вырастала вдвое, ломая ряд.
+         * Фиксированная высота держит её в одну линию с соседними полями.
+         */}
+        <span
+          className={`truncate ${selected ? 'text-navy-900' : 'text-navy-300'}`}
+        >
           {selected ? fmt(selected) : placeholder}
         </span>
         <Calendar className="h-4 w-4 shrink-0 text-navy-400" />

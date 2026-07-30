@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { api } from '../api/client';
 import type { NotificationItem } from '../types';
-import { formatDateTime } from '../lib/labels';
+import { formatDateTime, notificationTarget } from '../lib/labels';
 
 export function NotificationsBell() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
@@ -75,20 +77,32 @@ export function NotificationsBell() {
               Уведомлений нет
             </div>
           )}
-          {items.map((n) => (
-            <div
-              key={n.id}
-              className="rounded-xl px-3 py-2.5 hover:bg-navy-50"
-            >
-              <div className="text-sm font-semibold text-navy-800">
-                {n.title}
-              </div>
-              <div className="text-sm text-navy-600">{n.message}</div>
-              <div className="mt-0.5 text-xs text-navy-400">
-                {formatDateTime(n.createdAt)}
-              </div>
-            </div>
-          ))}
+          {items.map((n) => {
+            const target = notificationTarget(n);
+            return (
+              <button
+                key={n.id}
+                type="button"
+                disabled={!target}
+                onClick={() => {
+                  if (!target) return;
+                  setOpen(false);
+                  navigate(target);
+                }}
+                className={`block w-full rounded-xl px-3 py-2.5 text-left ${
+                  target ? 'cursor-pointer hover:bg-navy-50' : 'cursor-default'
+                }`}
+              >
+                <div className="text-sm font-semibold text-navy-800">
+                  {n.title}
+                </div>
+                <div className="text-sm text-navy-600">{n.message}</div>
+                <div className="mt-0.5 text-xs text-navy-400">
+                  {formatDateTime(n.createdAt)}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   DragDropContext,
   Droppable,
@@ -164,6 +165,21 @@ export function Funnel() {
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
   // счётчик над колонкой — не просто число: по клику показываем сам список
   const [stageDrill, setStageDrill] = useState<BoardColumn | null>(null);
+
+  /*
+   * ?order=<id> — переход из уведомления сразу в нужную карточку.
+   * Ждём загрузки доски: до неё заказа в state ещё нет. Адрес после открытия
+   * чистим, иначе карточка будет всплывать снова при каждом возврате назад.
+   */
+  const [params, setParams] = useSearchParams();
+  const wantedOrderId = params.get('order');
+  useEffect(() => {
+    if (!wantedOrderId || !data) return;
+    const found = data.flatMap((c) => c.orders).find((o) => o.id === wantedOrderId);
+    if (found) setOpenOrder(found);
+    else toast.error('Заказ не найден — возможно, он удалён');
+    setParams({}, { replace: true });
+  }, [wantedOrderId, data]);
 
   // Оптимистичное перемещение карточки между этапами (до ответа сервера)
   const applyPatch = (orderId: string, patch: Partial<Order>) => {
