@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Bar,
   BarChart,
@@ -36,6 +36,79 @@ interface Drill {
   key?: string;
 }
 
+
+/**
+ * Таблица разреза: подпись, цифры и кликабельная строка.
+ *
+ * Своя, а не общая DataTable: здесь нет страниц и фильтров, зато нужна
+ * компактность — таких блоков на экране несколько.
+ */
+function BreakdownCard<T>({
+  title,
+  hint,
+  rows,
+  columns,
+  rowKey,
+  emptyText,
+}: {
+  title: string;
+  hint?: string;
+  rows: T[];
+  columns: {
+    key: string;
+    header: string;
+    align?: 'left' | 'right';
+    cell: (row: T) => ReactNode;
+  }[];
+  rowKey: (row: T) => string;
+  emptyText: string;
+}) {
+  return (
+    <div className="card p-4 sm:p-5">
+      <h3 className="font-bold text-navy-900">{title}</h3>
+      {hint && <p className="mt-0.5 mb-3 text-xs text-navy-400">{hint}</p>}
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-navy-400">{emptyText}</p>
+      ) : (
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-400">
+                {columns.map((c) => (
+                  <th
+                    key={c.key}
+                    className={`py-2 pr-3 font-semibold ${
+                      c.align === 'right' ? 'text-right' : ''
+                    }`}
+                  >
+                    {c.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={rowKey(r)} className="border-b border-navy-50 last:border-0">
+                  {columns.map((c) => (
+                    <td
+                      key={c.key}
+                      className={`py-2 pr-3 align-top ${
+                        c.align === 'right' ? 'text-right tabular-nums' : ''
+                      }`}
+                    >
+                      {c.cell(r)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Analytics() {
   const { user } = useAuth();
   const seesAll = userSeesAll(user);
@@ -55,6 +128,8 @@ export function Analytics() {
     `/analytics/full?${query.toString()}`,
     { deps: [period.from, period.to] },
   );
+
+  const bd = data?.breakdowns;
 
   const rangeLabel =
     data?.from && data?.to
@@ -168,29 +243,66 @@ export function Analytics() {
                   })
                 }
               />
-              {(
-                [
-                  ['day', 'За день'],
-                  ['week', 'За неделю'],
-                  ['month', 'За месяц'],
-                  ['quarter', 'За квартал'],
-                ] as const
-              ).map(([key, label]) => (
-                <StatCard
-                  key={key}
-                  label={label}
-                  value={formatPrice(data.revenue![key])}
-                  title={`Заказы, оплаченные ${label.toLowerCase()}`}
-                  onClick={() =>
-                    setDrill({
-                      title: `Выручка ${label.toLowerCase()}`,
-                      subtitle: 'Оплаченные заказы своего окна — независимо от периода сверху',
-                      metric: 'revenueMoment',
-                      key,
-                    })
-                  }
-                />
-              ))}
+              {/*
+                Раньше здесь стояли четыре окна «за день / неделю / месяц /
+                квартал», которые считались НЕЗАВИСИМО от фильтра сверху:
+                выбираешь «Прошлый месяц», а они показывают текущие цифры —
+                на экране оказывались четыре одинаковых числа. Теперь всё за
+                один и тот же период, но разные показатели.
+              */}
+              <StatCard
+                label="Оплаченных заказов"
+                value={bd?.totals.paidOrders ?? 0}
+                hint={rangeLabel}
+                title="Заказы, оплаченные за выбранный период"
+                onClick={() =>
+                  setDrill({
+                    title: 'Оплаченные заказы',
+                    subtitle: rangeLabel,
+                    metric: 'revenuePeriod',
+                  })
+                }
+              />
+              <StatCard
+                label="Средний чек"
+                value={formatPrice(bd?.totals.average ?? 0)}
+                hint="выручка ÷ оплаченные заказы"
+                title="Из каких заказов сложился средний чек"
+                onClick={() =>
+                  setDrill({
+                    title: 'Средний чек — из чего сложился',
+                    subtitle: rangeLabel,
+                    metric: 'revenuePeriod',
+                  })
+                }
+              />
+              <StatCard
+                label="Скидки"
+                value={formatPrice(bd?.totals.discountTotal ?? 0)}
+                tone={bd && bd.totals.discountTotal > 0 ? 'negative' : 'default'}
+                hint="сколько отдали клиентам"
+                title="Заказы, по которым дали скидку"
+                onClick={() =>
+                  setDrill({
+                    title: 'Скидки за период',
+                    subtitle: rangeLabel,
+                    metric: 'revenuePeriod',
+                  })
+                }
+              />
+              <StatCard
+                label="Доп. услуги"
+                value={formatPrice(bd?.totals.extrasRevenue ?? 0)}
+                hint="сверх основной уборки"
+                title="Какие доп. услуги брали за период"
+                onClick={() =>
+                  setDrill({
+                    title: 'Доп. услуги за период',
+                    subtitle: rangeLabel,
+                    metric: 'revenuePeriod',
+                  })
+                }
+              />
             </div>
           )}
 
@@ -346,6 +458,251 @@ export function Analytics() {
             </div>
 
             {/* Загруженность сотрудников — руководителю и ops-менеджеру, за всё время */}
+            {/*
+              Разрезы за выбранный период. Каждая строка кликабельна: цифра
+              в аналитике не должна быть тупиком — по клику видно, из каких
+              заказов она сложилась.
+            */}
+            {bd && (
+              <>
+                <BreakdownCard
+                  title="Менеджеры за период"
+                  hint={`Сколько обращений принял каждый и сколько довёл до оплаты · ${rangeLabel}`}
+                  rows={bd.managers}
+                  rowKey={(r) => r.id ?? 'none'}
+                  emptyText="За период обращений не было"
+                  columns={[
+                    {
+                      key: 'name',
+                      header: 'Менеджер',
+                      cell: (r) => (
+                        <DrillValue
+                          title="Заказы этого менеджера за период"
+                          onClick={() =>
+                            setDrill({
+                              title: `Заказы — ${r.name}`,
+                              subtitle: rangeLabel,
+                              metric: 'managerOrders',
+                              key: r.id ?? 'none',
+                            })
+                          }
+                        >
+                          {r.name}
+                        </DrillValue>
+                      ),
+                    },
+                    { key: 'total', header: 'Обращений', align: 'right', cell: (r) => r.total },
+                    {
+                      key: 'paid',
+                      header: 'Оплачено',
+                      align: 'right',
+                      cell: (r) => (
+                        <DrillValue
+                          align="right"
+                          tone="success"
+                          disabled={r.paid === 0}
+                          title="Оплаченные заказы этого менеджера"
+                          onClick={() =>
+                            setDrill({
+                              title: `Оплачено — ${r.name}`,
+                              subtitle: rangeLabel,
+                              metric: 'managerPaidOrders',
+                              key: r.id ?? 'none',
+                            })
+                          }
+                        >
+                          {r.paid}
+                        </DrillValue>
+                      ),
+                    },
+                    ...(isDirector
+                      ? [
+                          {
+                            key: 'amount',
+                            header: 'Сумма',
+                            align: 'right' as const,
+                            cell: (r: typeof bd.managers[number]) => formatPrice(r.amount),
+                          },
+                          {
+                            key: 'average',
+                            header: 'Сред. чек',
+                            align: 'right' as const,
+                            cell: (r: typeof bd.managers[number]) => formatPrice(r.average),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <BreakdownCard
+                    title="Услуги за период"
+                    hint="По оплаченным заказам"
+                    rows={bd.services}
+                    rowKey={(r) => r.key}
+                    emptyText="Оплаченных заказов за период нет"
+                    columns={[
+                      { key: 'label', header: 'Услуга', cell: (r) => r.label },
+                      { key: 'count', header: 'Заказов', align: 'right', cell: (r) => r.count },
+                      ...(isDirector
+                        ? [
+                            {
+                              key: 'amount',
+                              header: 'Сумма',
+                              align: 'right' as const,
+                              cell: (r: typeof bd.services[number]) => formatPrice(r.amount),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+
+                  <BreakdownCard
+                    title="Доп. услуги за период"
+                    hint="Что берут сверх основной уборки"
+                    rows={bd.extras}
+                    rowKey={(r) => r.key}
+                    emptyText="Доп. услуги за период не брали"
+                    columns={[
+                      { key: 'label', header: 'Услуга', cell: (r) => r.label },
+                      { key: 'count', header: 'Раз взяли', align: 'right', cell: (r) => r.count },
+                      ...(isDirector
+                        ? [
+                            {
+                              key: 'amount',
+                              header: 'Сумма',
+                              align: 'right' as const,
+                              cell: (r: typeof bd.extras[number]) => formatPrice(r.amount),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+
+                  <BreakdownCard
+                    title="Бригады за период"
+                    hint="Выезды и смены по дате выезда"
+                    rows={bd.brigades}
+                    rowKey={(r) => r.id ?? 'none'}
+                    emptyText="Выездов за период не было"
+                    columns={[
+                      {
+                        key: 'name',
+                        header: 'Бригада',
+                        cell: (r) => (
+                          <span>
+                            {r.name}
+                            {r.leader && (
+                              <span className="block text-xs text-navy-400">
+                                бригадир: {r.leader}
+                              </span>
+                            )}
+                          </span>
+                        ),
+                      },
+                      { key: 'visits', header: 'Выездов', align: 'right', cell: (r) => r.visits },
+                      { key: 'shifts', header: 'Смен', align: 'right', cell: (r) => r.shifts },
+                      ...(isDirector
+                        ? [
+                            {
+                              key: 'accrued',
+                              header: 'Начислено',
+                              align: 'right' as const,
+                              cell: (r: typeof bd.brigades[number]) => formatPrice(r.accrued),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+
+                  <BreakdownCard
+                    title="Клинеры за период"
+                    hint="Кто сколько отработал смен"
+                    rows={bd.cleaners}
+                    rowKey={(r) => r.id}
+                    emptyText="Смен за период не было"
+                    columns={[
+                      { key: 'name', header: 'Клинер', cell: (r) => r.name },
+                      { key: 'shifts', header: 'Смен', align: 'right', cell: (r) => r.shifts },
+                      ...(isDirector
+                        ? [
+                            {
+                              key: 'accrued',
+                              header: 'Начислено',
+                              align: 'right' as const,
+                              cell: (r: typeof bd.cleaners[number]) => formatPrice(r.accrued),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+
+                  <BreakdownCard
+                    title="Клиенты за период"
+                    hint="Топ по оплаченным заказам"
+                    rows={bd.clients}
+                    rowKey={(r) => r.id}
+                    emptyText="Оплаченных заказов за период нет"
+                    columns={[
+                      { key: 'name', header: 'Клиент', cell: (r) => r.name },
+                      { key: 'count', header: 'Заказов', align: 'right', cell: (r) => r.count },
+                      ...(isDirector
+                        ? [
+                            {
+                              key: 'amount',
+                              header: 'Сумма',
+                              align: 'right' as const,
+                              cell: (r: typeof bd.clients[number]) => formatPrice(r.amount),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+
+                  <BreakdownCard
+                    title="Источники за период"
+                    hint="Не только обращения, но и деньги"
+                    rows={bd.sourceRows}
+                    rowKey={(r) => r.source}
+                    emptyText="Обращений за период нет"
+                    columns={[
+                      {
+                        key: 'label',
+                        header: 'Источник',
+                        cell: (r) => (
+                          <DrillValue
+                            title="Обращения из этого источника"
+                            onClick={() =>
+                              setDrill({
+                                title: `Источник — ${r.label}`,
+                                subtitle: rangeLabel,
+                                metric: 'source',
+                                key: r.source,
+                              })
+                            }
+                          >
+                            {r.label}
+                          </DrillValue>
+                        ),
+                      },
+                      { key: 'total', header: 'Обращений', align: 'right', cell: (r) => r.total },
+                      { key: 'paid', header: 'Оплачено', align: 'right', cell: (r) => r.paid },
+                      ...(isDirector
+                        ? [
+                            {
+                              key: 'amount',
+                              header: 'Сумма',
+                              align: 'right' as const,
+                              cell: (r: typeof bd.sourceRows[number]) => formatPrice(r.amount),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                </div>
+              </>
+            )}
+
             {data.managerWorkload && (
               <div className="card p-5 lg:col-span-2">
                 <h3 className="mb-1 font-bold text-navy-900">Загруженность сотрудников</h3>

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
-import { FunnelStage, Prisma, Role } from '@prisma/client';
+import { FunnelStage, LeadSource, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AuthUser,
@@ -9,6 +9,7 @@ import { NOT_DELETED } from '../common/soft-delete';
 import {
   dayKey,
   momentRange,
+  rangeUTC,
   startOfDay,
   startOfMonth,
   startOfQuarter,
@@ -251,9 +252,275 @@ export class AnalyticsService {
     // Загруженность менеджеров (не финансы) — директору и ops-менеджеру
     if (seesAll(user)) {
       result.managerWorkload = await this.managerWorkload();
+
+      /*
+       * Разрезы. Деньги в них видит только руководитель, поэтому
+       * ops-менеджеру суммы обнуляем, а количества оставляем — они не финансы.
+       */
+      const paidInRange: Prisma.OrderWhereInput = hasRange
+        ? { ...scope, stage: FunnelStage.PAID, closedAt: range }
+        : { ...scope, stage: FunnelStage.PAID };
+      // границы для выездов: тот же период, но по дню-снапшоту
+      const dayRange = hasRange
+        ? rangeUTC(
+            range.gte ? dayKey(range.gte) : undefined,
+            range.lte ? dayKey(range.lte) : undefined,
+          )
+        : undefined;
+      const rows = await this.breakdowns(periodScope, paidInRange, dayRange);
+      result.breakdowns =
+        user.role === Role.DIRECTOR
+          ? rows
+          : {
+              ...rows,
+              managers: rows.managers.map((m) => ({ ...m, amount: 0, average: 0 })),
+              services: rows.services.map((r) => ({ ...r, amount: 0 })),
+              extras: rows.extras.map((r) => ({ ...r, amount: 0 })),
+              brigades: rows.brigades.map((r) => ({ ...r, accrued: 0 })),
+              cleaners: rows.cleaners.map((r) => ({ ...r, accrued: 0 })),
+              clients: rows.clients.map((r) => ({ ...r, amount: 0 })),
+              sourceRows: rows.sourceRows.map((r) => ({ ...r, amount: 0 })),
+              totals: { ...rows.totals, revenue: 0, average: 0, discountTotal: 0, extrasRevenue: 0 },
+            };
     }
 
     return result;
+  }
+
+
+  /**
+   * Разрезы за выбранный период: кто сколько принял и что сколько принесло.
+   *
+   * Сводные цифры сверху отвечают на «сколько всего», но не на «за счёт кого
+   * и чего». Раньше этих ответов в аналитике не было вовсе — руководитель
+   * собирал их руками по воронке и ведомостям.
+   *
+   * Всё считается ОДНИМ условием периода — тем же, что и цифры выше, иначе
+   * разрезы не сойдутся с итогом и доверие к аналитике пропадёт.
+   */
+  private async breakdowns(
+    periodScope: Prisma.OrderWhereInput,
+    paidInRange: Prisma.OrderWhereInput,
+    dayRange?: { gte?: Date; lte?: Date },
+  ) {
+    const [orders, paid, extrasCatalogue, brigades, shiftGroups] =
+      await Promise.all([
+        // все обращения периода — для конверсии по менеджеру и источнику
+        this.prisma.order.findMany({
+          where: periodScope,
+          select: {
+            id: true,
+            stage: true,
+            source: true,
+            managerId: true,
+            manager: { select: { fullName: true } },
+          },
+        }),
+        // оплаченные — для денег
+        this.prisma.order.findMany({
+          where: paidInRange,
+          select: {
+            id: true,
+            source: true,
+            serviceKey: true,
+            cleaningType: true,
+            finalPrice: true,
+            estimatedPrice: true,
+            discount: true,
+            extras: true,
+            managerId: true,
+            manager: { select: { fullName: true } },
+            client: { select: { id: true, fullName: true } },
+          },
+        }),
+        this.prisma.extraService.findMany({
+          where: NOT_DELETED,
+          select: { key: true, title: true, price: true, hasQty: true },
+        }),
+        this.prisma.brigade.findMany({
+          select: {
+            id: true,
+            name: true,
+            leader: { select: { fullName: true } },
+          },
+        }),
+        this.prisma.shiftGroup.findMany({
+          // дата выезда хранится днём-снапшотом (полночь UTC) — свой диапазон
+          where: { ...NOT_DELETED, ...(dayRange ? { date: dayRange } : {}) },
+          select: {
+            id: true,
+            brigadeId: true,
+            brigadeName: true,
+            members: { select: { cleanerId: true, fullName: true, rate: true } },
+          },
+        }),
+      ]);
+
+    const money = (o: { finalPrice: number | null; estimatedPrice: number }) =>
+      o.finalPrice ?? o.estimatedPrice ?? 0;
+
+    // ── менеджеры: обращения, оплачено, деньги, средний чек
+    const byManager = new Map<
+      string,
+      { id: string | null; name: string; total: number; paid: number; amount: number }
+    >();
+    const mgrRow = (id: string | null, name: string) => {
+      const key = id ?? 'none';
+      if (!byManager.has(key)) {
+        byManager.set(key, { id, name, total: 0, paid: 0, amount: 0 });
+      }
+      return byManager.get(key)!;
+    };
+    for (const o of orders) {
+      mgrRow(o.managerId, o.manager?.fullName ?? 'без менеджера').total += 1;
+    }
+    for (const o of paid) {
+      const row = mgrRow(o.managerId, o.manager?.fullName ?? 'без менеджера');
+      row.paid += 1;
+      row.amount += money(o);
+    }
+    const managers = [...byManager.values()]
+      .map((r) => ({
+        ...r,
+        average: r.paid ? Math.round(r.amount / r.paid) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount || b.total - a.total);
+
+    // ── услуги: сколько заказов и денег принесла каждая
+    const byService = new Map<string, { key: string; label: string; count: number; amount: number }>();
+    for (const o of paid) {
+      const key = o.serviceKey || o.cleaningType;
+      const label = TYPE_LABEL[o.cleaningType] ?? key;
+      const row = byService.get(key) ?? { key, label, count: 0, amount: 0 };
+      row.count += 1;
+      row.amount += money(o);
+      byService.set(key, row);
+    }
+    const services = [...byService.values()].sort((a, b) => b.amount - a.amount);
+
+    // ── доп. услуги: сколько раз брали и на какую сумму
+    const byExtra = new Map<string, { key: string; label: string; count: number; amount: number }>();
+    for (const o of paid) {
+      const chosen = (o.extras as Record<string, number> | null) ?? null;
+      if (!chosen) continue;
+      for (const [key, rawQty] of Object.entries(chosen)) {
+        const item = extrasCatalogue.find((e) => e.key === key);
+        if (!item) continue;
+        const qty = Math.max(0, Math.round(Number(rawQty) || 0));
+        if (qty === 0) continue;
+        const row = byExtra.get(key) ?? { key, label: item.title, count: 0, amount: 0 };
+        row.count += 1;
+        row.amount += item.hasQty ? item.price * qty : item.price;
+        byExtra.set(key, row);
+      }
+    }
+    const extras = [...byExtra.values()].sort((a, b) => b.amount - a.amount);
+
+    // ── бригады и клинеры: выезды, смены, начислено
+    const byBrigade = new Map<
+      string,
+      { id: string | null; name: string; leader: string | null; visits: number; shifts: number; accrued: number }
+    >();
+    const byCleaner = new Map<
+      string,
+      { id: string; name: string; shifts: number; accrued: number }
+    >();
+    for (const g of shiftGroups) {
+      const key = g.brigadeId ?? 'none';
+      const info = brigades.find((b) => b.id === g.brigadeId);
+      const row =
+        byBrigade.get(key) ??
+        {
+          id: g.brigadeId,
+          name: g.brigadeName ?? info?.name ?? 'без бригады',
+          leader: info?.leader?.fullName ?? null,
+          visits: 0,
+          shifts: 0,
+          accrued: 0,
+        };
+      row.visits += 1;
+      row.shifts += g.members.length;
+      row.accrued += g.members.reduce((sum, m) => sum + m.rate, 0);
+      byBrigade.set(key, row);
+
+      for (const m of g.members) {
+        const c = byCleaner.get(m.cleanerId) ?? {
+          id: m.cleanerId,
+          name: m.fullName,
+          shifts: 0,
+          accrued: 0,
+        };
+        c.shifts += 1;
+        c.accrued += m.rate;
+        byCleaner.set(m.cleanerId, c);
+      }
+    }
+    const brigadeRows = [...byBrigade.values()].sort((a, b) => b.visits - a.visits);
+    const cleanerRows = [...byCleaner.values()]
+      .sort((a, b) => b.shifts - a.shifts)
+      .slice(0, 30);
+
+    // ── клиенты: топ по деньгам
+    const byClient = new Map<string, { id: string; name: string; count: number; amount: number }>();
+    for (const o of paid) {
+      if (!o.client) continue;
+      const row =
+        byClient.get(o.client.id) ??
+        { id: o.client.id, name: o.client.fullName, count: 0, amount: 0 };
+      row.count += 1;
+      row.amount += money(o);
+      byClient.set(o.client.id, row);
+    }
+    const clients = [...byClient.values()]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 20);
+
+    // ── источники: не только обращения, но и деньги
+    const bySource = new Map<
+      string,
+      { source: string; label: string; total: number; paid: number; amount: number }
+    >();
+    const srcRow = (source: string) => {
+      if (!bySource.has(source)) {
+        bySource.set(source, {
+          source,
+          label: SOURCE_LABEL[source as LeadSource] ?? source,
+          total: 0,
+          paid: 0,
+          amount: 0,
+        });
+      }
+      return bySource.get(source)!;
+    };
+    for (const o of orders) srcRow(o.source).total += 1;
+    for (const o of paid) {
+      const row = srcRow(o.source);
+      row.paid += 1;
+      row.amount += money(o);
+    }
+    const sourceRows = [...bySource.values()].sort((a, b) => b.amount - a.amount);
+
+    // ── итоги периода для карточек
+    const revenue = paid.reduce((sum, o) => sum + money(o), 0);
+    const discountTotal = paid.reduce((sum, o) => sum + (o.discount ?? 0), 0);
+    const extrasRevenue = extras.reduce((sum, e) => sum + e.amount, 0);
+
+    return {
+      managers,
+      services,
+      extras,
+      brigades: brigadeRows,
+      cleaners: cleanerRows,
+      clients,
+      sourceRows,
+      totals: {
+        paidOrders: paid.length,
+        revenue,
+        average: paid.length ? Math.round(revenue / paid.length) : 0,
+        discountTotal,
+        extrasRevenue,
+      },
+    };
   }
 
   /**
@@ -281,7 +548,12 @@ export class AnalyticsService {
      * загруженность в обход `full()`.
      */
     const MONEY = ['revenuePeriod', 'revenueMoment', 'revenueDay', 'unpriced', 'noCloseDate'];
-    const ALL_STAFF = ['managerActive', 'managerPaid'];
+    const ALL_STAFF = [
+      'managerActive',
+      'managerPaid',
+      'managerOrders',
+      'managerPaidOrders',
+    ];
     if (MONEY.includes(metric) && user.role !== Role.DIRECTOR) {
       throw new ForbiddenException('Финансовые данные доступны только руководителю');
     }
@@ -376,6 +648,16 @@ export class AnalyticsService {
           stage: FunnelStage.PAID,
           managerId: key === 'none' ? null : key,
         };
+        break;
+      /*
+       * Разрезы по менеджеру — за ВЫБРАННЫЙ период, в отличие от managerActive
+       * и managerPaid, которые показывают текущую загруженность за всё время.
+       */
+      case 'managerOrders':
+        where = { ...periodScope, managerId: key === 'none' ? null : key };
+        break;
+      case 'managerPaidOrders':
+        where = { ...paidInRange, managerId: key === 'none' ? null : key };
         break;
       // сверка: заказы, которые молча выпадают из выручки
       case 'unpriced':

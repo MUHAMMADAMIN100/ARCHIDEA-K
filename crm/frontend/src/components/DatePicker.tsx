@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { DayPicker } from 'react-day-picker';
 import { ru } from 'date-fns/locale';
@@ -91,31 +97,48 @@ export function DatePicker({
    * половина месяца уходила за край окна. В портале обрезать его нечем,
    * а положение подгоняем так, чтобы он не вылез за экран.
    */
-  const CAL_W = 300;
-  const CAL_H = 340;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
-      const r = ref.current?.getBoundingClientRect();
-      if (!r) return;
+      const field = ref.current?.getBoundingClientRect();
+      if (!field) return;
+      const pop = popRef.current;
+      /*
+       * Размер берём у самого календаря, а не из константы.
+       * Раньше здесь стояло 300 px «на глаз»: настоящий календарь шире, и у
+       * правого края экрана он вылезал — стрелка «вперёд» уезжала за границу.
+       * До первой отрисовки размеров ещё нет, поэтому подстраховываемся
+       * приблизительными — на следующем кадре положение уточнится.
+       */
+      const w = pop?.offsetWidth || 320;
+      const h = pop?.offsetHeight || 340;
       const gap = 6;
-      const left = Math.min(
-        Math.max(8, r.left),
-        Math.max(8, window.innerWidth - CAL_W - 8),
-      );
-      // не хватает места снизу — открываем над полем
-      const below = window.innerHeight - r.bottom;
-      const top =
-        below < CAL_H && r.top > CAL_H
-          ? r.top - CAL_H - gap
-          : Math.min(r.bottom + gap, window.innerHeight - CAL_H - 8);
-      setPos({ top: Math.max(8, top), left });
+      const edge = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // по горизонтали: прижимаем к правому краю, если слева места не хватает
+      const left = Math.max(edge, Math.min(field.left, vw - w - edge));
+
+      // по вертикали: снизу не влезает — открываем над полем
+      const fitsBelow = vh - field.bottom >= h + gap + edge;
+      const fitsAbove = field.top >= h + gap + edge;
+      const top = fitsBelow
+        ? field.bottom + gap
+        : fitsAbove
+          ? field.top - h - gap
+          : Math.max(edge, vh - h - edge);
+
+      setPos({ top, left });
     };
     place();
+    // после отрисовки календаря размеры известны — уточняем положение
+    const raf = requestAnimationFrame(place);
     window.addEventListener('resize', place);
     // календарь может стоять внутри прокручиваемой модалки — следим за ней тоже
     window.addEventListener('scroll', place, true);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
@@ -176,8 +199,10 @@ export function DatePicker({
               className="fixed z-[61] max-h-[85vh] w-max max-w-[calc(100vw-1rem)] overflow-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
               style={{
                 ...rdpVars,
-                top: pos?.top ?? -9999,
-                left: pos?.left ?? -9999,
+                top: pos?.top ?? 0,
+                left: pos?.left ?? 0,
+                // до первого замера не показываем — иначе кадр мигает в углу
+                visibility: pos ? 'visible' : 'hidden',
               }}
             >
               <DayPicker

@@ -216,11 +216,13 @@ export function DetailModal({
   return (
     <Modal open onClose={onClose} title={title} wide>
       {/*
-        Подпись была text-xs text-navy-400 — светло-голубым по светлому фону,
-        прочитать её было нельзя. Размер и цвет подняты до читаемых.
+        Отрицательного отступа здесь быть не должно: содержимое модалки
+        прокручивается, и подтянутая вверх строка обрезалась краем прокрутки —
+        от даты периода была видна только нижняя половина букв.
+        Цвет и размер тоже подняты: светло-голубое по светлому не читалось.
       */}
       {subtitle && (
-        <div className="-mt-3 mb-4 text-sm text-navy-600">{subtitle}</div>
+        <div className="mb-4 text-sm text-navy-600">{subtitle}</div>
       )}
       {children}
     </Modal>

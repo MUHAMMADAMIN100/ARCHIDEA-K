@@ -54,6 +54,7 @@ export type PeriodPreset =
   | 'prevMonth'
   | 'quarter'
   | 'year'
+  | 'prevYear'
   | 'all';
 
 export const PERIOD_LABEL: Record<PeriodPreset, string> = {
@@ -63,6 +64,7 @@ export const PERIOD_LABEL: Record<PeriodPreset, string> = {
   prevMonth: 'Прошлый месяц',
   quarter: 'Квартал',
   year: 'Год',
+  prevYear: 'Прошлый год',
   all: 'Всё время',
 };
 
@@ -105,6 +107,11 @@ export function rangeOf(preset: PeriodPreset): { from: string; to: string } {
     }
     case 'year':
       return { from: `${year}-01-01`, to: `${year}-12-31` };
+    case 'prevYear': {
+      // прошлый год целиком — чтобы можно было сравнить с текущим
+      const prev = Number(year) - 1;
+      return { from: `${prev}-01-01`, to: `${prev}-12-31` };
+    }
     case 'all':
       return { from: '', to: '' };
     case 'month':

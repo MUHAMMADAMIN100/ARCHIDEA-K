@@ -233,7 +233,16 @@ export interface Period {
 export function PeriodFilter({
   value,
   onChange,
-  presets = ['today', 'week', 'month', 'prevMonth', 'quarter', 'year', 'all'],
+  presets = [
+    'today',
+    'week',
+    'month',
+    'prevMonth',
+    'quarter',
+    'year',
+    'prevYear',
+    'all',
+  ],
   showMonthArrows = false,
 }: {
   value: Period;

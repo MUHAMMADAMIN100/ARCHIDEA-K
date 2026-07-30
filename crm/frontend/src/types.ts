@@ -738,6 +738,46 @@ export type AnalyticsPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'a
  * считалась за всю историю, а выручка — за выбранный период, из-за чего
  * цифры на одном экране не сходились между собой.
  */
+/** Разрезы аналитики за выбранный период — все строки кликабельны */
+export interface AnalyticsBreakdowns {
+  managers: {
+    id: string | null;
+    name: string;
+    /** обращений за период */
+    total: number;
+    /** из них оплачено */
+    paid: number;
+    amount: number;
+    average: number;
+  }[];
+  services: { key: string; label: string; count: number; amount: number }[];
+  extras: { key: string; label: string; count: number; amount: number }[];
+  brigades: {
+    id: string | null;
+    name: string;
+    leader: string | null;
+    visits: number;
+    shifts: number;
+    accrued: number;
+  }[];
+  cleaners: { id: string; name: string; shifts: number; accrued: number }[];
+  clients: { id: string; name: string; count: number; amount: number }[];
+  sourceRows: {
+    source: string;
+    label: string;
+    total: number;
+    paid: number;
+    amount: number;
+  }[];
+  totals: {
+    paidOrders: number;
+    revenue: number;
+    average: number;
+    discountTotal: number;
+    extrasRevenue: number;
+  };
+}
+
 export interface AnalyticsFull extends Omit<Analytics, 'revenue'> {
   period: AnalyticsPeriod;
   from: string | null;
@@ -750,6 +790,8 @@ export interface AnalyticsFull extends Omit<Analytics, 'revenue'> {
     /** выручка ровно за выбранный период — то, с чем нужно сверять остальные разрезы */
     period: number;
   };
+  /** Разрезы: менеджеры, услуги, бригады, клиенты, источники */
+  breakdowns?: AnalyticsBreakdowns;
   /** Сверка: расхождения должны быть видны сразу, а не теряться в цифрах */
   reconciliation?: {
     paidOrdersInPeriod: number;
