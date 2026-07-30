@@ -196,7 +196,7 @@ export function Team() {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-400">
             Сотрудники
           </h3>
-          <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mb-8 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {staff.map((m) => (
               <StaffCard
                 key={m.id}
@@ -223,11 +223,11 @@ export function Team() {
       {!brigades || brigades.length === 0 ? (
         <EmptyState text="Бригад пока нет" />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
           {brigades.map((b) => {
             const members = b.cleaners.filter((c) => c.isActive);
             return (
-            <div key={b.id} className="card p-5">
+            <div key={b.id} className="card min-w-0 p-5">
               <div className="mb-4 flex items-center gap-2.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-100 text-navy-700">
                   <UsersIcon className="h-5 w-5" />
@@ -558,8 +558,13 @@ function StaffCard({
 }) {
   const navigate = useNavigate();
   const isDirector = person.role === 'DIRECTOR';
+  /*
+   * min-w-0 обязателен: карточка — элемент сетки, а у него min-width: auto.
+   * Длинная должность с truncate (nowrap) задавала минимальную ширину колонки,
+   * сетка вырастала шире экрана телефона и уводила всю страницу влево.
+   */
   return (
-    <div className="card flex flex-col p-5">
+    <div className="card flex min-w-0 flex-col p-5">
       <div className="flex items-center gap-3">
         <span
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-bold ${

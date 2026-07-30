@@ -367,7 +367,7 @@ export function Calendar() {
         onDragEnd={onDragEnd}
       >
         {/* Шапка дней недели */}
-        <div className="mb-2 grid grid-cols-7 gap-2">
+        <div className="mb-2 grid grid-cols-7 gap-1 sm:gap-2">
           {WEEKDAYS.map((w) => (
             <div key={w} className="text-xs font-semibold text-navy-400">
               {w}
@@ -376,7 +376,7 @@ export function Calendar() {
         </div>
 
         {/* Сетка дней */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {days.map((d) => {
             const key = dayKey(d);
             const inMonth = view === 'week' || d.getMonth() === cursor.getMonth();
@@ -388,7 +388,7 @@ export function Calendar() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`group flex flex-col rounded-xl border p-2 transition-colors ${cellMin} ${
+                    className={`group flex min-w-0 flex-col rounded-xl border p-1.5 transition-colors sm:p-2 ${cellMin} ${
                       isToday
                         ? 'border-navy-400 bg-navy-50/60 ring-1 ring-navy-200'
                         : 'border-navy-100 bg-white'
@@ -398,7 +398,7 @@ export function Calendar() {
                   >
                     <div className="mb-1.5 flex items-center justify-between">
                       <span
-                        className={`text-sm font-semibold ${
+                        className={`text-xs font-semibold sm:text-sm ${
                           isToday ? 'text-navy-700' : 'text-navy-500'
                         }`}
                       >
@@ -406,12 +406,12 @@ export function Calendar() {
                       </span>
                       <button
                         onClick={() => setModal({ mode: 'create', date: key })}
-                        className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-navy-500 transition hover:bg-navy-100 hover:text-navy-800 ${
+                        className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-500 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
                           isTouch ? '' : 'opacity-0 group-hover:opacity-100'
                         }`}
                       >
-                        <Plus className="h-3 w-3" />
-                        задача
+                        <Plus className="h-3 w-3 shrink-0" />
+                        <span className="hidden sm:inline">задача</span>
                       </button>
                     </div>
 

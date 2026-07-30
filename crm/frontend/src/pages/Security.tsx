@@ -1,6 +1,7 @@
 import { useFetch } from '../api/hooks';
 import { Spinner, PageHeader, Badge, EmptyState } from '../components/ui';
 import { ShieldCheck, ShieldAlert, Lock, Monitor } from 'lucide-react';
+import { Column, DataTable } from '../components/common';
 
 interface Attempt {
   id: string;
@@ -19,6 +20,43 @@ interface LockedUser {
   fullName: string;
   lockedUntil: string;
 }
+
+const attemptColumns: Column<Attempt>[] = [
+  {
+    key: 'when',
+    title: 'Когда',
+    render: (a) => <span className="text-navy-500">{when(a.createdAt)}</span>,
+  },
+  {
+    key: 'login',
+    title: 'Логин',
+    render: (a) => <span className="font-medium text-navy-900">{a.login}</span>,
+  },
+  {
+    key: 'result',
+    title: 'Результат',
+    render: (a) =>
+      a.success ? (
+        <Badge className="bg-green-100 text-green-700">Вход</Badge>
+      ) : (
+        <Badge className="bg-red-100 text-red-700">
+          {REASON_LABEL[a.reason ?? ''] ?? 'Отказано'}
+        </Badge>
+      ),
+  },
+  {
+    key: 'ip',
+    title: 'Адрес',
+    render: (a) => <span className="text-navy-500">{a.ip || '—'}</span>,
+  },
+  {
+    // строка браузера длинная и на телефоне не помогает — прячем
+    key: 'device',
+    title: 'Устройство',
+    hideOnMobile: true,
+    render: (a) => <span className="text-navy-500">{device(a.userAgent)}</span>,
+  },
+];
 
 interface AttemptsData {
   items: Attempt[];
@@ -166,49 +204,15 @@ export function Security() {
       {data.items.length === 0 ? (
         <EmptyState text="Записей пока нет" />
       ) : (
-        <div className="card overflow-x-auto p-0">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400">
-                <th className="px-4 py-3 font-semibold">Когда</th>
-                <th className="px-4 py-3 font-semibold">Логин</th>
-                <th className="px-4 py-3 font-semibold">Результат</th>
-                <th className="px-4 py-3 font-semibold">Адрес</th>
-                <th className="px-4 py-3 font-semibold">Устройство</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((a) => (
-                <tr
-                  key={a.id}
-                  className={`border-b border-navy-50 ${
-                    a.success ? '' : 'bg-red-50/30'
-                  }`}
-                >
-                  <td className="whitespace-nowrap px-4 py-2.5 text-navy-500">
-                    {when(a.createdAt)}
-                  </td>
-                  <td className="px-4 py-2.5 font-medium text-navy-900">
-                    {a.login}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {a.success ? (
-                      <Badge className="bg-green-100 text-green-700">Вход</Badge>
-                    ) : (
-                      <Badge className="bg-red-100 text-red-700">
-                        {REASON_LABEL[a.reason ?? ''] ?? 'Отказано'}
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-navy-500">{a.ip || '—'}</td>
-                  <td className="px-4 py-2.5 text-navy-500">
-                    {device(a.userAgent)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        // общая таблица: на телефоне сама показывает записи карточками,
+        // раньше здесь была своя вёрстка с min-w-[640px] и боковой прокруткой
+        <DataTable
+          columns={attemptColumns}
+          rows={data.items}
+          rowKey={(a) => a.id}
+          perPage={25}
+          emptyText="Записей пока нет"
+        />
       )}
 
       {failed.length > 0 && (
