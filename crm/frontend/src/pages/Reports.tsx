@@ -92,7 +92,7 @@ export function Reports() {
 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-navy-900">
+                  <span className="min-w-0 break-words font-semibold text-navy-900">
                     {r.clientName}
                   </span>
                   <Badge className={REPORT_STATUS_COLOR[r.status]}>
