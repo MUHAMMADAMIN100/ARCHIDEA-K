@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { EmptyState, ErrorState, Spinner } from '../ui';
+import { DatePicker } from '../DatePicker';
 import { useFetch } from '../../api/hooks';
 import {
   PERIOD_LABEL,
@@ -77,7 +78,62 @@ export function DataTable<T>({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-2xl border border-navy-100 bg-white">
+      {/*
+       * Телефон: строка — карточка «подпись → значение».
+       *
+       * Таблица держала min-w-[640px] в горизонтальной прокрутке, поэтому на
+       * экране 320–425 px любой список ездил в бок, а вместе с ним съезжала и
+       * вся страница. Читать таблицу боковой прокруткой всё равно неудобно:
+       * уводя взгляд к сумме, теряешь имя. Карточка показывает запись целиком.
+       * Колонки, помеченные hideOnMobile, здесь не показываем — они и задуманы
+       * как второстепенные.
+       */}
+      <div className="space-y-2 md:hidden">
+        {slice.map((row) => (
+          <div
+            key={rowKey(row)}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            className={`rounded-2xl border border-navy-100 bg-white p-3 ${
+              onRowClick ? 'cursor-pointer active:bg-navy-50' : ''
+            }`}
+          >
+            {columns
+              .filter((c) => !c.hideOnMobile)
+              .map((c) => (
+                <div
+                  key={c.key}
+                  className="flex items-start justify-between gap-3 border-b border-navy-50 py-1.5 last:border-0"
+                >
+                  <span className="shrink-0 text-[11px] uppercase tracking-wide text-navy-400">
+                    {c.title}
+                  </span>
+                  <span className="min-w-0 break-words text-right text-sm text-navy-800">
+                    {c.render(row)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        ))}
+        {totals && (
+          <div className="rounded-2xl border border-navy-100 bg-navy-50/60 p-3 font-semibold">
+            {columns
+              .filter((c) => !c.hideOnMobile && totals[c.key])
+              .map((c) => (
+                <div
+                  key={c.key}
+                  className="flex items-center justify-between gap-3 py-1 text-sm"
+                >
+                  <span className="text-[11px] uppercase tracking-wide text-navy-400">
+                    {c.title}
+                  </span>
+                  <span className="tabular-nums">{totals[c.key]}</span>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-2xl border border-navy-100 bg-white md:block">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400">
@@ -224,24 +280,34 @@ export function PeriodFilter({
         ))}
       </div>
 
-      <div className="flex items-center gap-1 text-sm">
-        <input
-          type="date"
-          className="input py-1"
-          value={value.from}
-          max={value.to || undefined}
-          onChange={(e) => onChange({ ...value, from: e.target.value })}
-          aria-label="Начало периода"
-        />
-        <span className="text-navy-400">—</span>
-        <input
-          type="date"
-          className="input py-1"
-          value={value.to}
-          min={value.from || undefined}
-          onChange={(e) => onChange({ ...value, to: e.target.value })}
-          aria-label="Конец периода"
-        />
+      {/*
+        Свой календарь вместо родных полей браузера. Родные рисовались в локали
+        системы («mm/dd/yyyy»), не поддавались сжатию и на экране 320–425 px
+        вылезали за границу карточки. min-w-0 обязателен: без него flex-элемент
+        не даёт себя сузить и снова распирает ряд.
+      */}
+      <div className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
+        <div className="min-w-0 flex-1">
+          <DatePicker
+            compact
+            clearable
+            placeholder="с даты"
+            value={value.from}
+            maxDate={value.to || undefined}
+            onChange={(v) => onChange({ ...value, from: v })}
+          />
+        </div>
+        <span className="shrink-0 text-xs text-navy-400">—</span>
+        <div className="min-w-0 flex-1">
+          <DatePicker
+            compact
+            clearable
+            placeholder="по дату"
+            value={value.to}
+            minDate={value.from || undefined}
+            onChange={(v) => onChange({ ...value, to: v })}
+          />
+        </div>
       </div>
     </div>
   );

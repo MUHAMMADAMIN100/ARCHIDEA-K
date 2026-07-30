@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DatePicker } from '../components/DatePicker';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -939,12 +940,7 @@ function EntryModal({
           </div>
           <div>
             <label className="label">Дата *</label>
-            <input
-              type="date"
-              className="input"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <DatePicker value={date} onChange={setDate} />
           </div>
         </div>
 
@@ -1413,21 +1409,22 @@ function BonusModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Период с</label>
-            <input
-              type="date"
-              className="input"
+            <DatePicker
+              compact
+              placeholder="с даты"
               value={periodFrom}
-              onChange={(e) => setPeriodFrom(e.target.value)}
+              maxDate={periodTo || undefined}
+              onChange={setPeriodFrom}
             />
           </div>
           <div>
             <label className="label">Период по</label>
-            <input
-              type="date"
-              className="input"
+            <DatePicker
+              compact
+              placeholder="по дату"
               value={periodTo}
-              min={periodFrom || undefined}
-              onChange={(e) => setPeriodTo(e.target.value)}
+              minDate={periodFrom || undefined}
+              onChange={setPeriodTo}
             />
           </div>
         </div>

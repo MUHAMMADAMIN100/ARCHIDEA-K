@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { ru } from 'date-fns/locale';
-import { Calendar } from 'lucide-react';
+import { Calendar, X } from 'lucide-react';
 import 'react-day-picker/style.css';
 
 function parseISO(s?: string): Date | undefined {
@@ -24,6 +24,17 @@ function fmt(d?: Date): string {
     : '';
 }
 
+/** «12.08.2026» — там, где на месяц словом нет места (фильтры периода) */
+function fmtShort(d?: Date): string {
+  return d
+    ? d.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '';
+}
+
 const rdpVars = {
   '--rdp-accent-color': '#0078c9',
   '--rdp-accent-background-color': '#e6f3fb',
@@ -34,7 +45,12 @@ interface Props {
   value: string;
   onChange: (v: string) => void;
   minDate?: string;
+  maxDate?: string;
   placeholder?: string;
+  /** Тесное место (фильтр периода): короткая дата и мелкий шрифт */
+  compact?: boolean;
+  /** Разрешить сброс даты — крестик очищает значение */
+  clearable?: boolean;
 }
 
 /** Красивый выбор даты (react-day-picker) — единый стиль CRM. */
@@ -42,12 +58,16 @@ export function DatePicker({
   value,
   onChange,
   minDate,
+  maxDate,
   placeholder = 'Выберите дату',
+  compact = false,
+  clearable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = parseISO(value);
   const min = parseISO(minDate);
+  const max = parseISO(maxDate);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -57,12 +77,20 @@ export function DatePicker({
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  const label = selected
+    ? compact
+      ? fmtShort(selected)
+      : fmt(selected)
+    : placeholder;
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative min-w-0" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-navy-200 bg-white px-3.5 text-sm transition-colors hover:border-navy-400 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-100"
+        className={`flex w-full min-w-0 items-center justify-between gap-1.5 rounded-xl border border-navy-200 bg-white transition-colors hover:border-navy-400 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-100 ${
+          compact ? 'h-9 px-2.5 text-xs' : 'h-11 px-3.5 text-sm'
+        }`}
       >
         {/*
          * truncate обязателен: в узкой колонке подпись вроде «Выберите дату»
@@ -72,31 +100,65 @@ export function DatePicker({
         <span
           className={`truncate ${selected ? 'text-navy-900' : 'text-navy-300'}`}
         >
-          {selected ? fmt(selected) : placeholder}
+          {label}
         </span>
-        <Calendar className="h-4 w-4 shrink-0 text-navy-400" />
+        <span className="flex shrink-0 items-center gap-1">
+          {clearable && selected && (
+            <X
+              className="h-3.5 w-3.5 text-navy-300 hover:text-navy-600"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange('');
+                setOpen(false);
+              }}
+            />
+          )}
+          <Calendar
+            className={`shrink-0 text-navy-400 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`}
+          />
+        </span>
       </button>
 
       {open && (
-        <div
-          className="absolute left-0 z-50 mt-2 rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
-          style={rdpVars}
-        >
-          <DayPicker
-            mode="single"
-            locale={ru}
-            weekStartsOn={1}
-            selected={selected}
-            defaultMonth={selected ?? min ?? new Date()}
-            disabled={min ? { before: min } : undefined}
-            onSelect={(d) => {
-              if (d) {
-                onChange(toISO(d));
-                setOpen(false);
-              }
-            }}
+        <>
+          {/*
+           * На телефоне календарь шириной ~300 px не влезает выпадающим списком:
+           * поле может стоять у правого края, и месяц уезжает за экран. Поэтому
+           * до sm он открывается по центру экрана поверх затемнения, а с планшета
+           * остаётся привычным выпадающим списком под полем.
+           */}
+          <div
+            className="fixed inset-0 z-40 bg-navy-950/10 backdrop-blur-sm sm:hidden"
+            onClick={() => setOpen(false)}
           />
-        </div>
+          <div
+            className="fixed left-1/2 top-1/2 z-50 w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-card sm:absolute sm:left-0 sm:top-full sm:mt-2 sm:max-w-none sm:translate-x-0 sm:translate-y-0"
+            style={rdpVars}
+          >
+            <DayPicker
+              mode="single"
+              locale={ru}
+              weekStartsOn={1}
+              selected={selected}
+              defaultMonth={selected ?? min ?? new Date()}
+              disabled={
+                min && max
+                  ? [{ before: min }, { after: max }]
+                  : min
+                    ? { before: min }
+                    : max
+                      ? { after: max }
+                      : undefined
+              }
+              onSelect={(d) => {
+                if (d) {
+                  onChange(toISO(d));
+                  setOpen(false);
+                }
+              }}
+            />
+          </div>
+        </>
       )}
     </div>
   );

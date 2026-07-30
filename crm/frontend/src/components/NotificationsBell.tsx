@@ -68,7 +68,12 @@ export function NotificationsBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 max-h-[420px] w-80 overflow-y-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-card">
+        {/*
+         * Ширина 320 px с привязкой к правому краю вылезала за левую границу
+         * экрана телефона — заголовок и текст обрезались. Считаем ширину от
+         * экрана и не даём быть шире 320 px.
+         */}
+        <div className="absolute right-0 z-50 mt-2 max-h-[70vh] w-[calc(100vw-1.5rem)] max-w-[20rem] overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white p-2 shadow-card">
           <div className="px-3 py-2 text-sm font-bold text-navy-900">
             Уведомления
           </div>
