@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramWorker } from './telegram.worker';
 
 /** Клиент Prisma или транзакция — как в audit.service.ts: очередь можно
  * писать внутри уже открытой транзакции, чтобы постановка сообщения
@@ -22,7 +23,8 @@ export interface EnqueueOptions {
  * api.telegram.org не должен ронять перевод заказа в «Оплачено», а
  * перезапуск контейнера при деплое Railway — терять уведомление.
  * Сообщение только кладётся в таблицу TelegramMessage; отправляет его
- * фоновый воркер (telegram.worker.ts) раз в минуту.
+ * фоновый воркер (telegram.worker.ts). Постановка сразу будит воркер, поэтому
+ * уведомление уходит через доли секунды, а не ждёт периодического прохода.
  *
  * Методы никогда не бросают исключение — сбой Telegram не должен ронять
  * вызвавшую бизнес-операцию.
@@ -31,7 +33,10 @@ export interface EnqueueOptions {
 export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger('Telegram');
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private worker: TelegramWorker,
+  ) {}
 
   onModuleInit(): void {
     if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -59,6 +64,8 @@ export class TelegramService implements OnModuleInit {
           refId: opts.refId ?? null,
         },
       });
+      // будим воркер: без этого сообщение ждало бы периодического прохода
+      this.worker.nudge();
     } catch (e) {
       this.logger.error('Не удалось поставить сообщение Telegram в очередь', e as Error);
     }

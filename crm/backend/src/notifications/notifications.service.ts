@@ -14,8 +14,33 @@ export class NotificationsService {
     message: string;
     orderId?: string;
     taskId?: string;
+    clientId?: string;
   }) {
     return this.prisma.notification.create({ data: params });
+  }
+
+  /**
+   * Уведомить всех действующих сотрудников.
+   *
+   * Нужно для новой заявки с сайта: раньше её видел только тот менеджер,
+   * которому она досталась при распределении, и руководитель не знал о
+   * поступившем обращении вовсе.
+   */
+  async notifyEveryone(params: {
+    type: NotificationType;
+    title: string;
+    message: string;
+    orderId?: string;
+    clientId?: string;
+  }) {
+    const staff = await this.prisma.user.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (staff.length === 0) return;
+    await this.prisma.notification.createMany({
+      data: staff.map((u) => ({ userId: u.id, ...params })),
+    });
   }
 
   /** Уведомить всех руководителей (например, о крупном заказе) */
@@ -24,6 +49,7 @@ export class NotificationsService {
     title: string;
     message: string;
     orderId?: string;
+    clientId?: string;
   }) {
     const directors = await this.prisma.user.findMany({
       where: { role: Role.DIRECTOR, isActive: true },

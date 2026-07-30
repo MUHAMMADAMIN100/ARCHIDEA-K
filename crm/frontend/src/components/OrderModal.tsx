@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { Modal, Badge, Spinner, ErrorState, EmptyState } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
@@ -497,6 +497,12 @@ export function OrderModal({
       } else if (scheduledWithTime) {
         await api.patch(`/orders/${order.id}`, { scheduledDate: scheduledWithTime });
       }
+      /*
+       * Смена этапа порождает записи в других разделах: осмотр — выезд в
+       * «Сменах», оплата — черновик ведомости. Их кэш надо забыть, иначе при
+       * переходе туда человек увидит прежнее состояние до фонового обновления.
+       */
+      invalidateOrderRelated();
       onUpdated();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Не удалось сохранить заказ');
@@ -653,13 +659,13 @@ export function OrderModal({
                   </div>
                 </div>
                 <div>
-                  <label className="label">Комментарий с сайта</label>
+                  <label className="label">Комментарий клиента</label>
                   <textarea
                     rows={2}
                     className="input"
                     value={editComment}
                     onChange={(e) => setEditComment(e.target.value)}
-                    placeholder="что написал клиент при обращении"
+                    placeholder="что написал или сказал клиент при обращении"
                   />
                 </div>
               </div>

@@ -180,27 +180,26 @@ export class LeadsService {
       },
     });
 
-    // 6. Уведомляем назначенного менеджера (или всех руководителей, если менеджеров нет)
-    if (managerId) {
-      const volume =
-        cleaningType === CleaningType.FURNITURE
-          ? `${dto.calculator?.seats ?? 0} мест`
-          : `${dto.calculator?.area ?? 0} м²`;
-      await this.notifications.notify({
-        userId: managerId,
-        type: NotificationType.NEW_LEAD,
-        title: 'Новая заявка с сайта',
-        message: `${client.fullName} · ${volume} · ${dto.total ?? 0} сомони`,
-        orderId: order.id,
-      });
-    } else {
-      await this.notifications.notifyDirectors({
-        type: NotificationType.NEW_LEAD,
-        title: 'Новая заявка с сайта (без менеджера)',
-        message: `${client.fullName} · ${dto.total ?? 0} сомони`,
-        orderId: order.id,
-      });
-    }
+    /*
+     * 6. Уведомление о новой заявке — всем действующим сотрудникам.
+     *
+     * Раньше его видел только менеджер, которому заявка досталась при
+     * распределении: руководитель о новом обращении не знал. Ссылку кладём
+     * и на клиента, и на заказ — по клику открывается карточка клиента.
+     */
+    const volume =
+      cleaningType === CleaningType.FURNITURE
+        ? `${dto.calculator?.seats ?? 0} мест`
+        : `${dto.calculator?.area ?? 0} м²`;
+    await this.notifications.notifyEveryone({
+      type: NotificationType.NEW_LEAD,
+      title: 'Новая заявка с сайта',
+      message: `${client.fullName} · ${volume} · ${clamp(dto.total)} сомони${
+        managerId ? '' : ' · менеджер не назначен'
+      }`,
+      orderId: order.id,
+      clientId: client.id,
+    });
 
     /*
      * Уведомление в рабочий чат Telegram (ТЗ 10.2). Раньше его слал сам браузер
@@ -208,10 +207,6 @@ export class LeadsService {
      * Теперь сообщение ставится в очередь на сервере: даже если Telegram
      * недоступен, заявка уже сохранена и уйдёт при следующей попытке.
      */
-    const volume =
-      cleaningType === CleaningType.FURNITURE
-        ? `${dto.calculator?.seats ?? 0} мест`
-        : `${dto.calculator?.area ?? 0} м²`;
     const lines = [
       '<b>Новая заявка с сайта</b>',
       `Клиент: ${escapeHtml(client.fullName)}`,

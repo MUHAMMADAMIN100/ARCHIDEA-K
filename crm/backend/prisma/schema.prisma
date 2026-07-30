@@ -568,6 +568,8 @@ model Notification {
   isRead    Boolean          @default(false)
   orderId   String?
   taskId    String?
+  /// Клиент, к которому относится уведомление — по клику открывается его карточка
+  clientId  String?
   createdAt DateTime         @default(now())
 
   @@index([userId, isRead])

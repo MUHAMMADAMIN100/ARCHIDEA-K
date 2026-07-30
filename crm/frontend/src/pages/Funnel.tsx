@@ -8,7 +8,7 @@ import {
 } from '@hello-pangea/dnd';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Spinner, PageHeader, Badge, ErrorState } from '../components/ui';
@@ -174,6 +174,10 @@ export function Funnel() {
   // «доезжает и сбрасывается», когда поллинг подтянет старое состояние)
   const draggingRef = useRef(false);
   const inFlightRef = useRef(0);
+  // доска: прокрутка стрелками — мышью тянуть полосу неудобно на большом экране
+  const boardRef = useRef<HTMLDivElement>(null);
+  const scrollBoard = (dir: -1 | 1) =>
+    boardRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
   const { data, loading, error, reload, setData } = useFetch<BoardColumn[]>(
     '/orders/board',
@@ -249,6 +253,13 @@ export function Funnel() {
         stage: newStage,
         rejectionReason,
       });
+      /*
+       * Смена этапа порождает записи в других разделах: осмотр — выезд в
+       * «Сменах», оплата — черновик ведомости и запись дохода. Забываем их
+       * кэш, чтобы при переходе туда данные загрузились заново, а не показали
+       * состояние до перетаскивания.
+       */
+      invalidateOrderRelated();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Не удалось сменить этап');
       reload(); // вернуть серверное состояние
@@ -340,11 +351,34 @@ export function Funnel() {
               Сбросить
             </button>
           )}
+
+          {/*
+            Стрелки прокрутки доски. Этапов девять, на экран они не влезают, и
+            тянуть полосу мышью через всю страницу неудобно.
+          */}
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              onClick={() => scrollBoard(-1)}
+              className="btn-ghost px-2 py-1"
+              aria-label="Прокрутить доску влево"
+              title="Влево"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => scrollBoard(1)}
+              className="btn-ghost px-2 py-1"
+              aria-label="Прокрутить доску вправо"
+              title="Вправо"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div ref={boardRef} className="board-scroll flex gap-4">
           {board.map((col) => (
             <div key={col.stage} className="flex w-72 shrink-0 flex-col">
               {/*

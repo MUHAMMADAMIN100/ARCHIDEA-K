@@ -57,6 +57,30 @@ export function mutateCache<T>(url: string, updater: (prev: T) => T) {
  * в финансах и меняет аналитику, закрытие смены — начисляет выплаты.
  * Без сброса пользователь увидел бы устаревшие цифры до перезагрузки страницы.
  */
+/**
+ * Сбросить кэш разделов, зависящих от заказа.
+ *
+ * У каждой страницы свой кэш: при переходе показывается сохранённое, а свежее
+ * подтягивается фоном. Поэтому созданный заказ не появлялся в воронке, выезд
+ * по осмотру — в «Сменах», а черновик ведомости — в «Ведомостях», пока не
+ * обновишь страницу. После изменения заказа эти разделы надо забыть, чтобы
+ * при переходе они загрузились заново.
+ */
+export function invalidateOrderRelated(): void {
+  for (const prefix of [
+    '/orders',
+    '/clients',
+    '/shift-groups',
+    '/payroll',
+    '/reports',
+    '/analytics',
+    '/finance',
+    '/notifications',
+  ]) {
+    invalidate(prefix);
+  }
+}
+
 export function invalidate(prefix: string) {
   for (const key of [...cache.keys()]) {
     if (key.startsWith(prefix)) cache.delete(key);

@@ -27,11 +27,25 @@ export function NotificationsBell() {
 
   useEffect(() => {
     load();
-    // опрос каждые 30 сек, но не когда вкладка скрыта (экономим запросы)
+    /*
+     * Опрос каждые 10 секунд плюс обновление при возврате на вкладку.
+     * Раньше интервал был 30 секунд, и уведомление о новой заявке появлялось
+     * с заметной задержкой — человек уже видел её в воронке, а колокольчик
+     * ещё молчал.
+     */
     const t = setInterval(() => {
       if (!document.hidden) load();
-    }, 30000);
-    return () => clearInterval(t);
+    }, 10000);
+    const onFocus = () => {
+      if (!document.hidden) load();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, []);
 
   useEffect(() => {

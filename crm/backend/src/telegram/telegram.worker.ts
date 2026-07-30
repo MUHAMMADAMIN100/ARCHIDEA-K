@@ -12,9 +12,14 @@ const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000, 60 * 60_0
 const SEND_TIMEOUT_MS = 10_000;
 
 /**
- * Раз в минуту забирает сообщения со статусом PENDING и наступившим временем
- * следующей попытки, отправляет через Telegram Bot API. Перезапуск контейнера
- * при деплое не теряет сообщения — они остаются в очереди до следующего тика.
+ * Забирает сообщения со статусом PENDING и наступившим временем следующей
+ * попытки и отправляет через Telegram Bot API. Перезапуск контейнера при
+ * деплое не теряет сообщения — они остаются в очереди до следующего тика.
+ *
+ * Раньше проход был раз в минуту, и уведомление приходило с задержкой до
+ * минуты — на живой заявке это заметно. Теперь отправку запускает сама
+ * постановка в очередь (nudge), а периодический проход остаётся страховкой:
+ * он подберёт то, что не ушло из-за недоступного Telegram или перезапуска.
  */
 @Injectable()
 export class TelegramWorker {
@@ -22,27 +27,53 @@ export class TelegramWorker {
 
   constructor(private prisma: PrismaService) {}
 
-  @Interval(60_000)
+  /** идёт ли проход сейчас — чтобы будильники не запускали его пачкой */
+  private running = false;
+  /** отложенный будильник: несколько сообщений подряд дают один проход */
+  private nudgeTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * Разобрать очередь как можно скорее.
+   *
+   * Небольшая задержка обязательна: сообщение часто ставится ВНУТРИ
+   * транзакции бизнес-операции, и до её фиксации строки в базе ещё нет.
+   * Если проход всё же опередит фиксацию, страховкой служит периодический
+   * тик — сообщение не потеряется.
+   */
+  nudge(delayMs = 300): void {
+    if (this.nudgeTimer) return;
+    this.nudgeTimer = setTimeout(() => {
+      this.nudgeTimer = null;
+      void this.tick();
+    }, delayMs);
+  }
+
+  @Interval(15_000)
   async tick(): Promise<void> {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) return; // без токена не пытаемся вовсе — предупреждение уже дано при старте
-
-    const due = await this.prisma.telegramMessage.findMany({
-      where: { status: TelegramStatus.PENDING, nextTryAt: { lte: new Date() } },
-      orderBy: { nextTryAt: 'asc' },
-      take: BATCH_SIZE,
-    });
-
-    for (const msg of due) {
-      // Оптимистичный захват на случай нескольких инстансов бэкенда:
-      // если запись уже забрал другой процесс — статус больше не PENDING.
-      const claimed = await this.prisma.telegramMessage.updateMany({
-        where: { id: msg.id, status: TelegramStatus.PENDING },
-        data: { status: TelegramStatus.SENDING },
+    if (this.running) return; // проход уже идёт — второй только мешал бы
+    this.running = true;
+    try {
+      const due = await this.prisma.telegramMessage.findMany({
+        where: { status: TelegramStatus.PENDING, nextTryAt: { lte: new Date() } },
+        orderBy: { nextTryAt: 'asc' },
+        take: BATCH_SIZE,
       });
-      if (claimed.count === 0) continue;
 
-      await this.sendOne(token, msg.id, msg.chatId, msg.text, msg.parseMode, msg.attempts);
+      for (const msg of due) {
+        // Оптимистичный захват на случай нескольких инстансов бэкенда:
+        // если запись уже забрал другой процесс — статус больше не PENDING.
+        const claimed = await this.prisma.telegramMessage.updateMany({
+          where: { id: msg.id, status: TelegramStatus.PENDING },
+          data: { status: TelegramStatus.SENDING },
+        });
+        if (claimed.count === 0) continue;
+
+        await this.sendOne(token, msg.id, msg.chatId, msg.text, msg.parseMode, msg.attempts);
+      }
+    } finally {
+      this.running = false;
     }
   }
 

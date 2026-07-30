@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, PhoneCall, Plus, Repeat2, Save, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesAll } from '../types';
 import { Spinner, PageHeader, Badge, Modal, ErrorState } from '../components/ui';
@@ -129,7 +129,11 @@ export function ClientCard() {
     );
     api
       .post('/orders', { clientId: data.id, source: 'CALL', ...payload })
-      .then(() => reload())
+      .then(() => {
+        // воронка должна показать новый заказ сразу при переходе, без обновления
+        invalidateOrderRelated();
+        reload();
+      })
       .catch((e) => {
         toast.error(e?.response?.data?.message || 'Не удалось создать заказ');
         setData((c) =>

@@ -27,6 +27,35 @@
 }
 
 @layer components {
+  /*
+   * Видимая полоса прокрутки для доски воронки.
+   *
+   * Системная полоса на широком экране почти не видна, и было неочевидно, что
+   * доска продолжается правее — колонки просто «обрезались». Здесь полоса
+   * заметная и в брендовом цвете, плюс запас снизу, чтобы её было куда тянуть.
+   */
+  .board-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.5rem;
+    scrollbar-width: auto;
+    scrollbar-color: #0078c9 #e6f3fb;
+  }
+  .board-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+  .board-scroll::-webkit-scrollbar-track {
+    background: #e6f3fb;
+    border-radius: 9999px;
+  }
+  .board-scroll::-webkit-scrollbar-thumb {
+    background: #0078c9;
+    border-radius: 9999px;
+  }
+  .board-scroll::-webkit-scrollbar-thumb:hover {
+    background: #0063a8;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed;
   }

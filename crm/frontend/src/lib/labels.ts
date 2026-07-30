@@ -437,9 +437,20 @@ export function notificationTarget(n: {
   type: NotificationKind;
   orderId?: string | null;
   taskId?: string | null;
+  clientId?: string | null;
 }): string | null {
   switch (n.type) {
+    /*
+     * Новая заявка ведёт в карточку клиента: с неё начинается работа с
+     * обращением — там контакты, все заказы и история. Если клиент почему-то
+     * не привязан, откатываемся к самой заявке в воронке.
+     */
     case 'NEW_LEAD':
+      return n.clientId
+        ? `/clients/${n.clientId}`
+        : n.orderId
+          ? `/funnel?order=${n.orderId}`
+          : '/funnel';
     case 'ORDER_STATUS_CHANGED':
     case 'ORDER_PREFERENCES':
       return n.orderId ? `/funnel?order=${n.orderId}` : '/funnel';

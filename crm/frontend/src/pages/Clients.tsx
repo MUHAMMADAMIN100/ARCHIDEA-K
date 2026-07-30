@@ -127,10 +127,22 @@ export function Clients() {
             ...order,
           })
         ).data;
-        // мгновенно показать заявку в кэше воронки (если он уже загружен)
+        /*
+         * Мгновенно показываем заявку в кэше воронки, если он уже загружен.
+         * Сумму на этапе тоже поправляем: иначе карточка появится, а «Сумма»
+         * в шапке колонки останется прежней до фонового обновления.
+         */
         mutateCache<BoardColumn[]>('/orders/board', (cols) =>
           cols.map((c) =>
-            c.stage === 'NEW' ? { ...c, orders: [created, ...c.orders] } : c,
+            c.stage === 'NEW'
+              ? {
+                  ...c,
+                  orders: [created, ...c.orders],
+                  amount:
+                    (c.amount ?? 0) +
+                    (created.finalPrice ?? created.estimatedPrice ?? 0),
+                }
+              : c,
           ),
         );
       }

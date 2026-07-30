@@ -315,9 +315,10 @@ export interface NotificationItem {
   title: string;
   message: string;
   isRead: boolean;
-  /** заполнены, когда уведомление привязано к заказу или задаче */
+  /** заполнены, когда уведомление привязано к заказу, задаче или клиенту */
   orderId?: string | null;
   taskId?: string | null;
+  clientId?: string | null;
   createdAt: string;
 }
 
