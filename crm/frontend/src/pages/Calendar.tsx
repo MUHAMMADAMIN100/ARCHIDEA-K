@@ -308,27 +308,32 @@ export function Calendar() {
           ))}
         </div>
 
-        <div className="flex items-center gap-1">
+        {/*
+          На 320 px этот ряд распирал страницу: 170 px под заголовок месяца
+          плюс две стрелки и «Сегодня» не влезали. Заголовок сжимается и
+          переносится по словам, кнопка мельче — стрелки остаются нажимаемыми.
+        */}
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           <button
             onClick={() => shift(-1)}
-            className="rounded-lg p-2 text-navy-500 hover:bg-navy-50"
+            className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 sm:p-2"
             title="Назад"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-[170px] text-center text-sm font-bold text-navy-900">
+          <span className="min-w-0 flex-1 text-center text-xs font-bold text-navy-900 sm:min-w-[170px] sm:flex-none sm:text-sm">
             {title}
           </span>
           <button
             onClick={() => shift(1)}
-            className="rounded-lg p-2 text-navy-500 hover:bg-navy-50"
+            className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 sm:p-2"
             title="Вперёд"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
           <button
             onClick={() => setCursor(new Date())}
-            className="ml-2 rounded-xl border border-navy-200 px-3 py-1.5 text-sm font-medium text-navy-700 transition hover:bg-navy-50"
+            className="ml-1 shrink-0 rounded-xl border border-navy-200 px-2 py-1.5 text-xs font-medium text-navy-700 transition hover:bg-navy-50 sm:ml-2 sm:px-3 sm:text-sm"
           >
             Сегодня
           </button>

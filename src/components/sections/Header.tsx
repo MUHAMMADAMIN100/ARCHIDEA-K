@@ -35,7 +35,7 @@ export function Header() {
         {/* на 320 px логотип в полный рост вместе с кнопкой звонка не влезал */}
         <Logo
           variant={scrolled ? 'blue' : 'white'}
-          className="h-9 shrink-0 sm:h-12"
+          className="h-8 shrink-0 sm:h-12"
         />
 
         <nav className="hidden items-center gap-7 text-sm font-medium md:flex">
@@ -57,7 +57,7 @@ export function Header() {
 
         <a
           href={COMPANY.phoneHref}
-          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all sm:gap-2 sm:px-4 sm:py-2 sm:text-sm [@media(max-width:359px)]:px-2 [@media(max-width:359px)]:text-[11px] ${
             scrolled
               ? 'bg-navy-500 text-white hover:bg-navy-600'
               : 'border border-white/25 bg-white/5 text-white backdrop-blur hover:bg-white/10'
