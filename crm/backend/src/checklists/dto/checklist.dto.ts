@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { CleaningType } from '@prisma/client';
+import { CleaningType, DirtAssessment } from '@prisma/client';
 
 /** Верхняя граница порядка сортировки — просто разумный предел, не бизнес-правило */
 const MAX_SORT_ORDER = 10_000;
@@ -23,6 +23,12 @@ export class ChecklistTemplateItemDto {
   @IsString()
   @MaxLength(300)
   title: string;
+
+  /** Строка-пояснение под пунктом: на что смотреть и почему это важно */
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  hint?: string | null;
 
   @IsOptional()
   @IsString()
@@ -44,6 +50,16 @@ export class CreateChecklistTemplateDto {
   @IsString()
   @MaxLength(200)
   name: string;
+
+  /** Пункты оцениваются «норма / среднее / сильное» вместо простой галочки */
+  @IsOptional()
+  @IsBoolean()
+  usesLevels?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  description?: string | null;
 
   /** null — шаблон подходит любому виду уборки */
   @IsOptional()
@@ -101,13 +117,22 @@ export class ApplyChecklistTemplateDto {
 }
 
 export class ToggleChecklistItemDto {
+  @IsOptional()
   @IsBoolean()
-  isDone: boolean;
+  isDone?: boolean;
 
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   comment?: string | null;
+
+  /**
+   * Оценка загрязнения по пункту для чек-листа приёма объекта.
+   * null — оценка снята.
+   */
+  @IsOptional()
+  @IsEnum(DirtAssessment)
+  level?: DirtAssessment | null;
 }
 
 export class AddChecklistItemDto {

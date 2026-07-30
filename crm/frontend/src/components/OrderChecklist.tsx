@@ -8,13 +8,41 @@ import { useDialog } from './Dialog';
 import { useToast } from './Toast';
 import { formatDateTimeTz } from '../lib/date';
 import { tempId } from '../lib/util';
-import type { ChecklistStatus, ChecklistTemplate, OrderChecklist, OrderChecklistItem } from '../types';
+import type {
+  ChecklistStatus,
+  ChecklistTemplate,
+  DirtAssessment,
+  OrderChecklist,
+  OrderChecklistItem,
+} from '../types';
 
 const STATUS_LABEL: Record<ChecklistStatus, string> = {
   OPEN: 'Не начат',
   IN_PROGRESS: 'В процессе',
   DONE: 'Закрыт',
 };
+
+/** Шкала приёма объекта — цвета повторяют печатную форму */
+const LEVELS: { value: DirtAssessment; label: string; on: string; off: string }[] = [
+  {
+    value: 'NORMAL',
+    label: 'Норма',
+    on: 'border-emerald-500 bg-emerald-500 text-white',
+    off: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50',
+  },
+  {
+    value: 'MEDIUM',
+    label: 'Среднее',
+    on: 'border-amber-500 bg-amber-500 text-white',
+    off: 'border-amber-200 text-amber-700 hover:bg-amber-50',
+  },
+  {
+    value: 'HEAVY',
+    label: 'Сильное',
+    on: 'border-red-500 bg-red-500 text-white',
+    off: 'border-red-200 text-red-700 hover:bg-red-50',
+  },
+];
 
 const STATUS_COLOR: Record<ChecklistStatus, string> = {
   OPEN: 'bg-navy-100 text-navy-600',
@@ -113,6 +141,34 @@ export function OrderChecklistCard({
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Не удалось применить шаблон');
       setData(null);
+    }
+  };
+
+  /** Оценка загрязнения по пункту (чек-лист приёма объекта) */
+  const setLevel = async (item: OrderChecklistItem, level: DirtAssessment) => {
+    if (!checklist) return;
+    // повторный клик по той же оценке снимает её
+    const next = item.level === level ? null : level;
+    const patch = (fields: Partial<OrderChecklistItem>) =>
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((i) =>
+                i.id === item.id ? { ...i, ...fields } : i,
+              ),
+            }
+          : prev,
+      );
+    patch({ level: next, isDone: next !== null });
+    try {
+      await api.patch(
+        `/orders/${orderId}/checklist/items/${item.id}`,
+        { level: next },
+      );
+    } catch (e: any) {
+      patch({ level: item.level, isDone: item.isDone });
+      toast.error(e?.response?.data?.message || 'Не удалось сохранить оценку');
     }
   };
 
@@ -236,8 +292,9 @@ export function OrderChecklistCard({
     }
   };
 
-  const totalCount = checklist?.items.length ?? 0;
-  const doneCount = checklist?.items.filter((i) => i.isDone).length ?? 0;
+  const items = checklist?.items ?? [];
+  const totalCount = items.length;
+  const doneCount = items.filter((i) => i.isDone).length;
   const requiredNotDone = checklist?.items.filter((i) => i.required && !i.isDone).length ?? 0;
 
   return (
@@ -333,7 +390,9 @@ export function OrderChecklistCard({
                         key={item.id}
                         item={item}
                         canEdit={canEdit}
+                        usesLevels={!!checklist.usesLevels}
                         onToggle={() => toggleItem(item)}
+                        onLevel={(lvl) => setLevel(item, lvl)}
                         onRemove={() => removeItem(item)}
                       />
                     ))}
@@ -411,12 +470,17 @@ export function OrderChecklistCard({
 function ChecklistItemRow({
   item,
   canEdit,
+  usesLevels,
   onToggle,
+  onLevel,
   onRemove,
 }: {
   item: OrderChecklistItem;
   canEdit: boolean;
+  /** чек-лист приёма объекта: вместо галочки — оценка загрязнения */
+  usesLevels: boolean;
   onToggle: () => void;
+  onLevel: (level: DirtAssessment) => void;
   onRemove: () => void;
 }) {
   const pending = item.required && !item.isDone;
@@ -426,6 +490,7 @@ function ChecklistItemRow({
         pending ? 'border-amber-200 bg-amber-50/40' : 'border-navy-100'
       }`}
     >
+      {!usesLevels && (
       <button
         type="button"
         onClick={canEdit ? onToggle : undefined}
@@ -437,9 +502,16 @@ function ChecklistItemRow({
       >
         {item.isDone && <Check className="h-3.5 w-3.5" />}
       </button>
+      )}
 
       <div className="min-w-0 flex-1">
-        <div className={`text-sm ${item.isDone ? 'text-navy-400 line-through' : 'text-navy-900'}`}>
+        <div
+          className={`text-sm ${
+            !usesLevels && item.isDone
+              ? 'text-navy-400 line-through'
+              : 'text-navy-900'
+          }`}
+        >
           {item.title}
           {item.required && (
             <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
@@ -447,7 +519,28 @@ function ChecklistItemRow({
             </span>
           )}
         </div>
-        {item.isDone && item.doneByName && (
+        {/* подсказка из бумажной формы: на что смотреть и почему это важно */}
+        {item.hint && (
+          <div className="mt-0.5 text-xs italic text-navy-400">{item.hint}</div>
+        )}
+        {usesLevels && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {LEVELS.map((l) => (
+              <button
+                key={l.value}
+                type="button"
+                disabled={!canEdit}
+                onClick={() => onLevel(l.value)}
+                className={`rounded-lg border px-2 py-0.5 text-xs font-medium transition ${
+                  item.level === l.value ? l.on : `bg-white ${l.off}`
+                } ${canEdit ? '' : 'cursor-not-allowed opacity-70'}`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {!usesLevels && item.isDone && item.doneByName && (
           <div className="mt-0.5 text-xs text-navy-400">
             Отметил(а) {item.doneByName}
             {item.doneAt ? ` · ${formatDateTimeTz(item.doneAt)}` : ''}

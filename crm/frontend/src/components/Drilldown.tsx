@@ -215,7 +215,13 @@ export function DetailModal({
 }) {
   return (
     <Modal open onClose={onClose} title={title} wide>
-      {subtitle && <div className="-mt-3 mb-4 text-xs text-navy-400">{subtitle}</div>}
+      {/*
+        Подпись была text-xs text-navy-400 — светло-голубым по светлому фону,
+        прочитать её было нельзя. Размер и цвет подняты до читаемых.
+      */}
+      {subtitle && (
+        <div className="-mt-3 mb-4 text-sm text-navy-600">{subtitle}</div>
+      )}
       {children}
     </Modal>
   );

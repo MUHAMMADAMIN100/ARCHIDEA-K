@@ -558,9 +558,14 @@ export interface AuditPage {
 
 export type ChecklistStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
 
+/** Оценка загрязнения при приёме объекта — как в бумажном чек-листе */
+export type DirtAssessment = 'NORMAL' | 'MEDIUM' | 'HEAVY';
+
 export interface ChecklistTemplateItem {
   id: string;
   title: string;
+  /** Пояснение под пунктом: на что смотреть и почему это важно */
+  hint?: string | null;
   section?: string | null;
   required: boolean;
   sortOrder: number;
@@ -569,6 +574,9 @@ export interface ChecklistTemplateItem {
 export interface ChecklistTemplate {
   id: string;
   name: string;
+  description?: string | null;
+  /** Пункты оцениваются по шкале, а не отмечаются галочкой */
+  usesLevels?: boolean;
   cleaningType?: CleaningType | null;
   serviceKey?: string | null;
   isActive: boolean;
@@ -578,6 +586,7 @@ export interface ChecklistTemplate {
 
 export interface OrderChecklistItem extends ChecklistTemplateItem {
   isDone: boolean;
+  level?: DirtAssessment | null;
   doneById?: string | null;
   doneByName?: string | null;
   doneAt?: string | null;
@@ -589,6 +598,8 @@ export interface OrderChecklist {
   orderId: string;
   templateId?: string | null;
   templateName: string;
+  usesLevels?: boolean;
+  note?: string | null;
   status: ChecklistStatus;
   completedAt?: string | null;
   items: OrderChecklistItem[];

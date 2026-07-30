@@ -93,6 +93,14 @@ export const SOURCE_LABEL: Record<LeadSource, string> = {
   RECOMMENDATION: 'Рекомендация',
 };
 
+/** Порядок источников в выпадающих списках */
+export const SOURCE_ORDER: LeadSource[] = [
+  'SITE',
+  'INSTAGRAM',
+  'CALL',
+  'RECOMMENDATION',
+];
+
 export const TAG_LABEL: Record<ClientTag, string> = {
   VIP: 'VIP',
   REGULAR: 'Постоянный',

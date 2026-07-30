@@ -798,9 +798,21 @@ model Bonus {
 // ═══════════════════════════════════════════════════════════
 
 /// Шаблон чек-листа (обычно свой на каждый вид уборки)
+/// Оценка загрязнения при приёме объекта — как в бумажном чек-листе
+enum DirtAssessment {
+  NORMAL // норма / лёгкое
+  MEDIUM // среднее загрязнение
+  HEAVY // сильное / критичное
+}
+
 model ChecklistTemplate {
   id           String                  @id @default(cuid())
   name         String
+  /// Пункты оцениваются по шкале «норма / среднее / сильное» — это чек-лист
+  /// приёма объекта. false — обычная проверка качества с галочкой.
+  usesLevels   Boolean                 @default(false)
+  /// Пояснение к назначению чек-листа («Приём объекта до начала работ»)
+  description  String?
   cleaningType CleaningType? // null — подходит любому виду уборки
   serviceKey   String? // ключ услуги из Tariff.key
   isActive     Boolean                 @default(true)
@@ -822,6 +834,8 @@ model ChecklistTemplateItem {
   template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   templateId String
   title      String
+  /// Подсказка мелким шрифтом: на что смотреть и почему это важно
+  hint       String?
   section    String? // «Кухня», «Санузел», «Комнаты»
   required   Boolean           @default(false)
   sortOrder  Int               @default(0)
@@ -837,6 +851,10 @@ model OrderChecklist {
   orderId      String               @unique
   templateId   String?
   templateName String
+  /// Копия признака из шаблона: чек-лист приёма оценивается по шкале
+  usesLevels   Boolean              @default(false)
+  /// «Комментарии и особые отметки» — свободное поле внизу бумажной формы
+  note         String?
   status       ChecklistStatus      @default(OPEN)
   completedAt  DateTime?
   items        OrderChecklistItem[]
@@ -850,10 +868,13 @@ model OrderChecklistItem {
   checklist   OrderChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   checklistId String
   title       String
+  hint        String?
   section     String?
   required    Boolean        @default(false)
   sortOrder   Int            @default(0)
   isDone      Boolean        @default(false)
+  /// Оценка загрязнения по пункту (только для чек-листов приёма объекта)
+  level       DirtAssessment?
   /// Отмечает менеджер или бригадир со своего аккаунта в CRM
   doneById    String?
   doneByName  String?

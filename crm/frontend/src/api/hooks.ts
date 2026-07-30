@@ -124,9 +124,18 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
         // Проверяем для ЛЮБОЙ загрузки (не только фоновой): первичная
         // тоже может завершиться уже после действия пользователя.
         if (dataGenRef.current !== gen) return;
-        cache.set(url, res.data);
+        /*
+         * Пустое тело ответа приводим к null.
+         *
+         * Nest на `return null` отдаёт 200 без тела, axios подставляет ''.
+         * Пустая строка — не null и не undefined, поэтому `data?.items.length`
+         * её НЕ отсекает и падает с «Cannot read properties of undefined».
+         * Именно на этом рушилась вкладка «Чек-лист» и вся страница воронки.
+         */
+        const body = (res.data as unknown) === '' ? null : res.data;
+        cache.set(url, body);
         if (urlRef.current !== url) return; // URL уже сменился — не трогаем состояние
-        setData(res.data);
+        setData(body as T);
         setError(null);
       } catch (e: any) {
         if (urlRef.current !== url) return;

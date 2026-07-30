@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { DayPicker } from 'react-day-picker';
 import { ru } from 'date-fns/locale';
 import { Calendar, X } from 'lucide-react';
@@ -65,17 +66,60 @@ export function DatePicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const selected = parseISO(value);
   const min = parseISO(minDate);
   const max = parseISO(maxDate);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (popRef.current?.contains(t)) return; // клик по самому календарю
+      if (ref.current && !ref.current.contains(t)) setOpen(false);
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  /*
+   * Позицию календаря считаем сами и рисуем его через портал в body.
+   *
+   * Раньше он был обычным выпадающим блоком внутри поля. Внутри модалки
+   * содержимое прокручивается (max-h-[90vh] overflow-y-auto), и календарь
+   * этой прокруткой обрезался: в «Штрафе клинеру» и в карточке заказа
+   * половина месяца уходила за край окна. В портале обрезать его нечем,
+   * а положение подгоняем так, чтобы он не вылез за экран.
+   */
+  const CAL_W = 300;
+  const CAL_H = 340;
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const gap = 6;
+      const left = Math.min(
+        Math.max(8, r.left),
+        Math.max(8, window.innerWidth - CAL_W - 8),
+      );
+      // не хватает места снизу — открываем над полем
+      const below = window.innerHeight - r.bottom;
+      const top =
+        below < CAL_H && r.top > CAL_H
+          ? r.top - CAL_H - gap
+          : Math.min(r.bottom + gap, window.innerHeight - CAL_H - 8);
+      setPos({ top: Math.max(8, top), left });
+    };
+    place();
+    window.addEventListener('resize', place);
+    // календарь может стоять внутри прокручиваемой модалки — следим за ней тоже
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
 
   const label = selected
     ? compact
@@ -119,47 +163,49 @@ export function DatePicker({
         </span>
       </button>
 
-      {open && (
-        <>
-          {/*
-           * На телефоне календарь шириной ~300 px не влезает выпадающим списком:
-           * поле может стоять у правого края, и месяц уезжает за экран. Поэтому
-           * до sm он открывается по центру экрана поверх затемнения, а с планшета
-           * остаётся привычным выпадающим списком под полем.
-           */}
-          <div
-            className="fixed inset-0 z-40 bg-navy-950/10 backdrop-blur-sm sm:hidden"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            className="fixed left-1/2 top-1/2 z-50 w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-card sm:absolute sm:left-0 sm:top-full sm:mt-2 sm:max-w-none sm:translate-x-0 sm:translate-y-0"
-            style={rdpVars}
-          >
-            <DayPicker
-              mode="single"
-              locale={ru}
-              weekStartsOn={1}
-              selected={selected}
-              defaultMonth={selected ?? min ?? new Date()}
-              disabled={
-                min && max
-                  ? [{ before: min }, { after: max }]
-                  : min
-                    ? { before: min }
-                    : max
-                      ? { after: max }
-                      : undefined
-              }
-              onSelect={(d) => {
-                if (d) {
-                  onChange(toISO(d));
-                  setOpen(false);
-                }
-              }}
+      {open &&
+        createPortal(
+          <>
+            {/* подложка: клик мимо закрывает календарь на любом устройстве */}
+            <div
+              className="fixed inset-0 z-[60] bg-navy-950/10 sm:bg-transparent"
+              onClick={() => setOpen(false)}
             />
-          </div>
-        </>
-      )}
+            <div
+              ref={popRef}
+              className="fixed z-[61] max-h-[85vh] w-max max-w-[calc(100vw-1rem)] overflow-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
+              style={{
+                ...rdpVars,
+                top: pos?.top ?? -9999,
+                left: pos?.left ?? -9999,
+              }}
+            >
+              <DayPicker
+                mode="single"
+                locale={ru}
+                weekStartsOn={1}
+                selected={selected}
+                defaultMonth={selected ?? min ?? new Date()}
+                disabled={
+                  min && max
+                    ? [{ before: min }, { after: max }]
+                    : min
+                      ? { before: min }
+                      : max
+                        ? { after: max }
+                        : undefined
+                }
+                onSelect={(d) => {
+                  if (d) {
+                    onChange(toISO(d));
+                    setOpen(false);
+                  }
+                }}
+              />
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

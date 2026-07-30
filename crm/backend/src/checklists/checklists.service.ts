@@ -233,8 +233,10 @@ export class ChecklistsService {
     }
 
     let templateName = 'Без шаблона';
+    let usesLevels = false;
     let items: {
       title: string;
+      hint: string | null;
       section: string | null;
       required: boolean;
       sortOrder: number;
@@ -243,8 +245,12 @@ export class ChecklistsService {
     if (dto.templateId) {
       const template = await this.getTemplateOrThrow(dto.templateId);
       templateName = template.name;
+      // признак шкалы копируем в чек-лист заказа: шаблон могут потом изменить,
+      // а уже начатый чек-лист должен остаться таким, каким его заполняли
+      usesLevels = template.usesLevels;
       items = template.items.map((i) => ({
         title: i.title,
+        hint: i.hint,
         section: i.section,
         required: i.required,
         sortOrder: i.sortOrder,
@@ -258,6 +264,7 @@ export class ChecklistsService {
             orderId,
             templateId: dto.templateId ?? null,
             templateName,
+            usesLevels,
             createdById: user.id,
             items: { create: items },
           },
@@ -298,15 +305,31 @@ export class ChecklistsService {
 
     const { updatedItem, becameDone, updatedChecklist } =
       await this.prisma.$transaction(async (tx) => {
+        /*
+         * Пункт можно менять двумя способами: отметить выполненным (контроль
+         * качества) или поставить оценку загрязнения (приём объекта). Оценка
+         * сама означает, что пункт осмотрен, — иначе чек-лист приёма никогда
+         * не считался бы заполненным.
+         */
+        const levelGiven = dto.level !== undefined;
+        const nextLevel = levelGiven ? dto.level : item.level;
+        const nextDone =
+          dto.isDone !== undefined
+            ? dto.isDone
+            : levelGiven
+              ? dto.level !== null
+              : item.isDone;
+
         const updatedItem = await tx.orderChecklistItem.update({
           where: { id: itemId },
           data: {
-            isDone: dto.isDone,
+            isDone: nextDone,
+            level: nextLevel,
             comment:
               dto.comment !== undefined ? dto.comment?.trim() || null : item.comment,
-            doneById: dto.isDone ? user.id : null,
-            doneByName: dto.isDone ? user.fullName : null,
-            doneAt: dto.isDone ? new Date() : null,
+            doneById: nextDone ? user.id : null,
+            doneByName: nextDone ? user.fullName : null,
+            doneAt: nextDone ? new Date() : null,
           },
         });
         const { checklist: updatedChecklist, becameDone } =

@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { CHECKLISTS } from './checklist-seed';
 
 /**
  * Первичное наполнение реальными данными компании (идемпотентно):
@@ -221,6 +222,7 @@ export class SetupService implements OnApplicationBootstrap {
       await this.ensureTeam();
       await this.syncPasswords();
       await this.ensureBrigades();
+      await this.ensureChecklists();
     } catch (e) {
       this.logger.error('Инициализация данных компании не удалась', e as any);
     }
@@ -307,6 +309,52 @@ export class SetupService implements OnApplicationBootstrap {
           `Не удалось синхронизировать пароль для @${t.login}`,
           e as any,
         );
+      }
+    }
+  }
+
+  /**
+   * Рабочие чек-листы компании из бумажных форм.
+   *
+   * Идемпотентно и без перезаписи: шаблон с таким названием уже есть — не
+   * трогаем, иначе правки, сделанные руками в CRM, откатывались бы при каждом
+   * рестарте. Пункты создаются только вместе с новым шаблоном.
+   */
+  private async ensureChecklists() {
+    for (const cl of CHECKLISTS) {
+      try {
+        const exists = await this.prisma.checklistTemplate.findFirst({
+          where: { name: cl.name },
+          select: { id: true },
+        });
+        if (exists) continue;
+
+        // порядок пунктов держим сквозным, чтобы разделы шли как в бумаге
+        let order = 0;
+        const items = cl.sections.flatMap((sec) =>
+          sec.items.map((it) => ({
+            title: it.title,
+            hint: it.hint ?? null,
+            section: sec.section,
+            required: false,
+            sortOrder: order++,
+          })),
+        );
+
+        await this.prisma.checklistTemplate.create({
+          data: {
+            name: cl.name,
+            description: cl.description,
+            usesLevels: cl.usesLevels,
+            cleaningType: cl.cleaningType ?? null,
+            items: { create: items },
+          },
+        });
+        this.logger.log(
+          `Чек-лист создан: ${cl.name} (${items.length} пунктов)`,
+        );
+      } catch (e) {
+        this.logger.error(`Не удалось создать чек-лист «${cl.name}»`, e as any);
       }
     }
   }

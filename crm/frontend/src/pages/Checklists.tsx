@@ -16,6 +16,8 @@ import type { ChecklistTemplate, CleaningType } from '../types';
 interface EditableItem {
   uid: string;
   title: string;
+  /** пояснение под пунктом — на что смотреть и почему это важно */
+  hint: string;
   section: string;
   required: boolean;
 }
@@ -25,7 +27,15 @@ interface TemplatePayload {
   name: string;
   cleaningType: CleaningType | null;
   isActive: boolean;
-  items: { title: string; section: string | null; required: boolean }[];
+  /** пункты оцениваются «норма / среднее / сильное» вместо галочки */
+  usesLevels: boolean;
+  description: string | null;
+  items: {
+    title: string;
+    hint: string | null;
+    section: string | null;
+    required: boolean;
+  }[];
 }
 
 const MAX_ITEMS = 100;
@@ -58,6 +68,7 @@ export function Checklists() {
       items: payload.items.map((it, i) => ({
         id: `${id}:${i}`,
         title: it.title,
+        hint: it.hint,
         section: it.section,
         required: it.required,
         sortOrder: i,
@@ -88,6 +99,7 @@ export function Checklists() {
                   items: payload.items.map((it, i) => ({
                     id: `${existing.id}:${i}`,
                     title: it.title,
+                    hint: it.hint,
                     section: it.section,
                     required: it.required,
                     sortOrder: i,
@@ -251,11 +263,15 @@ function TemplateModal({
     template?.cleaningType ?? '',
   );
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
+  // шкала «норма / среднее / сильное» вместо галочки — для чек-листов приёма
+  const [usesLevels, setUsesLevels] = useState(template?.usesLevels ?? false);
+  const [description, setDescription] = useState(template?.description ?? '');
   const [items, setItems] = useState<EditableItem[]>(
     () =>
       template?.items.map((it) => ({
         uid: it.id,
         title: it.title,
+        hint: it.hint ?? '',
         section: it.section ?? '',
         required: it.required,
       })) ?? [],
@@ -268,7 +284,7 @@ function TemplateModal({
     setItems((list) =>
       list.length >= MAX_ITEMS
         ? list
-        : [...list, { uid: tempId(), title: '', section: '', required: false }],
+        : [...list, { uid: tempId(), title: '', hint: '', section: '', required: false }],
     );
 
   const removeItem = (uid: string) =>
@@ -292,11 +308,14 @@ function TemplateModal({
       name: name.trim(),
       cleaningType: cleaningType || null,
       isActive,
+      usesLevels,
+      description: description.trim() || null,
       // пустые строки-заготовки без текста в шаблон не попадают
       items: items
         .filter((i) => i.title.trim().length > 0)
         .map((i) => ({
           title: i.title.trim(),
+          hint: i.hint.trim() || null,
           section: i.section.trim() || null,
           required: i.required,
         })),
@@ -351,6 +370,37 @@ function TemplateModal({
           </span>
         </label>
 
+        {/*
+          Два разных вида чек-листа: приём объекта до работ оценивается по
+          шкале загрязнения, контроль качества после работ — галочкой.
+        */}
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={usesLevels}
+            onChange={(e) => setUsesLevels(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-navy-500"
+          />
+          <span className="text-sm text-navy-800">
+            <span className="font-medium">Оценка загрязнения вместо галочки</span>
+            <span className="mt-0.5 block text-xs text-navy-500">
+              Каждый пункт отмечается как «Норма», «Среднее» или «Сильное» —
+              для чек-листов приёма объекта до начала работ.
+            </span>
+          </span>
+        </label>
+
+        <div>
+          <label className="label">Пояснение к чек-листу</label>
+          <input
+            className="input"
+            value={description}
+            maxLength={300}
+            placeholder="Например: приём объекта менеджером до начала работ"
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="label mb-0">Пункты чек-листа</label>
@@ -402,6 +452,14 @@ function TemplateModal({
                     maxLength={120}
                     placeholder="Раздел (Кухня, Санузел…)"
                     onChange={(e) => updateItem(it.uid, { section: e.target.value })}
+                  />
+                  {/* подсказка — та самая строка курсивом из бумажной формы */}
+                  <input
+                    className="input min-w-[10rem] flex-[2]"
+                    value={it.hint}
+                    maxLength={300}
+                    placeholder="Подсказка — на что смотреть"
+                    onChange={(e) => updateItem(it.uid, { hint: e.target.value })}
                   />
 
                   <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-navy-600">

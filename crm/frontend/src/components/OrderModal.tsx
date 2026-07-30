@@ -6,8 +6,10 @@ import { Modal, Badge, Spinner, ErrorState, EmptyState } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
-import { CleanerPicker, Tabs } from './common';
+import { CleanerPicker, Tabs, UserPicker } from './common';
+import { NameInput, PhoneInput } from './ContactFields';
 import { withRetry } from '../lib/util';
+import { isValidPersonName, normalizePhone } from '../lib/contact';
 import { formatDateTz, formatDateTimeTz, toDateTimeInput } from '../lib/date';
 import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
@@ -18,6 +20,7 @@ import {
   STAGE_COLOR,
   TYPE_LABEL,
   SOURCE_LABEL,
+  SOURCE_ORDER,
   DIRT_LABEL,
   DIRT_ORDER,
   SHIFT_GROUP_STATUS_LABEL,
@@ -30,6 +33,7 @@ import type {
   CleaningType,
   DirtLevel,
   FunnelStage,
+  LeadSource,
   Order,
   ShiftGroupBrief,
   Tariff,
@@ -130,6 +134,16 @@ export function OrderModal({
   const [finalPrice, setFinalPrice] = useState('');
   const [isManualPrice, setIsManualPrice] = useState(false);
   const [preferences, setPreferences] = useState('');
+  // данные заявки: раньше блок был только для чтения
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [editSource, setEditSource] = useState<LeadSource>('CALL');
+  const [editManagerId, setEditManagerId] = useState<string | null>(null);
+  const [editCreatedAt, setEditCreatedAt] = useState('');
+  const [editEstimated, setEditEstimated] = useState('');
+  const [editPreferredDate, setEditPreferredDate] = useState('');
+  const [editPreferredTime, setEditPreferredTime] = useState('');
+  const [editComment, setEditComment] = useState('');
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [error, setError] = useState('');
 
@@ -208,6 +222,19 @@ export function OrderModal({
       setIsManualPrice(!!o.isManualPrice);
     }
     if (!skip('preferences')) setPreferences(o.preferences ?? '');
+    if (!skip('client')) {
+      setClientName(o.client?.fullName ?? '');
+      setClientPhone(o.client?.phone ?? '');
+    }
+    if (!skip('request')) {
+      setEditSource(o.source);
+      setEditManagerId(o.managerId ?? null);
+      setEditCreatedAt(o.createdAt.slice(0, 10));
+      setEditEstimated(String(o.estimatedPrice ?? ''));
+      setEditPreferredDate(o.preferredDate?.slice(0, 10) ?? '');
+      setEditPreferredTime(o.preferredTime ?? '');
+      setEditComment(o.comment ?? '');
+    }
     if (!skip('cleaners')) setSelectedCleaners((o.cleaners ?? []).map((c) => c.id));
   };
 
@@ -336,6 +363,21 @@ export function OrderModal({
       setError('Укажите причину отказа');
       return;
     }
+    /*
+     * Контакты клиента проверяем теми же правилами, что и в базе клиентов:
+     * имя без цифр, телефон ровно из девяти цифр. Иначе через карточку заказа
+     * можно было бы завести то, что форма клиента не пропускает.
+     */
+    if (touched('client')) {
+      if (!isValidPersonName(clientName)) {
+        setError('Имя клиента: только буквы, без цифр');
+        return;
+      }
+      if (!normalizePhone(clientPhone)) {
+        setError('Телефон клиента: ровно 9 цифр');
+        return;
+      }
+    }
     setError('');
 
     const toInt = (s: string) => Math.round(Number(s)); // бэкенд принимает только целые
@@ -394,7 +436,22 @@ export function OrderModal({
         ...(newFinalPrice != null ? { finalPrice: newFinalPrice } : {}),
         isManualPrice,
         preferences: trimmedPrefs,
+        // данные заявки — правятся прямо в карточке
+        source: editSource,
+        comment: editComment.trim(),
+        ...(editManagerId ? { managerId: editManagerId } : {}),
+        ...(editCreatedAt ? { createdAt: editCreatedAt } : {}),
+        ...(editEstimated !== '' ? { estimatedPrice: toInt(editEstimated) } : {}),
+        preferredDate: editPreferredDate,
+        preferredTime: editPreferredTime,
       });
+      // ФИО и телефон принадлежат клиенту, а не заказу
+      if (touched('client')) {
+        await api.patch(`/clients/${order.clientId}`, {
+          fullName: clientName.trim(),
+          phone: normalizePhone(clientPhone) ?? clientPhone,
+        });
+      }
       if (cleanersChangedFlag) {
         await api.patch(`/orders/${order.id}/cleaners`, {
           cleanerIds: selectedCleaners,
@@ -479,22 +536,101 @@ export function OrderModal({
 
           {tab === 'order' && (
             <div className="space-y-5">
-              {/* Инфо (только чтение) */}
-              <div className="grid grid-cols-2 gap-3 rounded-xl bg-navy-50 p-4 text-sm">
-                <Info label="Телефон" value={order.client?.phone} />
-                <Info label="Источник" value={SOURCE_LABEL[order.source]} />
-                <Info label="Оформлена" value={formatDateTz(order.createdAt)} />
-                <Info label="Менеджер" value={order.manager?.fullName ?? 'не назначен'} />
-                <Info label="Расчёт с сайта" value={formatPrice(order.estimatedPrice)} />
-                {order.preferredDate && (
-                  <Info
-                    label="Клиент просил"
-                    value={`${formatDateTz(order.preferredDate)}${
-                      order.preferredTime ? `, ${order.preferredTime}` : ''
-                    }`}
+              {/*
+                Данные заявки. Раньше блок был только для чтения, и опечатку
+                в имени или телефоне приходилось править в базе клиентов, а
+                источник и время обращения — вообще нигде. Теперь правится
+                прямо здесь: ФИО и телефон уходят в карточку клиента, остальное
+                в заказ.
+              */}
+              <div className="space-y-3 rounded-xl bg-navy-50 p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="label">Клиент</label>
+                    <NameInput
+                      value={clientName}
+                      onChange={(v) => {
+                        markTouched('client');
+                        setClientName(v);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Телефон</label>
+                    <PhoneInput
+                      value={clientPhone}
+                      onChange={(v) => {
+                        markTouched('client');
+                        setClientPhone(v);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Источник</label>
+                    <select
+                      className="input"
+                      value={editSource}
+                      onChange={(e) => setEditSource(e.target.value as LeadSource)}
+                    >
+                      {SOURCE_ORDER.map((s) => (
+                        <option key={s} value={s}>
+                          {SOURCE_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Ответственный менеджер</label>
+                    <UserPicker
+                      value={editManagerId}
+                      onChange={(v) => setEditManagerId(v)}
+                      placeholder="не назначен"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Оформлена</label>
+                    <DatePicker value={editCreatedAt} onChange={setEditCreatedAt} />
+                  </div>
+                  <div>
+                    <label className="label">Расчёт с сайта, сомони</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="input"
+                      value={editEstimated}
+                      onChange={(e) => setEditEstimated(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Клиент просил — дата</label>
+                    <DatePicker
+                      clearable
+                      value={editPreferredDate}
+                      onChange={setEditPreferredDate}
+                      placeholder="не указана"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Клиент просил — время</label>
+                    <input
+                      type="time"
+                      className="input h-11"
+                      value={editPreferredTime}
+                      onChange={(e) => setEditPreferredTime(e.target.value)}
+                      aria-label="Желаемое время клиента"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Комментарий с сайта</label>
+                  <textarea
+                    rows={2}
+                    className="input"
+                    value={editComment}
+                    onChange={(e) => setEditComment(e.target.value)}
+                    placeholder="что написал клиент при обращении"
                   />
-                )}
-                {order.comment && <Info label="Комментарий с сайта" value={order.comment} />}
+                </div>
               </div>
 
               {/* Параметры заявки (редактирование) */}

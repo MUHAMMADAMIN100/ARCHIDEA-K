@@ -73,6 +73,15 @@ export class UpdateOrderDto {
   @IsOptional() @IsEnum(AccessMethod) accessMethod?: AccessMethod;
   @IsOptional() @IsBoolean() hasUtilities?: boolean;
   @IsOptional() @IsString() managerId?: string;
+  /*
+   * Поля, которые раньше были только для чтения в карточке заказа.
+   * Менеджер должен иметь возможность поправить их вручную: заявка могла
+   * прийти с опечаткой, не тем источником или не тем временем.
+   */
+  @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
+  @IsOptional() @IsString() createdAt?: string;
+  @IsOptional() @IsString() preferredDate?: string;
+  @IsOptional() @IsString() @MaxLength(20) preferredTime?: string;
 }
 
 export class ChangeStageDto {

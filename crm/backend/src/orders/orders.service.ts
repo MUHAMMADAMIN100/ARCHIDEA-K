@@ -306,6 +306,9 @@ export class OrdersService {
       'comment',
       'accessMethod',
       'hasUtilities',
+      // ТЗ: данные заявки правятся вручную — заявка могла прийти с опечаткой
+      'source',
+      'preferredTime',
     ];
     for (const key of assignable) {
       if (dto[key] !== undefined) (data as any)[key] = dto[key];
@@ -326,6 +329,18 @@ export class OrdersService {
     }
     if (dto.scheduledDate !== undefined) {
       data.scheduledDate = parseDate(dto.scheduledDate);
+    }
+    if (dto.preferredDate !== undefined) {
+      data.preferredDate = parseDate(dto.preferredDate);
+    }
+    /*
+     * Дату оформления тоже разрешаем править: заявку могли занести в CRM
+     * позже, чем она реально поступила, и тогда отчёты за период врут.
+     * Пустое значение игнорируем — заказ без даты создания недопустим.
+     */
+    if (dto.createdAt) {
+      const created = parseDate(dto.createdAt);
+      if (created) data.createdAt = created;
     }
     if (dto.managerId && seesAll(user)) data.managerId = dto.managerId;
 
