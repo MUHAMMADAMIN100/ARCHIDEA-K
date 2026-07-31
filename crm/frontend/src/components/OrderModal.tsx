@@ -482,6 +482,13 @@ export function OrderModal({
     const newDirt = hasLevelsNow ? editDirt || null : null;
     const trimmedPrefs = preferences.trim();
     const cleanersTouched = touched('cleaners');
+    /*
+     * Отметки «что трогали» читаем ДО onClose(): закрытие модалки обнуляет
+     * orderId, эффект сбрасывает touchedRef, и к моменту, когда очередь
+     * доходит до карточки клиента (после await первого запроса), флаг уже
+     * стёрт — правки статуса, тегов, ФИО и телефона молча терялись.
+     */
+    const clientTouched = touched('client');
     // PATCH /orders/:id/cleaners уходит ТОЛЬКО если команду реально трогали —
     // иначе он безусловно перезаписывал бы назначенную бригаду пустым/чужим
     // набором (диагноз бага 3.1, пп.3-4 ТЗ)
@@ -546,8 +553,8 @@ export function OrderModal({
         preferredDate: editPreferredDate,
         preferredTime: editPreferredTime,
       });
-      // ФИО и телефон принадлежат клиенту, а не заказу
-      if (touched('client')) {
+      // ФИО, телефон, статус и теги принадлежат клиенту, а не заказу
+      if (clientTouched) {
         await api.patch(`/clients/${order.clientId}`, {
           fullName: clientName.trim(),
           phone: normalizePhone(clientPhone) ?? clientPhone,
