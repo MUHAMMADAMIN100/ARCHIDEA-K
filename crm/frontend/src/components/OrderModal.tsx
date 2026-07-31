@@ -15,6 +15,8 @@ import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
 import { ReminderModal } from './ReminderModal';
 import {
+  TAG_COLOR,
+  TAG_LABEL,
   STAGE_LABEL,
   STAGE_ORDER,
   STAGE_COLOR,
@@ -31,6 +33,7 @@ import {
 import type {
   Cleaner,
   CleaningType,
+  ClientTag,
   DirtLevel,
   FunnelStage,
   LeadSource,
@@ -60,6 +63,9 @@ const TAB_ITEMS: { value: TabKey; label: string }[] = [
   { value: 'checklist', label: 'Чек-лист' },
   { value: 'history', label: 'История' },
 ];
+
+/** Статусы клиента, доступные для выбора прямо из карточки заявки */
+const CLIENT_TAGS: ClientTag[] = ['VIP', 'REGULAR', 'POTENTIAL', 'REFUSED'];
 
 /** Все значения enum'а — старые заказы (MAINTENANCE) должны и дальше сохраняться корректно */
 const CLEANING_TYPE_VALUES: CleaningType[] = [
@@ -153,6 +159,10 @@ export function OrderModal({
   const [editSourceDetail, setEditSourceDetail] = useState('');
   // запасные номера клиента (ТЗ 1.1)
   const [clientExtraPhones, setClientExtraPhones] = useState<string[]>([]);
+  // статус и свободные теги клиента — правятся прямо из карточки заявки
+  const [clientTags, setClientTags] = useState<ClientTag[]>([]);
+  const [clientLabels, setClientLabels] = useState<string[]>([]);
+  const [labelInput, setLabelInput] = useState('');
   // дополнительные основные услуги (ТЗ 1.3): ключ, объём, цена за единицу
   const [addServices, setAddServices] = useState<
     { key: string; qty: string; pricePerUnit: string }[]
@@ -293,6 +303,8 @@ export function OrderModal({
       setClientName(o.client?.fullName ?? '');
       setClientPhone(o.client?.phone ?? '');
       setClientExtraPhones(o.client?.extraPhones ?? []);
+      setClientTags(o.client?.tags ?? []);
+      setClientLabels(o.client?.labels ?? []);
     }
     if (!skip('request')) {
       setEditSource(o.source);
@@ -542,6 +554,8 @@ export function OrderModal({
           extraPhones: clientExtraPhones
             .map((p) => normalizePhone(p))
             .filter((p): p is string => !!p),
+          tags: clientTags,
+          labels: clientLabels,
         });
       }
       if (cleanersChangedFlag) {
@@ -724,6 +738,87 @@ export function OrderModal({
                       placeholder="От кого — например: От Анисы"
                     />
                   </div>
+                  {/*
+                    Статус и теги клиента. Держим их в карточке заявки, а не
+                    только в карточке клиента: менеджер помечает VIP или
+                    отказника по ходу разговора, не уходя из заявки.
+                  */}
+                  <div className="sm:col-span-2">
+                    <label className="label">Статус и теги клиента</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {CLIENT_TAGS.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            markTouched('client');
+                            setClientTags((prev) =>
+                              prev.includes(t)
+                                ? prev.filter((x) => x !== t)
+                                : // статус у клиента один: новый заменяет прежний
+                                  [t],
+                            );
+                          }}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            clientTags.includes(t)
+                              ? TAG_COLOR[t] + ' ring-2 ring-navy-300'
+                              : 'border border-navy-200 bg-white text-navy-600'
+                          }`}
+                        >
+                          {TAG_LABEL[t]}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {clientLabels.map((l) => (
+                        <span
+                          key={l}
+                          className="inline-flex items-center gap-1 rounded-lg bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700"
+                        >
+                          {l}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              markTouched('client');
+                              setClientLabels((prev) =>
+                                prev.filter((x) => x !== l),
+                              );
+                            }}
+                            className="text-navy-600 hover:text-red-600"
+                            aria-label={`Убрать тег ${l}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        className="input input-xs w-36"
+                        value={labelInput}
+                        maxLength={40}
+                        placeholder="тег и Enter"
+                        onChange={(e) => setLabelInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          const v = labelInput.trim();
+                          if (v && !clientLabels.includes(v)) {
+                            markTouched('client');
+                            setClientLabels((prev) => [...prev, v]);
+                          }
+                          setLabelInput('');
+                        }}
+                        onBlur={() => {
+                          const v = labelInput.trim();
+                          if (v && !clientLabels.includes(v)) {
+                            markTouched('client');
+                            setClientLabels((prev) => [...prev, v]);
+                          }
+                          setLabelInput('');
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="label">Ответственный менеджер</label>
                     <UserPicker
