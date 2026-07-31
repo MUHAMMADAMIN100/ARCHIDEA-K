@@ -216,6 +216,30 @@ export const REPORT_STATUS_COLOR: Record<ReportStatus, string> = {
   ACCEPTED: 'bg-green-100 text-green-700',
 };
 
+/**
+ * Полная стоимость заказа: итог после осмотра, а пока его нет — расчётная.
+ */
+export function orderTotal(
+  o: Pick<Order, 'finalPrice' | 'estimatedPrice'>,
+): number {
+  return o.finalPrice ?? o.estimatedPrice ?? 0;
+}
+
+/**
+ * Сколько по заказу ещё предстоит получить: полная стоимость минус то,
+ * что клиент уже заплатил. Именно эта сумма показывается в воронке,
+ * календаре и списке заказов клиента — руководителю важно видеть долг,
+ * а не то, во сколько заказ оценили изначально.
+ *
+ * В аналитике и книге доходов по-прежнему считается полная стоимость:
+ * там речь о выручке, а не о задолженности.
+ */
+export function orderDue(
+  o: Pick<Order, 'finalPrice' | 'estimatedPrice' | 'paidAmount'>,
+): number {
+  return Math.max(0, orderTotal(o) - (o.paidAmount ?? 0));
+}
+
 export function formatPrice(v?: number | null): string {
   if (v == null) return '—';
   return `${v.toLocaleString('ru-RU')} сомони`;

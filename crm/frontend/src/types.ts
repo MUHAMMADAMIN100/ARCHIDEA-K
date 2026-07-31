@@ -276,6 +276,10 @@ export interface Order {
     fullName: string;
     phone: string;
     extraPhones?: string[];
+    /** статус клиента — показывается в углу карточки воронки */
+    tags?: ClientTag[];
+    /** свободные теги клиента — там же, рядом со статусом */
+    labels?: string[];
     preferences?: string | null;
     isRepeat?: boolean;
     paidOrdersCount?: number;

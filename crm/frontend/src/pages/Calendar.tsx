@@ -15,21 +15,18 @@ import { OrderModal } from '../components/OrderModal';
 import {
   TASK_TYPE_COLOR,
   TASK_TYPE_DOT,
-  TASK_TYPE_LABEL,
-  TASK_TYPE_ORDER,
   TASK_STATUS_LABEL,
   STAGE_COLOR,
   STAGE_LABEL,
   STAGE_ORDER,
   formatPrice,
+  orderDue,
 } from '../lib/labels';
 import { tempId, nowISO } from '../lib/util';
 import { useAuth } from '../auth/AuthContext';
 import type { BoardColumn, FunnelStage, Order, Task, TaskType } from '../types';
 
 type View = 'month' | 'week';
-/** Что показывает календарь: задачи сотрудников или заказы по датам уборки */
-type Mode = 'tasks' | 'orders';
 
 /**
  * Цвет карточки заказа по этапу воронки. Берём тот же STAGE_COLOR, что и в
@@ -162,7 +159,7 @@ function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
         </span>
       </div>
       <div className="mt-0.5 truncate pl-3 text-[11px] font-medium tabular-nums">
-        {formatPrice(order.finalPrice ?? order.estimatedPrice)}
+        {formatPrice(orderDue(order))}
       </div>
       {!compact && order.address && (
         <div className="truncate pl-3 text-[10px] opacity-80">
@@ -193,9 +190,7 @@ export function Calendar() {
 
   const [view, setView] = useState<View>('month');
   const [cursor, setCursor] = useState(() => new Date());
-  const [typeFilter, setTypeFilter] = useState<TaskType | 'ALL'>('ALL');
-  // задачи или заказы; этапы воронки — те же, что в разделе «Воронка»
-  const [mode, setMode] = useState<Mode>('tasks');
+  // единственный фильтр календаря — этапы воронки (те же, что в «Воронке»)
   const [stageFilter, setStageFilter] = useState<FunnelStage | 'ALL'>('ALL');
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
 
@@ -203,10 +198,9 @@ export function Calendar() {
    * Заказы берём из той же доски, что и воронка: один запрос, общий кэш —
    * переключение между разделами мгновенное, а этапы гарантированно совпадают.
    */
-  const boardQuery = useFetch<BoardColumn[]>(
-    mode === 'orders' ? '/orders/board' : null,
-    { pollMs: 20000 },
-  );
+  const boardQuery = useFetch<BoardColumn[]>('/orders/board', {
+    pollMs: 20000,
+  });
   // в модалке храним ТОЛЬКО id — саму задачу берём из свежих данных,
   // иначе статусы, изменённые внутри модалки, не были бы видны
   const [modal, setModal] = useState<
@@ -234,7 +228,6 @@ export function Calendar() {
     const map = new Map<string, Task[]>();
     const none: Task[] = [];
     for (const t of data ?? []) {
-      if (typeFilter !== 'ALL' && t.type !== typeFilter) continue;
       if (!t.deadline) {
         none.push(t);
         continue;
@@ -245,7 +238,7 @@ export function Calendar() {
       else map.set(key, [t]);
     }
     return { byDay: map, undated: none };
-  }, [data, typeFilter]);
+  }, [data]);
 
   // заказы по дням уборки (с учётом фильтра этапа)
   const { ordersByDay, ordersUndated } = useMemo(() => {
@@ -388,7 +381,7 @@ export function Calendar() {
     <div>
       <PageHeader
         title="Календарь"
-        subtitle="Задачи сотрудников по дням — постановка, сроки и статусы"
+        subtitle="Заказы по датам уборки и задачи сотрудников — по этапам воронки"
         action={
           <button
             onClick={() => setModal({ mode: 'create', date: todayKey })}
@@ -451,73 +444,30 @@ export function Calendar() {
         </div>
       </div>
 
-      {/* Что показывать: задачи сотрудников или заказы по датам уборки */}
-      <div className="mb-3 inline-flex rounded-xl border border-navy-200 bg-white p-1">
-        {(['tasks', 'orders'] as Mode[]).map((m) => (
+      {/* Фильтр по этапам воронки — те же названия и цвета, что в «Воронке» */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-navy-600">Этап:</span>
+        {(['ALL', ...STAGE_ORDER] as (FunnelStage | 'ALL')[]).map((st) => (
           <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
-              mode === m
-                ? 'bg-navy-600 text-white'
-                : 'text-navy-600 hover:bg-navy-50'
+            key={st}
+            onClick={() => setStageFilter(st)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              stageFilter === st
+                ? 'bg-navy-500 text-white'
+                : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
             }`}
           >
-            {m === 'tasks' ? 'Задачи' : 'Заказы'}
+            {st !== 'ALL' && (
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  stageFilter === st ? 'bg-white' : STAGE_DOT[st]
+                }`}
+              />
+            )}
+            {st === 'ALL' ? 'Все' : STAGE_LABEL[st]}
           </button>
         ))}
       </div>
-
-      {/* Фильтр: по типу задачи либо по этапу воронки */}
-      {mode === 'tasks' ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-navy-600">Тип:</span>
-          {(['ALL', ...TASK_TYPE_ORDER] as (TaskType | 'ALL')[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                typeFilter === t
-                  ? 'bg-navy-500 text-white'
-                  : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-              }`}
-            >
-              {t !== 'ALL' && (
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    typeFilter === t ? 'bg-white' : TASK_TYPE_DOT[t]
-                  }`}
-                />
-              )}
-              {t === 'ALL' ? 'Все' : TASK_TYPE_LABEL[t]}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-navy-600">Этап:</span>
-          {(['ALL', ...STAGE_ORDER] as (FunnelStage | 'ALL')[]).map((st) => (
-            <button
-              key={st}
-              onClick={() => setStageFilter(st)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                stageFilter === st
-                  ? 'bg-navy-500 text-white'
-                  : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-              }`}
-            >
-              {st !== 'ALL' && (
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    stageFilter === st ? 'bg-white' : STAGE_DOT[st]
-                  }`}
-                />
-              )}
-              {st === 'ALL' ? 'Все' : STAGE_LABEL[st]}
-            </button>
-          ))}
-        </div>
-      )}
 
       <DragDropContext
         onDragStart={() => {
@@ -563,28 +513,26 @@ export function Calendar() {
                       >
                         {d.getDate()}
                       </span>
-                      {mode === 'tasks' ? (
+                      <div className="flex shrink-0 items-center gap-1">
+                        {(ordersByDay.get(key)?.length ?? 0) > 0 && (
+                          <span className="rounded-md bg-navy-100 px-1.5 text-[11px] font-semibold text-navy-700">
+                            {ordersByDay.get(key)?.length}
+                          </span>
+                        )}
                         <button
                           onClick={() => setModal({ mode: 'create', date: key })}
-                          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-600 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
+                          className={`inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-600 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
                             isTouch ? '' : 'opacity-0 group-hover:opacity-100'
                           }`}
                         >
                           <Plus className="h-3 w-3 shrink-0" />
                           <span className="hidden sm:inline">задача</span>
                         </button>
-                      ) : (
-                        (ordersByDay.get(key)?.length ?? 0) > 0 && (
-                          <span className="shrink-0 rounded-md bg-white/70 px-1.5 text-[11px] font-semibold text-navy-600">
-                            {ordersByDay.get(key)?.length}
-                          </span>
-                        )
-                      )}
+                      </div>
                     </div>
 
                     <div className="flex-1 space-y-1.5">
-                      {mode === 'orders' &&
-                        (ordersByDay.get(key) ?? []).map((o) => (
+                      {(ordersByDay.get(key) ?? []).map((o) => (
                           <div
                             key={o.id}
                             onClick={() => setOpenOrder(o)}
@@ -593,8 +541,7 @@ export function Calendar() {
                             <OrderCard order={o} compact={view === 'month'} />
                           </div>
                         ))}
-                      {mode === 'tasks' &&
-                        list.map((t, index) => (
+                      {list.map((t, index) => (
                         <Draggable
                           key={t.id}
                           draggableId={t.id}
@@ -618,7 +565,7 @@ export function Calendar() {
                             </div>
                           )}
                         </Draggable>
-                        ))}
+                      ))}
                       {provided.placeholder}
                     </div>
                   </div>
@@ -642,21 +589,22 @@ export function Calendar() {
             >
               <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-navy-600">
                 <Inbox className="h-3.5 w-3.5" />
-                {mode === 'orders' ? 'Без даты уборки' : 'Без срока'}
-                {(mode === 'orders' ? ordersUndated : undated).length > 0 && (
+                Без даты
+                {ordersUndated.length + undated.length > 0 && (
                   <span className="text-navy-600">
-                    · {(mode === 'orders' ? ordersUndated : undated).length}
+                    · {ordersUndated.length + undated.length}
                   </span>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {mode === 'orders' && ordersUndated.length === 0 && (
+                {ordersUndated.length === 0 && undated.length === 0 && (
                   <span className="text-xs text-navy-600">
-                    У всех заказов проставлена дата уборки
+                    {isTouch
+                      ? 'Заказы и задачи без даты появятся здесь'
+                      : 'Перетащите задачу сюда, чтобы снять срок'}
                   </span>
                 )}
-                {mode === 'orders' &&
-                  ordersUndated.map((o) => (
+                {ordersUndated.map((o) => (
                     <div
                       key={o.id}
                       onClick={() => setOpenOrder(o)}
@@ -665,15 +613,7 @@ export function Calendar() {
                       <OrderCard order={o} compact />
                     </div>
                   ))}
-                {mode === 'tasks' && undated.length === 0 && (
-                  <span className="text-xs text-navy-600">
-                    {isTouch
-                      ? 'Задачи без даты появятся здесь'
-                      : 'Перетащите сюда, чтобы снять срок'}
-                  </span>
-                )}
-                {mode === 'tasks' &&
-                  undated.map((t, index) => (
+                {undated.map((t, index) => (
                   <Draggable
                     key={t.id}
                     draggableId={t.id}
@@ -697,7 +637,7 @@ export function Calendar() {
                       </div>
                     )}
                   </Draggable>
-                  ))}
+                ))}
                 {provided.placeholder}
               </div>
             </div>
@@ -709,34 +649,20 @@ export function Calendar() {
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold text-navy-600">Легенда:</span>
-          {mode === 'tasks'
-            ? TASK_TYPE_ORDER.map((t) => (
-                <span
-                  key={t}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-600"
-                >
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${TASK_TYPE_DOT[t]}`}
-                  />
-                  {TASK_TYPE_LABEL[t]}
-                </span>
-              ))
-            : STAGE_ORDER.map((st) => (
-                <span
-                  key={st}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-600"
-                >
-                  <span className={`h-2.5 w-2.5 rounded-full ${STAGE_DOT[st]}`} />
-                  {STAGE_LABEL[st]}
-                </span>
-              ))}
+          {STAGE_ORDER.map((st) => (
+            <span
+              key={st}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-600"
+            >
+              <span className={`h-2.5 w-2.5 rounded-full ${STAGE_DOT[st]}`} />
+              {STAGE_LABEL[st]}
+            </span>
+          ))}
         </div>
         <span className="text-xs text-navy-600">
-          {mode === 'orders'
-            ? '💡 Нажмите на заказ, чтобы открыть его карточку'
-            : isTouch
-              ? '💡 Нажмите на задачу, чтобы изменить дату и статусы'
-              : '💡 Задачи можно перетаскивать на другой день'}
+          {isTouch
+            ? '💡 Нажмите на заказ или задачу, чтобы открыть карточку'
+            : '💡 Нажмите на заказ, чтобы открыть его; задачи перетаскиваются'}
         </span>
       </div>
 

@@ -993,7 +993,7 @@ export function OrderModal({
                     className="rounded-lg border border-navy-100 px-2.5 py-2"
                   >
                     <select
-                      className="input h-9 w-full"
+                      className="input input-sm w-full"
                       value={r.key}
                       onChange={(e) => {
                         const key = e.target.value;
@@ -1028,7 +1028,7 @@ export function OrderModal({
                     <input
                       type="number"
                       min={1}
-                      className="input h-9 w-20"
+                      className="input input-sm w-20"
                       value={r.qty}
                       onChange={(e) => {
                         markTouched('addServices');
@@ -1046,7 +1046,7 @@ export function OrderModal({
                     <input
                       type="number"
                       min={0}
-                      className="input h-9 w-20"
+                      className="input input-sm w-20"
                       value={r.pricePerUnit}
                       onChange={(e) => {
                         markTouched('addServices');
@@ -1167,7 +1167,7 @@ export function OrderModal({
                             <input
                               type="number"
                               min={1}
-                              className="input h-9 w-20 shrink-0"
+                              className="input input-sm w-20 shrink-0"
                               value={qty}
                               onChange={(ev) => {
                                 markTouched('extras');

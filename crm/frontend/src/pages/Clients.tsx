@@ -605,7 +605,7 @@ export function AddClientModal({
               </span>
             ))}
             <input
-              className="input h-9 w-40"
+              className="input input-sm w-40"
               value={labelInput}
               maxLength={40}
               list="client-label-hints"
@@ -680,7 +680,7 @@ export function AddClientModal({
               {moreRows.map((r, i) => (
                 <div key={i} className="mt-2 rounded-lg border border-navy-100 p-2">
                   <select
-                    className="input h-9 w-full"
+                    className="input input-sm w-full"
                     value={r.key}
                     onChange={(e) =>
                       setMoreServices((prev) =>
@@ -698,7 +698,7 @@ export function AddClientModal({
                   <input
                     type="number"
                     min={1}
-                    className="input h-9 w-20"
+                    className="input input-sm w-20"
                     value={r.qty}
                     onChange={(e) =>
                       setMoreServices((prev) =>

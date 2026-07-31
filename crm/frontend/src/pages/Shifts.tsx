@@ -661,7 +661,7 @@ function ShiftGroupModal({
             {guests.map((g, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
                 <input
-                  className="input h-10 min-w-[9rem] flex-1"
+                  className="input input-sm min-w-[9rem] flex-1"
                   value={g.fullName}
                   maxLength={120}
                   placeholder="Имя разового клинера"
@@ -676,7 +676,7 @@ function ShiftGroupModal({
                 <input
                   type="number"
                   min={0}
-                  className="input h-10 w-32"
+                  className="input input-sm w-32"
                   value={g.rate}
                   placeholder="Выплата"
                   onChange={(e) =>

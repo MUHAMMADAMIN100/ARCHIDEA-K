@@ -55,7 +55,16 @@ const STAGE_LABEL: Record<FunnelStage, string> = {
 
 /** Состав списка воронки — лёгкий, без вложенных выездов */
 const orderInclude = {
-  client: { select: { id: true, fullName: true, phone: true } },
+  client: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      // статус и свободные теги видны прямо на карточке воронки
+      tags: true,
+      labels: true,
+    },
+  },
   manager: { select: { id: true, fullName: true } },
   cleaners: { select: { id: true, fullName: true } },
 };
@@ -71,6 +80,8 @@ const orderDetailInclude = {
       id: true,
       fullName: true,
       phone: true,
+      tags: true,
+      labels: true,
       extraPhones: true,
       preferences: true,
       isRepeat: true,
@@ -269,12 +280,18 @@ export class OrdersService {
         stage,
         label: STAGE_LABEL[stage],
         /*
-         * Сумма денег на этапе. Считаем по итоговой цене, а если её ещё нет —
-         * по расчётной: руководителю нужно видеть, сколько «висит» на каждом
-         * шаге воронки, а не только количество карточек.
+         * Сумма денег на этапе — то, что ещё предстоит получить: полная
+         * стоимость минус уже внесённая оплата. Руководителю нужно видеть,
+         * сколько реально «висит» на каждом шаге воронки. Выручка в
+         * аналитике и книге доходов считается отдельно, по полной сумме.
          */
         amount: inStage.reduce(
-          (sum, o) => sum + (o.finalPrice ?? o.estimatedPrice ?? 0),
+          (sum, o) =>
+            sum +
+            Math.max(
+              0,
+              (o.finalPrice ?? o.estimatedPrice ?? 0) - (o.paidAmount ?? 0),
+            ),
           0,
         ),
         orders: inStage,

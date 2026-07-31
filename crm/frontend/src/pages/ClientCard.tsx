@@ -24,6 +24,8 @@ import {
   DIRT_LABEL,
   DIRT_ORDER,
   formatPrice,
+  orderDue,
+  orderTotal,
   formatDate,
   formatVolume,
 } from '../lib/labels';
@@ -372,7 +374,7 @@ export function ClientCard() {
                 </span>
               ))}
               <input
-                className="input h-8 w-36 text-xs"
+                className="input input-xs w-36"
                 value={labelInput}
                 maxLength={40}
                 onChange={(e) => setLabelInput(e.target.value)}
@@ -472,7 +474,12 @@ export function ClientCard() {
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-navy-800">
-                        {formatPrice(o.finalPrice ?? o.estimatedPrice)}
+                        {formatPrice(orderDue(o))}
+                        {(o.paidAmount ?? 0) > 0 && (
+                          <span className="ml-1 text-xs font-normal text-navy-600">
+                            из {orderTotal(o).toLocaleString('ru-RU')}
+                          </span>
+                        )}
                       </div>
                       {o.cleaners && o.cleaners.length > 0 && (
                         <div className="text-xs text-navy-600">
@@ -672,7 +679,7 @@ function AddOrderModal({
           {moreRows.map((r, i) => (
             <div key={i} className="mt-2 rounded-lg border border-navy-100 p-2">
               <select
-                className="input h-9 w-full"
+                className="input input-sm w-full"
                 value={r.key}
                 onChange={(e) =>
                   setMoreServices((prev) =>
@@ -690,7 +697,7 @@ function AddOrderModal({
               <input
                 type="number"
                 min={1}
-                className="input h-9 w-20"
+                className="input input-sm w-20"
                 value={r.qty}
                 onChange={(e) =>
                   setMoreServices((prev) =>

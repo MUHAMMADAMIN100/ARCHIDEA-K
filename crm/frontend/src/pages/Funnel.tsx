@@ -21,9 +21,13 @@ import {
   STAGE_COLOR,
   STAGE_LABEL,
   STAGE_ORDER,
+  TAG_COLOR,
+  TAG_LABEL,
   TYPE_LABEL,
   formatPrice,
   formatVolume,
+  orderDue,
+  orderTotal,
 } from '../lib/labels';
 import { userSeesAll } from '../types';
 import type { BoardColumn, FunnelStage, Order } from '../types';
@@ -73,12 +77,42 @@ function OrderCardBody({
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div className="font-semibold text-navy-900">{o.client?.fullName}</div>
-        {o.isLarge && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-            КРУПНЫЙ
-          </span>
-        )}
+        <div className="min-w-0 flex-1 font-semibold text-navy-900">
+          {o.client?.fullName}
+        </div>
+        {/*
+          Статус клиента и его теги — в правом верхнем углу карточки: по
+          воронке работают глазами, и «VIP» или «Отказник» должны читаться
+          до того, как карточку открыли.
+        */}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {o.isLarge && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+              КРУПНЫЙ
+            </span>
+          )}
+          {(o.client?.tags ?? []).map((t) => (
+            <span
+              key={t}
+              className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TAG_COLOR[t]}`}
+            >
+              {TAG_LABEL[t]}
+            </span>
+          ))}
+          {(o.client?.labels ?? []).slice(0, 2).map((l) => (
+            <span
+              key={l}
+              className="rounded bg-navy-100 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700"
+            >
+              {l}
+            </span>
+          ))}
+          {(o.client?.labels ?? []).length > 2 && (
+            <span className="rounded bg-navy-100 px-1 py-0.5 text-[10px] font-semibold text-navy-700">
+              +{(o.client?.labels ?? []).length - 2}
+            </span>
+          )}
+        </div>
       </div>
       {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
       {o.client?.phone && (
@@ -91,7 +125,12 @@ function OrderCardBody({
       </div>
       <div className="mt-2 flex items-center justify-between">
         <span className="text-sm font-bold text-navy-700">
-          {formatPrice(o.finalPrice ?? o.estimatedPrice)}
+          {formatPrice(orderDue(o))}
+          {(o.paidAmount ?? 0) > 0 && (
+            <span className="ml-1 text-xs font-medium text-navy-600">
+              из {orderTotal(o).toLocaleString('ru-RU')}
+            </span>
+          )}
         </span>
         {o.cleaners && o.cleaners.length > 0 && (
           <span className="text-xs text-navy-600">👥 {o.cleaners.length}</span>
@@ -415,10 +454,7 @@ export function Funnel() {
                   <span className="font-bold text-navy-800">
                     {formatPrice(
                       col.amount ??
-                        col.orders.reduce(
-                          (sum, o) => sum + (o.finalPrice ?? o.estimatedPrice ?? 0),
-                          0,
-                        ),
+                        col.orders.reduce((sum, o) => sum + orderDue(o), 0),
                     )}
                   </span>
                 </div>
@@ -564,7 +600,7 @@ function StageOrdersModal({
   onPick: (order: Order) => void;
   onClose: () => void;
 }) {
-  const priceOf = (o: Order) => o.finalPrice ?? o.estimatedPrice ?? 0;
+  const priceOf = (o: Order) => orderDue(o);
   const sum = column.orders.reduce((s, o) => s + priceOf(o), 0);
 
   return (
