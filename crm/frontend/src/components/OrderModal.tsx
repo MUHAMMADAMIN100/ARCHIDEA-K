@@ -1234,7 +1234,7 @@ export function OrderModal({
                       <span className="tabular-nums">{formatPrice(subtotalSum)}</span>
                     </div>
                     {discountSum > 0 && (
-                      <div className="flex justify-between font-medium text-red-600">
+                      <div className="flex justify-between font-medium text-red-700">
                         <span>Скидка</span>
                         <span className="tabular-nums">− {formatPrice(discountSum)}</span>
                       </div>
@@ -1253,7 +1253,7 @@ export function OrderModal({
                     )}
                     <div
                       className={`mt-1 flex justify-between border-t border-navy-200 pt-1 font-bold ${
-                        dueSum > 0 ? 'text-red-600' : 'text-emerald-700'
+                        dueSum > 0 ? 'text-red-700' : 'text-emerald-700'
                       }`}
                     >
                       <span>{dueSum > 0 ? 'Остаток' : 'Оплачен полностью'}</span>
@@ -1430,7 +1430,7 @@ function ShiftGroupsSection({
             </div>
           )}
           {g.closedAt && (
-            <div className="mt-2 text-xs font-medium text-emerald-600">
+            <div className="mt-2 text-xs font-medium text-emerald-700">
               Смена закрыта {formatDateTimeTz(g.closedAt)}
             </div>
           )}

@@ -328,7 +328,7 @@ function ProposalsTab() {
                   e.stopPropagation();
                   changeStatus(p, 'ACCEPTED');
                 }}
-                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-emerald-50 hover:text-emerald-600"
+                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-emerald-50 hover:text-emerald-700"
                 title="Принято клиентом"
               >
                 <CheckCircle2 className="h-4 w-4" />
@@ -338,7 +338,7 @@ function ProposalsTab() {
                   e.stopPropagation();
                   changeStatus(p, 'REJECTED');
                 }}
-                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-600"
+                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-700"
                 title="Отклонено клиентом"
               >
                 <XCircle className="h-4 w-4" />
@@ -350,7 +350,7 @@ function ProposalsTab() {
               e.stopPropagation();
               removeProposal(p);
             }}
-            className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-700"
             title="Удалить в корзину"
           >
             <Trash2 className="h-4 w-4" />
@@ -822,7 +822,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                         <button
                           type="button"
                           onClick={() => removeItem(idx)}
-                          className="text-navy-600 hover:text-rose-600"
+                          className="text-navy-600 hover:text-rose-700"
                         >
                           <X className="h-4 w-4" />
                         </button>

@@ -63,7 +63,7 @@ export function PhoneInput({
         />
       </div>
       {error ? (
-        <div className="mt-1 text-xs text-rose-600">{error}</div>
+        <div className="mt-1 text-xs text-rose-700">{error}</div>
       ) : (
         <div className="mt-1 text-xs text-navy-600">
           {phoneDigits(value).length}/{PHONE_DIGITS} цифр
@@ -112,7 +112,7 @@ export function NameInput({
         disabled={disabled}
         aria-invalid={!!error}
       />
-      {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
+      {error && <div className="mt-1 text-xs text-rose-700">{error}</div>}
     </div>
   );
 }

@@ -301,7 +301,7 @@ function ReportBreakdownModal({
               header: 'Сумма',
               align: 'right',
               cell: (e) => (
-                <span className="font-medium text-rose-600">{formatPrice(e.amount)}</span>
+                <span className="font-medium text-rose-700">{formatPrice(e.amount)}</span>
               ),
             },
           ]}
@@ -311,7 +311,7 @@ function ReportBreakdownModal({
                 <td className="px-3 py-2" colSpan={2}>
                   Итого расходов
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-rose-600">
+                <td className="px-3 py-2 text-right tabular-nums text-rose-700">
                   {formatPrice(expenses)}
                 </td>
               </tr>

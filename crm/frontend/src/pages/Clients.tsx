@@ -252,7 +252,7 @@ export function Clients() {
           >
             {c._count?.orders ?? 0}
             {(c.paidOrdersCount ?? 0) > 0 && (
-              <span className="ml-1 text-xs text-emerald-600">
+              <span className="ml-1 text-xs text-emerald-700">
                 ({c.paidOrdersCount} опл.)
               </span>
             )}

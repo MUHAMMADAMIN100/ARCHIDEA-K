@@ -524,9 +524,9 @@ export function StatCard({
 }) {
   const toneClass =
     tone === 'positive'
-      ? 'text-emerald-600'
+      ? 'text-emerald-700'
       : tone === 'negative'
-        ? 'text-rose-600'
+        ? 'text-rose-700'
         : 'text-navy-900';
 
   const body = (

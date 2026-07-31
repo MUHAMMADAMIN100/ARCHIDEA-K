@@ -360,7 +360,7 @@ function EntriesTab() {
       title: 'Сумма',
       numeric: true,
       render: (row) => (
-        <span className={row.kind === 'INCOME' ? 'font-semibold text-emerald-600' : 'font-semibold text-rose-600'}>
+        <span className={row.kind === 'INCOME' ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
           {row.kind === 'INCOME' ? '+' : '−'}
           {formatPrice(row.amount)}
         </span>
@@ -407,7 +407,7 @@ function EntriesTab() {
           </button>
           <button
             onClick={() => removeEntry(row)}
-            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-700"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -593,8 +593,8 @@ function EntriesTab() {
                   date: `Итого: ${rows.length}`,
                   amount: (
                     <span className="space-x-2 whitespace-nowrap">
-                      <span className="text-emerald-600">+{formatPrice(footIncome)}</span>
-                      <span className="text-rose-600">−{formatPrice(footExpense)}</span>
+                      <span className="text-emerald-700">+{formatPrice(footIncome)}</span>
+                      <span className="text-rose-700">−{formatPrice(footExpense)}</span>
                     </span>
                   ),
                 }
@@ -731,8 +731,8 @@ function FinanceDrilldownModal({
                   <span
                     className={
                       e.kind === 'INCOME'
-                        ? 'font-semibold text-emerald-600'
-                        : 'font-semibold text-rose-600'
+                        ? 'font-semibold text-emerald-700'
+                        : 'font-semibold text-rose-700'
                     }
                   >
                     {e.kind === 'INCOME' ? '+' : '−'}
@@ -782,8 +782,8 @@ function EntryDetailModal({
         <span
           className={
             entry.kind === 'INCOME'
-              ? 'font-bold text-emerald-600'
-              : 'font-bold text-rose-600'
+              ? 'font-bold text-emerald-700'
+              : 'font-bold text-rose-700'
           }
         >
           {entry.kind === 'INCOME' ? '+' : '−'}
@@ -1022,7 +1022,7 @@ function OrderPicker({
         <span className="min-w-0 flex-1 truncate text-navy-700">{value.label}</span>
         <button
           type="button"
-          className="shrink-0 text-navy-600 hover:text-rose-600"
+          className="shrink-0 text-navy-600 hover:text-rose-700"
           onClick={() => onChange(null)}
           aria-label="Отвязать заказ"
         >
@@ -1216,7 +1216,7 @@ function BonusesTab() {
       key: 'amount',
       title: 'Сумма',
       numeric: true,
-      render: (b) => <span className="font-semibold text-rose-600">− {formatPrice(b.amount)}</span>,
+      render: (b) => <span className="font-semibold text-rose-700">− {formatPrice(b.amount)}</span>,
     },
     {
       key: 'paid',
@@ -1242,7 +1242,7 @@ function BonusesTab() {
         <div className="flex justify-end">
           <button
             onClick={() => removeBonus(b)}
-            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-700"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
