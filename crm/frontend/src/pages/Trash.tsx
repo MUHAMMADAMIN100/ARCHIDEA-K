@@ -258,9 +258,9 @@ export function Trash() {
       render: (row) => (
         <div>
           <div className="font-medium text-navy-900">{row.title}</div>
-          {row.subtitle && <div className="text-xs text-navy-500">{row.subtitle}</div>}
+          {row.subtitle && <div className="text-xs text-navy-600">{row.subtitle}</div>}
           {activeTab === 'all' && (
-            <div className="mt-1 inline-block rounded-full bg-navy-50 px-2 py-0.5 text-[11px] text-navy-500">
+            <div className="mt-1 inline-block rounded-full bg-navy-50 px-2 py-0.5 text-[11px] text-navy-600">
               {TRASH_TYPE_LABEL[row.type]}
             </div>
           )}

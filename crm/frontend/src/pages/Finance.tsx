@@ -373,14 +373,14 @@ function EntriesTab() {
       render: (row) =>
         row.orderId ? (
           <span
-            className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-navy-500"
+            className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-navy-600"
             title={row.orderId}
           >
             <Link2 className="h-3.5 w-3.5" />
             №{row.orderId.slice(-6).toUpperCase()}
           </span>
         ) : (
-          <span className="text-navy-500">—</span>
+          <span className="text-navy-600">—</span>
         ),
     },
     {
@@ -400,14 +400,14 @@ function EntriesTab() {
               setEditingEntry(row);
               setModalOpen(true);
             }}
-            className="rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 hover:text-navy-700"
+            className="rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
             title="Изменить"
           >
             <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={() => removeEntry(row)}
-            className="rounded-lg p-1.5 text-navy-500 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-600"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -1035,7 +1035,7 @@ function OrderPicker({
   return (
     <div className="relative">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-600" />
         <input
           className="input pl-9"
           placeholder="Поиск заказа по имени или телефону клиента (необязательно)"
@@ -1242,7 +1242,7 @@ function BonusesTab() {
         <div className="flex justify-end">
           <button
             onClick={() => removeBonus(b)}
-            className="rounded-lg p-1.5 text-navy-500 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-600"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />

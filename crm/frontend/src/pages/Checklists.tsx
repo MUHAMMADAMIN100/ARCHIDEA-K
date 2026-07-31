@@ -169,7 +169,7 @@ export function Checklists() {
       render: (t) => (
         <Badge
           className={
-            t.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-navy-100 text-navy-500'
+            t.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-navy-100 text-navy-600'
           }
         >
           {t.isActive ? 'Активен' : 'Отключён'}
@@ -383,7 +383,7 @@ function TemplateModal({
           />
           <span className="text-sm text-navy-800">
             <span className="font-medium">Оценка загрязнения вместо галочки</span>
-            <span className="mt-0.5 block text-xs text-navy-500">
+            <span className="mt-0.5 block text-xs text-navy-600">
               Каждый пункт отмечается как «Норма», «Среднее» или «Сильное» —
               для чек-листов приёма объекта до начала работ.
             </span>

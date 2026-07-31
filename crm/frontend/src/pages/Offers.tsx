@@ -256,7 +256,7 @@ function ProposalsTab() {
       key: 'order',
       title: 'Заказ',
       hideOnMobile: true,
-      render: (p) => (p.orderId ? p.address || 'без адреса' : <span className="text-navy-500">без заказа</span>),
+      render: (p) => (p.orderId ? p.address || 'без адреса' : <span className="text-navy-600">без заказа</span>),
     },
     {
       key: 'total',
@@ -295,7 +295,7 @@ function ProposalsTab() {
             <div className="text-xs text-navy-600">{formatDateTimeTz(p.sentAt)}</div>
           </div>
         ) : (
-          <span className="text-navy-500">не отправлено</span>
+          <span className="text-navy-600">не отправлено</span>
         ),
     },
     {
@@ -470,11 +470,11 @@ function ProposalTotalModal({
             header: 'Расчёт',
             cell: (i) =>
               i.volume && i.unitPrice ? (
-                <span className="text-navy-500">
+                <span className="text-navy-600">
                   {i.volume} × {formatPrice(i.unitPrice)}
                 </span>
               ) : (
-                <span className="text-navy-500">фиксированная</span>
+                <span className="text-navy-600">фиксированная</span>
               ),
           },
           {
@@ -822,7 +822,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                         <button
                           type="button"
                           onClick={() => removeItem(idx)}
-                          className="text-navy-500 hover:text-rose-600"
+                          className="text-navy-600 hover:text-rose-600"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -837,12 +837,12 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
 
         {/* Итог */}
         <div className="space-y-1.5 rounded-xl bg-navy-50 p-3 text-sm">
-          <div className="flex justify-between text-navy-500">
+          <div className="flex justify-between text-navy-600">
             <span>Расчёт по {items.length > 0 ? 'позициям' : 'площади и цене'}</span>
             <span className="tabular-nums">{formatPrice(autoTotal)}</span>
           </div>
           {discount > 0 && (
-            <div className="flex justify-between text-navy-500">
+            <div className="flex justify-between text-navy-600">
               <span>Скидка</span>
               <span className="tabular-nums">− {formatPrice(discount)}</span>
             </div>
@@ -943,7 +943,7 @@ function TemplatesTab() {
                 </Badge>
               )}
               {t.intro && (
-                <p className="mt-2 line-clamp-3 text-sm text-navy-500">{t.intro}</p>
+                <p className="mt-2 line-clamp-3 text-sm text-navy-600">{t.intro}</p>
               )}
               <p className="mt-2 text-xs text-navy-600">
                 Действует {t.validDays} {t.validDays === 1 ? 'день' : 'дней'} с даты составления

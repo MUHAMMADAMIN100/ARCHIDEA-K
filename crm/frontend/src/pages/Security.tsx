@@ -25,7 +25,7 @@ const attemptColumns: Column<Attempt>[] = [
   {
     key: 'when',
     title: 'Когда',
-    render: (a) => <span className="text-navy-500">{when(a.createdAt)}</span>,
+    render: (a) => <span className="text-navy-600">{when(a.createdAt)}</span>,
   },
   {
     key: 'login',
@@ -47,14 +47,14 @@ const attemptColumns: Column<Attempt>[] = [
   {
     key: 'ip',
     title: 'Адрес',
-    render: (a) => <span className="text-navy-500">{a.ip || '—'}</span>,
+    render: (a) => <span className="text-navy-600">{a.ip || '—'}</span>,
   },
   {
     // строка браузера длинная и на телефоне не помогает — прячем
     key: 'device',
     title: 'Устройство',
     hideOnMobile: true,
-    render: (a) => <span className="text-navy-500">{device(a.userAgent)}</span>,
+    render: (a) => <span className="text-navy-600">{device(a.userAgent)}</span>,
   },
 ];
 
@@ -118,7 +118,7 @@ export function Security() {
               <div className="text-2xl font-extrabold text-navy-900">
                 {data.items.filter((a) => a.success).length}
               </div>
-              <div className="text-sm text-navy-500">Успешных входов</div>
+              <div className="text-sm text-navy-600">Успешных входов</div>
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ export function Security() {
               <div className="text-2xl font-extrabold text-navy-900">
                 {data.failed24h}
               </div>
-              <div className="text-sm text-navy-500">Неудачных за сутки</div>
+              <div className="text-sm text-navy-600">Неудачных за сутки</div>
             </div>
           </div>
         </div>
@@ -160,7 +160,7 @@ export function Security() {
               <div className="text-2xl font-extrabold text-navy-900">
                 {data.locked.length}
               </div>
-              <div className="text-sm text-navy-500">Заблокировано сейчас</div>
+              <div className="text-sm text-navy-600">Заблокировано сейчас</div>
             </div>
           </div>
         </div>

@@ -297,7 +297,7 @@ export function Tariffs() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <h4 className="font-bold leading-tight text-navy-900">{t.title}</h4>
                     {t.isSystem && (
-                      <Badge className="border border-navy-200 bg-navy-50 text-navy-500">Базовая</Badge>
+                      <Badge className="border border-navy-200 bg-navy-50 text-navy-600">Базовая</Badge>
                     )}
                     {!t.isActive && (
                       <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Скрыта</Badge>
@@ -313,7 +313,7 @@ export function Tariffs() {
                     const value = [p.light, p.medium, p.heavy][i];
                     return (
                       <div key={lv.key} className="flex items-center gap-3">
-                        <span className="w-20 shrink-0 text-sm text-navy-500">
+                        <span className="w-20 shrink-0 text-sm text-navy-600">
                           {lv.label}
                         </span>
                         <div className="relative flex-1">
@@ -344,7 +344,7 @@ export function Tariffs() {
                 </div>
               ) : (
                 <div className="mt-4">
-                  <label className="mb-1.5 block text-xs font-medium text-navy-500">
+                  <label className="mb-1.5 block text-xs font-medium text-navy-600">
                     Цена
                   </label>
                   <div className="relative">
@@ -390,7 +390,7 @@ export function Tariffs() {
               <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-navy-100 pt-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => setTariffModal({ item: t })}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -398,7 +398,7 @@ export function Tariffs() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => setHistoryKey({ key: t.key, title: t.title })}
                 >
                   <HistoryIcon className="h-3.5 w-3.5" />
@@ -406,7 +406,7 @@ export function Tariffs() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => toggleTariffActive(t)}
                 >
                   {t.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -414,7 +414,7 @@ export function Tariffs() {
                 </button>
                 {t.isSystem ? (
                   <span
-                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500"
+                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600"
                     title="Базовая услуга — на неё завязаны лендинг и старые заказы, удалить нельзя. Можно только скрыть."
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -458,7 +458,7 @@ export function Tariffs() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <h4 className="font-bold leading-tight text-navy-900">{e.title}</h4>
                     {e.isSystem && (
-                      <Badge className="border border-navy-200 bg-navy-50 text-navy-500">Базовая</Badge>
+                      <Badge className="border border-navy-200 bg-navy-50 text-navy-600">Базовая</Badge>
                     )}
                     {!e.isActive && (
                       <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Скрыта</Badge>
@@ -467,7 +467,7 @@ export function Tariffs() {
                 </div>
               </div>
 
-              <label className="mb-1.5 mt-4 block text-xs font-medium text-navy-500">
+              <label className="mb-1.5 mt-4 block text-xs font-medium text-navy-600">
                 Цена
               </label>
               <div className="relative">
@@ -510,7 +510,7 @@ export function Tariffs() {
               <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-navy-100 pt-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => setExtraModal({ item: e })}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -518,7 +518,7 @@ export function Tariffs() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500 hover:bg-navy-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => toggleExtraActive(e)}
                 >
                   {e.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -526,7 +526,7 @@ export function Tariffs() {
                 </button>
                 {e.isSystem ? (
                   <span
-                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500"
+                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600"
                     title="Базовая доп. услуга — удалить нельзя, можно только скрыть."
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -670,7 +670,7 @@ function TariffModal({
               Теперь ключ формируется из названия на сервере.
             */}
             {isEdit && tariff!.isSystem && (
-              <p className="rounded-lg bg-navy-50 px-3 py-2 text-xs text-navy-500">
+              <p className="rounded-lg bg-navy-50 px-3 py-2 text-xs text-navy-600">
                 Это базовая услуга — ключ и единица измерения зафиксированы: на них завязаны
                 калькулятор на сайте и уже оформленные заказы.
               </p>

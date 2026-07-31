@@ -196,7 +196,7 @@ export function Tasks() {
                       </Badge>
                     </div>
                     {t.description && (
-                      <p className="mt-1 text-sm text-navy-500">{t.description}</p>
+                      <p className="mt-1 text-sm text-navy-600">{t.description}</p>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-navy-600">
                       <span>{TASK_TYPE_LABEL[t.type]}</span>

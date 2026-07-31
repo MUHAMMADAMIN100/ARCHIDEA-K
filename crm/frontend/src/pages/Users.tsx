@@ -143,7 +143,7 @@ export function UsersPage() {
                         e.stopPropagation();
                         removeUser(u);
                       }}
-                      className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       title="Удалить сотрудника"
                     >
                       <Trash2 className="h-4 w-4" />

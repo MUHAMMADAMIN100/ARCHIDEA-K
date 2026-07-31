@@ -153,7 +153,7 @@ export function Reports() {
                 </div>
               </div>
 
-              <ChevronRight className="h-4 w-4 shrink-0 text-navy-500" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-navy-600" />
             </Link>
           ))}
         </div>
@@ -246,7 +246,7 @@ function ReportBreakdownModal({
               key: 'calc',
               header: 'Расчёт',
               cell: (w) => (
-                <span className="text-navy-500">
+                <span className="text-navy-600">
                   {w.days} × {formatPrice(w.rate)}
                   {w.fine > 0 && ` − штраф ${formatPrice(w.fine)}`}
                   {w.extra > 0 && ` + доплата ${formatPrice(w.extra)}`}
@@ -294,7 +294,7 @@ function ReportBreakdownModal({
             {
               key: 'initiator',
               header: 'От кого',
-              cell: (e) => <span className="text-navy-500">{e.initiator || '—'}</span>,
+              cell: (e) => <span className="text-navy-600">{e.initiator || '—'}</span>,
             },
             {
               key: 'amount',

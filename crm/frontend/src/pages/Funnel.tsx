@@ -410,7 +410,7 @@ export function Funnel() {
                     </DrillValue>
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-navy-500">
+                <div className="mt-1 text-xs text-navy-600">
                   Сумма:{' '}
                   <span className="font-bold text-navy-800">
                     {formatPrice(
@@ -471,7 +471,7 @@ export function Funnel() {
                     ))}
                     {provided.placeholder}
                     {col.orders.length === 0 && !snapshot.isDraggingOver && (
-                      <div className="rounded-xl border border-dashed border-navy-200 py-6 text-center text-xs text-navy-500">
+                      <div className="rounded-xl border border-dashed border-navy-200 py-6 text-center text-xs text-navy-600">
                         {isTouch ? 'Нет заказов' : 'Перетащите сюда'}
                       </div>
                     )}
@@ -613,7 +613,7 @@ function StageOrdersModal({
             key: 'manager',
             header: 'Ответственный',
             cell: (o) => (
-              <span className="text-navy-500">{o.manager?.fullName ?? '—'}</span>
+              <span className="text-navy-600">{o.manager?.fullName ?? '—'}</span>
             ),
           },
           {

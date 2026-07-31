@@ -109,7 +109,7 @@ export function OrdersDrilldownModal({
                 key: 'manager',
                 header: 'Ответственный',
                 cell: (o) => (
-                  <span className="text-navy-500">{o.manager?.fullName ?? '—'}</span>
+                  <span className="text-navy-600">{o.manager?.fullName ?? '—'}</span>
                 ),
               },
               ...(showMoney

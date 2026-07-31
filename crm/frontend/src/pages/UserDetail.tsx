@@ -129,7 +129,7 @@ export function UserDetail() {
       <div>
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> Назад
         </button>
@@ -153,7 +153,7 @@ export function UserDetail() {
     <div>
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
       >
         <ArrowLeft className="h-4 w-4" /> Назад
       </button>
@@ -197,7 +197,7 @@ export function UserDetail() {
                 className={
                   data.isActive
                     ? 'bg-green-100 text-green-700'
-                    : 'bg-navy-100 text-navy-500'
+                    : 'bg-navy-100 text-navy-600'
                 }
               >
                 {data.isActive ? '● Активен' : '○ Отключён'}
@@ -257,7 +257,7 @@ export function UserDetail() {
             )}
             {data.mainTask && (
               <div className="mt-4 rounded-xl bg-navy-50 p-3.5">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-navy-500">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-navy-600">
                   Основная задача
                 </div>
                 <div className="text-sm font-medium text-navy-900">
@@ -282,12 +282,12 @@ export function UserDetail() {
               >
                 <s.icon className="h-5 w-5" />
               </span>
-              <ChevronRight className="h-4 w-4 text-navy-500" />
+              <ChevronRight className="h-4 w-4 text-navy-600" />
             </div>
             <div className="mt-3 text-2xl font-extrabold text-navy-900">
               {s.value}
             </div>
-            <div className="text-sm text-navy-500">{s.label}</div>
+            <div className="text-sm text-navy-600">{s.label}</div>
           </button>
         ))}
       </div>
@@ -467,7 +467,7 @@ function EditUserModal({
             />
             <span className="text-sm text-navy-800">
               <span className="font-medium">Расширенный доступ (без финансов)</span>
-              <span className="mt-0.5 block text-xs text-navy-500">
+              <span className="mt-0.5 block text-xs text-navy-600">
                 Видит клиентов, заказы, команду и аналитику всей компании, ставит
                 задачи любому сотруднику. Без разделов «Смены и выплаты», «Отчёты»,
                 «Тарифы» и без данных о доходах.
@@ -489,7 +489,7 @@ function EditUserModal({
             />
             <span className="text-sm text-navy-800">
               <span className="font-medium">Полный доступ к задачам</span>
-              <span className="mt-0.5 block text-xs text-navy-500">
+              <span className="mt-0.5 block text-xs text-navy-600">
                 Видит, ставит, назначает и контролирует задачи всей компании,
                 включая календарь. На доступ к клиентам, заказам и финансам
                 не влияет.
@@ -509,7 +509,7 @@ function EditUserModal({
           />
           <span className="text-sm text-navy-800">
             <span className="font-medium">Доступ к корзине</span>
-            <span className="mt-0.5 block text-xs text-navy-500">
+            <span className="mt-0.5 block text-xs text-navy-600">
               Видит удалённые записи и возвращает их. Удалять безвозвратно
               может только руководитель с этим доступом.
             </span>
@@ -691,7 +691,7 @@ function PeriodAnalytics({
                     key: 'date',
                     header: 'Принят',
                     cell: (o: UserPeriodAnalytics['orders'][number]) => (
-                      <span className="text-navy-500">{formatDate(o.createdAt)}</span>
+                      <span className="text-navy-600">{formatDate(o.createdAt)}</span>
                     ),
                   },
                   {

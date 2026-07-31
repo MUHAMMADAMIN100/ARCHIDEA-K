@@ -43,7 +43,7 @@ export function ReportView() {
       <div className="mx-auto max-w-4xl">
         <button
           onClick={() => navigate('/reports')}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
@@ -122,7 +122,7 @@ export function ReportView() {
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={() => navigate('/reports')}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
@@ -168,7 +168,7 @@ export function ReportView() {
       <div className="print-sheet card p-6 sm:p-8">
         <div className="mb-1 flex items-center justify-between">
           <div className="text-xl font-extrabold tracking-wide text-navy-900">
-            ARCHIDEA <span className="font-medium text-navy-500">· Платёжная ведомость</span>
+            ARCHIDEA <span className="font-medium text-navy-600">· Платёжная ведомость</span>
           </div>
           <Badge className={`no-print ${REPORT_STATUS_COLOR[r.status]}`}>
             {REPORT_STATUS_LABEL[r.status]}
@@ -203,7 +203,7 @@ export function ReportView() {
               key={k}
               className={`flex ${i > 0 ? 'border-t border-navy-100' : ''}`}
             >
-              <div className="w-2/5 shrink-0 bg-navy-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-navy-500">
+              <div className="w-2/5 shrink-0 bg-navy-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
                 {k}
               </div>
               <div className={`flex-1 px-3 py-2 text-navy-900 ${k === 'Итоговая стоимость' ? 'font-bold' : ''}`}>
@@ -235,12 +235,12 @@ export function ReportView() {
             <tbody>
               {r.workers.map((w, i) => (
                 <tr key={w.id ?? i}>
-                  <td className="border border-navy-200 px-2 py-1.5 text-navy-500">{i + 1}</td>
+                  <td className="border border-navy-200 px-2 py-1.5 text-navy-600">{i + 1}</td>
                   <td className="border border-navy-200 px-2 py-1.5 font-medium text-navy-900">{w.fullName}</td>
                   <td className="border border-navy-200 px-2 py-1.5 text-navy-700">{w.role}</td>
                   <td className="border border-navy-200 px-2 py-1.5 text-center text-navy-900">{w.days}</td>
                   <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-900">{w.rate}</td>
-                  <td className={`border border-navy-200 px-2 py-1.5 text-right ${w.fine ? 'font-medium text-red-600' : 'text-navy-500'}`}>
+                  <td className={`border border-navy-200 px-2 py-1.5 text-right ${w.fine ? 'font-medium text-red-600' : 'text-navy-600'}`}>
                     {w.fine ? `− ${w.fine}` : '—'}
                   </td>
                   <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-900">
@@ -287,7 +287,7 @@ export function ReportView() {
               <tbody>
                 {r.expenses.map((e, i) => (
                   <tr key={e.id ?? i}>
-                    <td className="border border-navy-200 px-2 py-1.5 text-navy-500">{i + 1}</td>
+                    <td className="border border-navy-200 px-2 py-1.5 text-navy-600">{i + 1}</td>
                     <td className="border border-navy-200 px-2 py-1.5 font-medium text-navy-900">{e.title}</td>
                     <td className="border border-navy-200 px-2 py-1.5 text-navy-700">{e.initiator || '—'}</td>
                     <td className="border border-navy-200 px-2 py-1.5 text-right font-bold text-navy-900">

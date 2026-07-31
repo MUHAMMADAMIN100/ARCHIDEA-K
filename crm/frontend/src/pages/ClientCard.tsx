@@ -241,7 +241,7 @@ export function ClientCard() {
     <div>
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
       >
         <ArrowLeft className="h-4 w-4" /> Назад
       </button>
@@ -340,7 +340,7 @@ export function ClientCard() {
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                     curTags.includes(t)
                       ? TAG_COLOR[t] + ' ring-2 ring-navy-200'
-                      : 'border border-navy-200 bg-white text-navy-500'
+                      : 'border border-navy-200 bg-white text-navy-600'
                   }`}
                 >
                   {TAG_LABEL[t]}
@@ -709,7 +709,7 @@ function AddOrderModal({
                 onClick={() =>
                   setMoreServices((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="shrink-0 rounded-lg p-1 text-navy-500 hover:text-red-600"
+                className="shrink-0 rounded-lg p-1 text-navy-600 hover:text-red-600"
                 aria-label="Убрать услугу"
               >
                 ×
@@ -747,7 +747,7 @@ function AddOrderModal({
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     dirtLevel === d
                       ? 'bg-navy-500 text-white ring-2 ring-navy-300'
-                      : 'border border-navy-200 bg-white text-navy-500 hover:bg-navy-50'
+                      : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
                   }`}
                 >
                   {DIRT_LABEL[d]}
@@ -793,7 +793,7 @@ function AddOrderModal({
               setManualPrice(true);
             }}
           />
-          <div className="mt-1 flex items-center gap-2 text-xs text-navy-500">
+          <div className="mt-1 flex items-center gap-2 text-xs text-navy-600">
             {manualPrice ? (
               <>
                 <span>Сумма задана вручную</span>

@@ -62,7 +62,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold text-navy-900">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-navy-500">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-sm text-navy-600">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -103,7 +103,7 @@ export function ErrorState({
 }) {
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center">
-      <div className="max-w-xs text-sm text-navy-500">{text}</div>
+      <div className="max-w-xs text-sm text-navy-600">{text}</div>
       {onRetry && (
         <button onClick={onRetry} className="btn-primary">
           Повторить

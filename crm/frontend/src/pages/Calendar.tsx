@@ -410,7 +410,7 @@ export function Calendar() {
               className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 view === v
                   ? 'bg-white text-navy-900 shadow-sm'
-                  : 'text-navy-500 hover:text-navy-800'
+                  : 'text-navy-600 hover:text-navy-800'
               }`}
             >
               {v === 'month' ? 'Месяц' : 'Неделя'}
@@ -427,7 +427,7 @@ export function Calendar() {
         <div className="flex w-full items-center gap-1 sm:w-auto">
           <button
             onClick={() => shift(-1)}
-            className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 sm:p-2"
+            className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 sm:p-2"
             title="Назад"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -437,7 +437,7 @@ export function Calendar() {
           </span>
           <button
             onClick={() => shift(1)}
-            className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 sm:p-2"
+            className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 sm:p-2"
             title="Вперёд"
           >
             <ChevronRight className="h-4 w-4" />
@@ -558,7 +558,7 @@ export function Calendar() {
                     <div className="mb-1.5 flex items-center justify-between">
                       <span
                         className={`text-xs font-semibold sm:text-sm ${
-                          isToday ? 'text-navy-700' : 'text-navy-500'
+                          isToday ? 'text-navy-700' : 'text-navy-600'
                         }`}
                       >
                         {d.getDate()}
@@ -566,7 +566,7 @@ export function Calendar() {
                       {mode === 'tasks' ? (
                         <button
                           onClick={() => setModal({ mode: 'create', date: key })}
-                          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-500 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
+                          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-600 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
                             isTouch ? '' : 'opacity-0 group-hover:opacity-100'
                           }`}
                         >
@@ -575,7 +575,7 @@ export function Calendar() {
                         </button>
                       ) : (
                         (ordersByDay.get(key)?.length ?? 0) > 0 && (
-                          <span className="shrink-0 rounded-md bg-white/70 px-1.5 text-[11px] font-semibold text-navy-500">
+                          <span className="shrink-0 rounded-md bg-white/70 px-1.5 text-[11px] font-semibold text-navy-600">
                             {ordersByDay.get(key)?.length}
                           </span>
                         )
@@ -644,14 +644,14 @@ export function Calendar() {
                 <Inbox className="h-3.5 w-3.5" />
                 {mode === 'orders' ? 'Без даты уборки' : 'Без срока'}
                 {(mode === 'orders' ? ordersUndated : undated).length > 0 && (
-                  <span className="text-navy-500">
+                  <span className="text-navy-600">
                     · {(mode === 'orders' ? ordersUndated : undated).length}
                   </span>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {mode === 'orders' && ordersUndated.length === 0 && (
-                  <span className="text-xs text-navy-500">
+                  <span className="text-xs text-navy-600">
                     У всех заказов проставлена дата уборки
                   </span>
                 )}
@@ -666,7 +666,7 @@ export function Calendar() {
                     </div>
                   ))}
                 {mode === 'tasks' && undated.length === 0 && (
-                  <span className="text-xs text-navy-500">
+                  <span className="text-xs text-navy-600">
                     {isTouch
                       ? 'Задачи без даты появятся здесь'
                       : 'Перетащите сюда, чтобы снять срок'}

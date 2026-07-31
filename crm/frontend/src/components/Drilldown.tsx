@@ -38,7 +38,7 @@ export function DrillValue({
 }) {
   const toneClass = {
     default: 'text-navy-800 decoration-navy-300 hover:text-navy-900',
-    muted: 'text-navy-500 decoration-navy-200 hover:text-navy-800',
+    muted: 'text-navy-600 decoration-navy-200 hover:text-navy-800',
     strong: 'font-bold text-navy-900 decoration-navy-300',
     danger: 'font-medium text-red-600 decoration-red-300 hover:text-red-700',
     success: 'font-bold text-green-700 decoration-green-300 hover:text-green-800',
@@ -116,7 +116,7 @@ export function DetailTabs<T extends string>({
           className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
             value === t.value
               ? 'bg-white text-navy-900 shadow-sm'
-              : 'text-navy-500 hover:text-navy-800'
+              : 'text-navy-600 hover:text-navy-800'
           }`}
         >
           {t.label}

@@ -300,7 +300,7 @@ export function OrderChecklistCard({
   return (
     <div className="card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <ClipboardList className="h-4 w-4 shrink-0 text-navy-500" />
+        <ClipboardList className="h-4 w-4 shrink-0 text-navy-600" />
         <h3 className="font-semibold text-navy-900">Чек-лист качества</h3>
         {checklist && <Badge className={STATUS_COLOR[checklist.status]}>{STATUS_LABEL[checklist.status]}</Badge>}
       </div>
@@ -313,7 +313,7 @@ export function OrderChecklistCard({
 
       {!error && noChecklistYet && (
         <div className="space-y-3">
-          <p className="text-sm text-navy-500">
+          <p className="text-sm text-navy-600">
             У заказа ещё нет чек-листа контроля качества.
           </p>
           {canEdit ? (
@@ -551,7 +551,7 @@ function ChecklistItemRow({
       {canEdit && (
         <button
           onClick={onRemove}
-          className="shrink-0 rounded-lg p-1 text-navy-500 hover:bg-red-50 hover:text-red-600"
+          className="shrink-0 rounded-lg p-1 text-navy-600 hover:bg-red-50 hover:text-red-600"
           title="Удалить пункт"
         >
           <X className="h-3.5 w-3.5" />

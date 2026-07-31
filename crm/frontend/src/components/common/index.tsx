@@ -191,7 +191,7 @@ export function DataTable<T>({
       </div>
 
       {pages > 1 && (
-        <div className="flex items-center justify-between text-sm text-navy-500">
+        <div className="flex items-center justify-between text-sm text-navy-600">
           <span>
             {current * perPage + 1}–
             {Math.min((current + 1) * perPage, list.length)} из {list.length}
@@ -488,7 +488,7 @@ export function Tabs<T extends string>({
           className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition ${
             i.value === value
               ? 'border-brand-500 font-medium text-brand-700'
-              : 'border-transparent text-navy-500 hover:text-navy-700'
+              : 'border-transparent text-navy-600 hover:text-navy-700'
           }`}
         >
           {i.label}
@@ -603,7 +603,7 @@ export function SearchInput({
 }) {
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-600" />
       <input
         className="input pl-9"
         value={value}
@@ -631,7 +631,7 @@ export function PrintSheet({
     <div className="print-sheet rounded-2xl border border-navy-100 bg-white p-6 sm:p-8">
       <div className="mb-5 border-b border-navy-100 pb-4">
         <div className="text-lg font-semibold text-navy-900">{title}</div>
-        {subtitle && <div className="mt-1 text-sm text-navy-500">{subtitle}</div>}
+        {subtitle && <div className="mt-1 text-sm text-navy-600">{subtitle}</div>}
       </div>
       {children}
     </div>

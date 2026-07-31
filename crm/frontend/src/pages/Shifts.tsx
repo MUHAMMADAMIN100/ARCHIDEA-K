@@ -384,7 +384,7 @@ function ShiftGroupCard({
             )}
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-sm font-medium text-navy-800">
-            <MapPin className="h-4 w-4 shrink-0 text-navy-500" />
+            <MapPin className="h-4 w-4 shrink-0 text-navy-600" />
             {group.address}
           </div>
           {group.order?.client && (
@@ -417,7 +417,7 @@ function ShiftGroupCard({
               </button>
               <button
                 onClick={onDelete}
-                className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                 title="В корзину"
               >
                 <Trash2 className="h-4 w-4" />
@@ -462,7 +462,7 @@ function ShiftGroupCard({
         )}
       </div>
 
-      {group.note && <p className="mt-3 text-sm text-navy-500">{group.note}</p>}
+      {group.note && <p className="mt-3 text-sm text-navy-600">{group.note}</p>}
 
       {closed && (
         <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 text-xs text-emerald-800">
@@ -693,7 +693,7 @@ function ShiftGroupModal({
                   onClick={() =>
                     setGuests((prev) => prev.filter((_, j) => j !== i))
                   }
-                  className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                  className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                   aria-label="Убрать разового клинера"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -906,7 +906,7 @@ function PayrollSummarySection() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => shiftMonthAnchor(-1)}
-            className="rounded-lg p-2 text-navy-500 hover:bg-navy-50"
+            className="rounded-lg p-2 text-navy-600 hover:bg-navy-50"
             aria-label="Предыдущий месяц"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -916,7 +916,7 @@ function PayrollSummarySection() {
           </span>
           <button
             onClick={() => shiftMonthAnchor(1)}
-            className="rounded-lg p-2 text-navy-500 hover:bg-navy-50"
+            className="rounded-lg p-2 text-navy-600 hover:bg-navy-50"
             aria-label="Следующий месяц"
           >
             <ChevronRight className="h-4 w-4" />
@@ -954,7 +954,7 @@ function PayrollSummarySection() {
                       {r.fullName}
                     </DrillValue>
                   </td>
-                  <td className="py-2.5 pr-3 text-navy-500">
+                  <td className="py-2.5 pr-3 text-navy-600">
                     {r.brigade ? (
                       <DrillValue
                         tone="muted"
@@ -997,7 +997,7 @@ function PayrollSummarySection() {
                   </td>
                   <td
                     className={`py-2.5 pr-3 text-right ${
-                      r.fines > 0 ? '' : 'text-navy-500'
+                      r.fines > 0 ? '' : 'text-navy-600'
                     }`}
                   >
                     <DrillValue
@@ -1028,7 +1028,7 @@ function PayrollSummarySection() {
                   <td className="py-2.5 text-right">
                     <button
                       onClick={() => setFineFor(r.cleanerId)}
-                      className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       title="Оштрафовать"
                     >
                       <AlertTriangle className="h-4 w-4" />
@@ -1397,7 +1397,7 @@ function PayrollBreakdownModal({
               r.fines > 0 ? (
                 <span className="text-red-600">− {formatPrice(r.fines)}</span>
               ) : (
-                <span className="text-navy-500">—</span>
+                <span className="text-navy-600">—</span>
               ),
           },
           {
@@ -1547,13 +1547,13 @@ function FinesSection() {
                 </span>
                 <button
                   onClick={() => removeFine(f)}
-                  className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-100 hover:text-red-600"
+                  className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-100 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
               <div className="mt-1 flex items-baseline justify-between gap-3 pl-6">
-                <span className="min-w-0 text-sm text-navy-500">{f.reason}</span>
+                <span className="min-w-0 text-sm text-navy-600">{f.reason}</span>
                 <span className="shrink-0 text-xs text-navy-600">
                   {formatDate(f.date)}
                 </span>

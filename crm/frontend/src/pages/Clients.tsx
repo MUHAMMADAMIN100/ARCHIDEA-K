@@ -206,7 +206,7 @@ export function Clients() {
       render: (c) => (
         <div className="flex flex-wrap gap-1">
           {c.tags.length === 0 && !(c.labels ?? []).length ? (
-            <span className="text-navy-500">—</span>
+            <span className="text-navy-600">—</span>
           ) : (
             <>
               {c.tags.map((t) => (
@@ -539,7 +539,7 @@ export function AddClientModal({
               onClick={() =>
                 setExtraPhones((prev) => prev.filter((_, j) => j !== i))
               }
-              className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+              className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
               aria-label="Убрать номер"
             >
               <X className="h-4 w-4" />
@@ -719,7 +719,7 @@ export function AddClientModal({
                         prev.filter((_, j) => j !== i),
                       )
                     }
-                    className="shrink-0 rounded-lg p-1 text-navy-500 hover:text-red-600"
+                    className="shrink-0 rounded-lg p-1 text-navy-600 hover:text-red-600"
                     aria-label="Убрать услугу"
                   >
                     <X className="h-4 w-4" />
@@ -757,7 +757,7 @@ export function AddClientModal({
                       className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                         dirtLevel === d
                           ? 'bg-navy-500 text-white ring-2 ring-navy-300'
-                          : 'border border-navy-200 bg-white text-navy-500 hover:bg-navy-50'
+                          : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
                       }`}
                     >
                       {DIRT_LABEL[d]}
@@ -807,7 +807,7 @@ export function AddClientModal({
                 }}
                 placeholder="0"
               />
-              <div className="mt-1 flex items-center gap-2 text-xs text-navy-500">
+              <div className="mt-1 flex items-center gap-2 text-xs text-navy-600">
                 {manualPrice ? (
                   <>
                     <span>Сумма задана вручную</span>

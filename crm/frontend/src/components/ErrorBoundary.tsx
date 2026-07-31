@@ -39,7 +39,7 @@ export class ErrorBoundary extends Component<Props, State> {
               ? 'Не удалось загрузить раздел'
               : 'Что-то пошло не так'}
           </div>
-          <div className="max-w-xs text-sm text-navy-500">
+          <div className="max-w-xs text-sm text-navy-600">
             {this.state.isChunk
               ? 'Проверьте подключение к интернету и обновите страницу.'
               : 'Попробуйте обновить страницу. Если не помогло — сообщите нам.'}

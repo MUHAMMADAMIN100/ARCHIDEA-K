@@ -268,7 +268,7 @@ export function Layout() {
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <div className="hidden text-sm text-navy-500 sm:block">
+          <div className="hidden text-sm text-navy-600 sm:block">
             {user?.role === 'DIRECTOR' ? 'Кабинет руководителя' : 'Кабинет менеджера'}
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -309,7 +309,7 @@ export function Layout() {
                     }}
                     className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-navy-700 hover:bg-navy-50"
                   >
-                    <UserCircle className="h-[18px] w-[18px] text-navy-500" />
+                    <UserCircle className="h-[18px] w-[18px] text-navy-600" />
                     Профиль
                   </button>
                   <button

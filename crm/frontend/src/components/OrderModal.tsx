@@ -519,7 +519,7 @@ export function OrderModal({
         // данные заявки — правятся прямо в карточке
         source: editSource,
         sourceDetail: editSourceDetail.trim(),
-        paidAmount: paidRaw,
+        paidAmount: paidSum,
         additionalServices: addRows
           .filter((r) => r.qtyN > 0)
           .map((r) => ({
@@ -684,7 +684,7 @@ export function OrderModal({
                               prev.filter((_, j) => j !== i),
                             );
                           }}
-                          className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                          className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                           aria-label="Убрать номер"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -780,7 +780,8 @@ export function OrderModal({
 
               {/* Параметры заявки (редактирование) */}
               <div className="grid gap-4 sm:grid-cols-3">
-                <div>
+                {/* Услуга — на всю строку: длинные названия должны быть видны целиком */}
+                <div className="sm:col-span-3">
                   <label className="label">Услуга</label>
                   {tariffsQuery.error && !tariffsQuery.data ? (
                     <button
@@ -852,7 +853,7 @@ export function OrderModal({
                         className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                           editDirt === d
                             ? 'bg-navy-500 text-white ring-2 ring-navy-300'
-                            : 'border border-navy-200 bg-white text-navy-500 hover:bg-navy-50'
+                            : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
                         }`}
                       >
                         {DIRT_LABEL[d]}
@@ -876,7 +877,7 @@ export function OrderModal({
                       className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                         stage === s
                           ? STAGE_COLOR[s] + ' ring-2 ring-navy-300'
-                          : 'bg-white text-navy-500 border border-navy-200 hover:bg-navy-50'
+                          : 'bg-white text-navy-600 border border-navy-200 hover:bg-navy-50'
                       }`}
                     >
                       {STAGE_LABEL[s]}
@@ -1070,7 +1071,7 @@ export function OrderModal({
                           prev.filter((_, j) => j !== i),
                         );
                       }}
-                      className="shrink-0 rounded-lg p-1 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                      className="shrink-0 rounded-lg p-1 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       aria-label="Убрать услугу"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -1157,7 +1158,7 @@ export function OrderModal({
                               {e.title}
                             </span>
                           </label>
-                          <span className="shrink-0 text-xs text-navy-500">
+                          <span className="shrink-0 text-xs text-navy-600">
                             {formatPrice(e.price)}
                             {e.hasQty ? ' / шт' : ''}
                           </span>
@@ -1410,7 +1411,7 @@ function ShiftGroupsSection({
             </Badge>
           </div>
           <div className="mt-1 text-sm text-navy-600">{g.address}</div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy-500">
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy-600">
             {g.brigadeName && <span>Бригада: {g.brigadeName}</span>}
             {g.brigadierName && <span>Бригадир: {g.brigadierName}</span>}
             {g.managerName && <span>Менеджер выезда: {g.managerName}</span>}

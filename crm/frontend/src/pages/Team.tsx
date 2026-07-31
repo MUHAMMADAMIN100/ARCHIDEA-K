@@ -412,7 +412,7 @@ export function Team() {
                   {o.address || 'адрес не указан'}
                 </div>
                 {o.cleaners && o.cleaners.length > 0 && (
-                  <div className="mt-1 text-xs text-navy-500">
+                  <div className="mt-1 text-xs text-navy-600">
                     Команда: {o.cleaners.map((c) => c.fullName).join(', ')}
                   </div>
                 )}
@@ -584,7 +584,7 @@ function StaffCard({
           >
             {person.fullName}
           </div>
-          <div className="truncate text-xs text-navy-500">
+          <div className="truncate text-xs text-navy-600">
             {person.position || (isDirector ? 'Руководитель' : 'Менеджер')}
           </div>
         </div>
@@ -640,7 +640,7 @@ function DutiesModal({
           <ul className="space-y-1.5">
             {duties.map((d) => (
               <li key={d} className="flex items-start gap-2 text-sm text-navy-800">
-                <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-navy-500" />
+                <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-navy-600" />
                 {d}
               </li>
             ))}
@@ -649,7 +649,7 @@ function DutiesModal({
       )}
       {mainTask && (
         <div className="mt-4 rounded-xl bg-navy-50 p-3.5">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-500">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-600">
             <Target className="h-3.5 w-3.5" />
             Основная задача
           </div>

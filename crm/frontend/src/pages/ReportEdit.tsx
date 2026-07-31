@@ -346,7 +346,7 @@ export function ReportEdit() {
         <div className="mx-auto max-w-4xl">
           <button
             onClick={() => navigate('/reports')}
-            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
           >
             <ArrowLeft className="h-4 w-4" /> К списку
           </button>
@@ -367,7 +367,7 @@ export function ReportEdit() {
     <div className="mx-auto max-w-4xl">
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-800"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
       >
         <ArrowLeft className="h-4 w-4" /> Назад
       </button>
@@ -637,7 +637,7 @@ export function ReportEdit() {
                         onClick={() =>
                           setWorkers((p) => p.filter((x) => x.key !== w.key))
                         }
-                        className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                        className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -738,7 +738,7 @@ export function ReportEdit() {
                         onClick={() =>
                           setExpenses((p) => p.filter((x) => x.key !== e.key))
                         }
-                        className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
+                        className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

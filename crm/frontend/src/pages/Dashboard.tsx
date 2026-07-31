@@ -107,10 +107,10 @@ export function Dashboard() {
                 >
                   <c.icon className="h-5 w-5" />
                 </span>
-                <ArrowRight className="h-4 w-4 text-navy-500" />
+                <ArrowRight className="h-4 w-4 text-navy-600" />
               </div>
               <div className="mt-4 text-3xl font-extrabold text-navy-900">{c.value}</div>
-              <div className="text-sm text-navy-500">{c.label}</div>
+              <div className="text-sm text-navy-600">{c.label}</div>
             </>
           );
 
@@ -172,7 +172,7 @@ export function Dashboard() {
         <div className="card p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-bold text-navy-900">Новые заявки</h2>
-            <Link to="/funnel" className="text-sm font-medium text-navy-500 hover:text-navy-800">
+            <Link to="/funnel" className="text-sm font-medium text-navy-600 hover:text-navy-800">
               Все →
             </Link>
           </div>
@@ -208,7 +208,7 @@ export function Dashboard() {
         <div className="card p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-bold text-navy-900">Актуальные задачи</h2>
-            <Link to="/tasks" className="text-sm font-medium text-navy-500 hover:text-navy-800">
+            <Link to="/tasks" className="text-sm font-medium text-navy-600 hover:text-navy-800">
               Все →
             </Link>
           </div>
