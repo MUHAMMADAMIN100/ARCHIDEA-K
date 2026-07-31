@@ -137,6 +137,8 @@ export function OrderModal({
   // доп. услуги: ключ → количество; скидка в сомони
   const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
   const [discount, setDiscount] = useState('');
+  // сколько клиент уже заплатил — остаток считаем от итога
+  const [paidAmount, setPaidAmount] = useState('');
   // данные заявки: раньше блок был только для чтения
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -237,6 +239,8 @@ export function OrderModal({
 
   const workSum =
     Math.round(Number(pricePerSqm) || 0) * unitsNow + addSum;
+  // оплата клиента: больше итога не считаем, остаток не уходит в минус
+  const paidRaw = Math.max(0, Math.round(Number(paidAmount) || 0));
   const subtotalSum = workSum + extrasSum;
   // скидка не может быть больше стоимости — так же считает сервер
   const discountSum = Math.min(
@@ -244,6 +248,9 @@ export function OrderModal({
     subtotalSum,
   );
   const toPaySum = subtotalSum - discountSum;
+  // оплата не может превышать итог — остаток никогда не уходит в минус
+  const paidSum = Math.min(paidRaw, toPaySum);
+  const dueSum = toPaySum - paidSum;
   // постоянные предпочтения клиента — вынесены в переменную, чтобы TS не
   // требовал повторного optional chaining внутри вложенного колбэка кнопки
   const clientPreferences = order?.client?.preferences ?? '';
@@ -279,6 +286,9 @@ export function OrderModal({
     if (!skip('preferences')) setPreferences(o.preferences ?? '');
     if (!skip('extras')) setSelectedExtras(o.extras ?? {});
     if (!skip('discount')) setDiscount(o.discount ? String(o.discount) : '');
+    if (!skip('paidAmount')) {
+      setPaidAmount(o.paidAmount ? String(o.paidAmount) : '');
+    }
     if (!skip('client')) {
       setClientName(o.client?.fullName ?? '');
       setClientPhone(o.client?.phone ?? '');
@@ -509,6 +519,7 @@ export function OrderModal({
         // данные заявки — правятся прямо в карточке
         source: editSource,
         sourceDetail: editSourceDetail.trim(),
+        paidAmount: paidRaw,
         additionalServices: addRows
           .filter((r) => r.qtyN > 0)
           .map((r) => ({
@@ -673,7 +684,7 @@ export function OrderModal({
                               prev.filter((_, j) => j !== i),
                             );
                           }}
-                          className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                          className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                           aria-label="Убрать номер"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -925,7 +936,7 @@ export function OrderModal({
                   ) : (
                     pricePerSqm !== '' &&
                     unitsNow > 0 && (
-                      <p className="mt-1 text-xs text-navy-400">
+                      <p className="mt-1 text-xs text-navy-600">
                         {unitsNow} {unitLabel} × {pricePerSqm} ={' '}
                         {formatPrice(Math.round(Number(pricePerSqm) * unitsNow))}
                       </p>
@@ -958,7 +969,7 @@ export function OrderModal({
                     />
                   </div>
                   {order.preferredDate && (
-                    <div className="mt-1 text-xs text-navy-400">
+                    <div className="mt-1 text-xs text-navy-600">
                       Заполнено по выбору клиента с сайта — можно изменить
                     </div>
                   )}
@@ -971,17 +982,17 @@ export function OrderModal({
                   <span className="text-sm font-semibold text-navy-800">
                     Ещё услуги в этой заявке
                   </span>
-                  <span className="text-xs text-navy-400">
+                  <span className="text-xs text-navy-600">
                     {addSum > 0 ? formatPrice(addSum) : 'не добавлены'}
                   </span>
                 </div>
                 {addRows.map((r, i) => (
                   <div
                     key={i}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border border-navy-100 px-2.5 py-2"
+                    className="rounded-lg border border-navy-100 px-2.5 py-2"
                   >
                     <select
-                      className="input h-9 min-w-[9rem] flex-1"
+                      className="input h-9 w-full"
                       value={r.key}
                       onChange={(e) => {
                         const key = e.target.value;
@@ -1012,6 +1023,7 @@ export function OrderModal({
                         </option>
                       ))}
                     </select>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <input
                       type="number"
                       min={1}
@@ -1027,7 +1039,9 @@ export function OrderModal({
                       }}
                       aria-label="Объём"
                     />
-                    <span className="text-xs text-navy-400">{r.unit} ×</span>
+                    <span className="text-xs font-medium text-navy-700">
+                      {r.unit} ×
+                    </span>
                     <input
                       type="number"
                       min={0}
@@ -1056,11 +1070,12 @@ export function OrderModal({
                           prev.filter((_, j) => j !== i),
                         );
                       }}
-                      className="shrink-0 rounded-lg p-1 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                      className="shrink-0 rounded-lg p-1 text-navy-500 hover:bg-red-50 hover:text-red-600"
                       aria-label="Убрать услугу"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    </div>
                   </div>
                 ))}
                 <button
@@ -1102,13 +1117,13 @@ export function OrderModal({
                   <span className="text-sm font-semibold text-navy-800">
                     Дополнительные услуги
                   </span>
-                  <span className="text-xs text-navy-400">
+                  <span className="text-xs text-navy-600">
                     {extrasSum > 0 ? formatPrice(extrasSum) : 'не выбраны'}
                   </span>
                 </div>
 
                 {extrasCatalogue.length === 0 ? (
-                  <p className="text-xs text-navy-400">
+                  <p className="text-xs text-navy-600">
                     Справочник доп. услуг пуст — заведите их в разделе «Услуги и цены».
                   </p>
                 ) : (
@@ -1181,8 +1196,27 @@ export function OrderModal({
                       }}
                       placeholder="0"
                     />
+
+                    {/*
+                      Сколько клиент уже заплатил. Из итога вычитается и
+                      показывается остаток — это учёт долга по заказу; в книгу
+                      доходов сумма попадает один раз, при переводе заказа
+                      в «Оплачено / Закрыто».
+                    */}
+                    <label className="label mt-3">Оплатил клиент, сомони</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="input"
+                      value={paidAmount}
+                      onChange={(ev) => {
+                        markTouched('paidAmount');
+                        setPaidAmount(ev.target.value);
+                      }}
+                      placeholder="0"
+                    />
                   </div>
-                  {/* Итог: видно, из чего он сложился и сколько вычли */}
+                  {/* Итог: видно, из чего он сложился, сколько вычли и сколько ещё должны */}
                   <div className="rounded-xl bg-navy-50 px-3 py-2 text-sm">
                     <div className="flex justify-between text-navy-600">
                       <span>Работы</span>
@@ -1208,6 +1242,22 @@ export function OrderModal({
                       <span>К оплате</span>
                       <span className="tabular-nums">{formatPrice(toPaySum)}</span>
                     </div>
+                    {paidSum > 0 && (
+                      <div className="flex justify-between font-medium text-emerald-700">
+                        <span>Оплачено</span>
+                        <span className="tabular-nums">
+                          − {formatPrice(paidSum)}
+                        </span>
+                      </div>
+                    )}
+                    <div
+                      className={`mt-1 flex justify-between border-t border-navy-200 pt-1 font-bold ${
+                        dueSum > 0 ? 'text-red-600' : 'text-emerald-700'
+                      }`}
+                    >
+                      <span>{dueSum > 0 ? 'Остаток' : 'Оплачен полностью'}</span>
+                      <span className="tabular-nums">{formatPrice(dueSum)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1217,7 +1267,7 @@ export function OrderModal({
                 {clientPreferences && (
                   <div className="rounded-xl border border-navy-100 bg-navy-50/60 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-medium uppercase tracking-wide text-navy-400">
+                      <div className="text-xs font-medium uppercase tracking-wide text-navy-600">
                         Постоянные предпочтения клиента
                       </div>
                       <button
@@ -1246,7 +1296,7 @@ export function OrderModal({
                     maxLength={2000}
                     placeholder="Например: аллергия на хлор, есть кот, ключи у консьержа, просит эко-средства…"
                   />
-                  <p className="mt-1 text-xs text-navy-400">
+                  <p className="mt-1 text-xs text-navy-600">
                     Если текст изменится — уведомление о предпочтениях уйдёт в рабочий чат Telegram.
                   </p>
                 </div>
@@ -1392,7 +1442,7 @@ function ShiftGroupsSection({
 function Info({ label, value }: { label: string; value?: string }) {
   return (
     <div>
-      <div className="text-xs text-navy-400">{label}</div>
+      <div className="text-xs text-navy-600">{label}</div>
       <div className="font-medium text-navy-800">{value}</div>
     </div>
   );

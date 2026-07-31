@@ -181,7 +181,7 @@ export function Security() {
               >
                 <span className="font-medium text-navy-900">
                   {u.fullName}{' '}
-                  <span className="text-sm text-navy-400">@{u.login}</span>
+                  <span className="text-sm text-navy-600">@{u.login}</span>
                 </span>
                 <span className="text-sm text-red-600">
                   до {when(u.lockedUntil)}
@@ -189,7 +189,7 @@ export function Security() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-navy-400">
+          <p className="mt-3 text-xs text-navy-600">
             Блокировка снимается автоматически. Если это ваш сотрудник — он
             просто ошибся паролем. Если логин чужой и попыток много — кто-то
             подбирает пароль.
@@ -198,7 +198,7 @@ export function Security() {
       )}
 
       {/* Журнал */}
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-400">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-600">
         Последние попытки входа
       </h3>
       {data.items.length === 0 ? (
@@ -216,7 +216,7 @@ export function Security() {
       )}
 
       {failed.length > 0 && (
-        <p className="mt-3 text-xs text-navy-400">
+        <p className="mt-3 text-xs text-navy-600">
           Много отказов с одного адреса подряд — признак подбора пароля. После 5
           неудач подряд аккаунт закрывается на 15 минут автоматически.
         </p>

@@ -193,7 +193,7 @@ export function Team() {
       {/* ── Сотрудники ── */}
       {staff && staff.length > 0 && (
         <>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-400">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-600">
             Сотрудники
           </h3>
           <div className="mb-8 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -217,7 +217,7 @@ export function Team() {
       )}
 
       {/* ── Бригады ── */}
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-400">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-600">
         Бригады клинеров
       </h3>
       {!brigades || brigades.length === 0 ? (
@@ -234,7 +234,7 @@ export function Team() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-navy-900">{b.name}</div>
-                  <div className="text-xs text-navy-400">
+                  <div className="text-xs text-navy-600">
                     <DrillValue
                       tone="muted"
                       className="text-xs"
@@ -250,7 +250,7 @@ export function Team() {
                 </div>
                 <button
                   onClick={() => setAddToBrigade(b.id)}
-                  className="rounded-lg p-2 text-navy-400 transition hover:bg-navy-50 hover:text-navy-700"
+                  className="rounded-lg p-2 text-navy-600 transition hover:bg-navy-50 hover:text-navy-700"
                   title="Добавить в бригаду"
                 >
                   <Plus className="h-4 w-4" />
@@ -259,7 +259,7 @@ export function Team() {
 
               <div className="space-y-2">
                 {members.length === 0 && (
-                  <div className="text-sm text-navy-400">Нет клинеров</div>
+                  <div className="text-sm text-navy-600">Нет клинеров</div>
                 )}
                 {[...members]
                   .sort((x, y) =>
@@ -298,12 +298,12 @@ export function Team() {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-navy-400">
+                          <div className="text-xs text-navy-600">
                             {c.phone || 'телефон не указан'}
                           </div>
                         </div>
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
-                          <Wallet className="h-3.5 w-3.5 text-navy-400" />
+                          <Wallet className="h-3.5 w-3.5 text-navy-600" />
                           {c.rate} с/смена
                         </span>
                         {isLeader && c.duties && (
@@ -315,7 +315,7 @@ export function Team() {
                                 duties: c.duties,
                               })
                             }
-                            className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-navy-50 hover:text-navy-700"
+                            className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                             title="Обязанности"
                           >
                             <BadgeCheck className="h-4 w-4" />
@@ -323,14 +323,14 @@ export function Team() {
                         )}
                         <button
                           onClick={() => setEditCleaner(c as Cleaner)}
-                          className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-navy-50 hover:text-navy-700"
+                          className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                           title="Редактировать"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => removeCleaner(c as Cleaner)}
-                          className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                          className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                           title="Удалить"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -348,7 +348,7 @@ export function Team() {
       {/* ── Клинеры без бригады ── */}
       {unassigned.length > 0 && (
         <>
-          <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-navy-400">
+          <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-navy-600">
             Без бригады
           </h3>
           <div className="card space-y-2 p-5">
@@ -364,23 +364,23 @@ export function Team() {
                   <div className="text-sm font-medium text-navy-900">
                     {c.fullName}
                   </div>
-                  <div className="text-xs text-navy-400">
+                  <div className="text-xs text-navy-600">
                     {c.phone || 'телефон не указан'}
                   </div>
                 </div>
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
-                  <Wallet className="h-3.5 w-3.5 text-navy-400" />
+                  <Wallet className="h-3.5 w-3.5 text-navy-600" />
                   {c.rate} с/смена
                 </span>
                 <button
                   onClick={() => setEditCleaner(c)}
-                  className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-50 hover:text-navy-700"
+                  className="rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => removeCleaner(c)}
-                  className="rounded-lg p-1.5 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -393,7 +393,7 @@ export function Team() {
       {/* ── Работа на сегодня ── */}
       {dayTasks && dayTasks.length > 0 && (
         <>
-          <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-navy-400">
+          <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-navy-600">
             Выезды на сегодня
           </h3>
           <div className="grid gap-3 lg:grid-cols-2">
@@ -407,7 +407,7 @@ export function Team() {
                     {STAGE_LABEL[o.stage]}
                   </Badge>
                 </div>
-                <div className="mt-1 text-xs text-navy-400">
+                <div className="mt-1 text-xs text-navy-600">
                   {formatVolume(o)} · {formatDateTime(o.scheduledDate)} ·{' '}
                   {o.address || 'адрес не указан'}
                 </div>
@@ -504,7 +504,7 @@ function BrigadeCostModal({
             cell: (c) => (
               <div>
                 <div className="font-medium text-navy-900">{c.fullName}</div>
-                <div className="text-xs text-navy-400">
+                <div className="text-xs text-navy-600">
                   {c.phone || 'телефон не указан'}
                 </div>
               </div>
@@ -517,7 +517,7 @@ function BrigadeCostModal({
               c.id === brigade.leaderId ? (
                 <Badge className="bg-amber-100 text-amber-700">Бригадир</Badge>
               ) : (
-                <span className="text-navy-400">Клинер</span>
+                <span className="text-navy-600">Клинер</span>
               ),
           },
           {
@@ -539,7 +539,7 @@ function BrigadeCostModal({
         }
       />
 
-      <p className="mt-3 text-xs text-navy-400">
+      <p className="mt-3 text-xs text-navy-600">
         Нажмите на клинера, чтобы изменить его ставку или бригаду.
       </p>
     </DetailModal>
@@ -634,7 +634,7 @@ function DutiesModal({
       )}
       {duties.length > 0 && (
         <>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-400">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
             Отвечает за
           </div>
           <ul className="space-y-1.5">

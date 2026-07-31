@@ -122,7 +122,7 @@ export function Reminders() {
             <div className={`font-medium ${overdue ? 'text-red-600' : 'text-navy-900'}`}>
               {formatDateTimeTz(r.remindAt)}
             </div>
-            <div className={`text-xs ${overdue ? 'font-semibold text-red-500' : 'text-navy-400'}`}>
+            <div className={`text-xs ${overdue ? 'font-semibold text-red-500' : 'text-navy-600'}`}>
               {humanDeadline(r.remindAt)}
             </div>
           </div>
@@ -149,7 +149,7 @@ export function Reminders() {
       render: (r) => (
         <div className="max-w-xs">
           <div className="font-medium text-navy-900">{r.title}</div>
-          {r.note && <div className="mt-0.5 text-xs text-navy-400">{r.note}</div>}
+          {r.note && <div className="mt-0.5 text-xs text-navy-600">{r.note}</div>}
           {tab === 'all' && (
             <Badge className={`mt-1 ${REMINDER_STATUS_COLOR[r.status]}`}>
               {REMINDER_STATUS_LABEL[r.status]}
@@ -194,7 +194,7 @@ export function Reminders() {
           {r.status !== 'CANCELLED' && (
             <button
               onClick={() => setEditing(r)}
-              className="rounded-lg p-1.5 text-navy-400 transition hover:bg-navy-50 hover:text-navy-700"
+              className="rounded-lg p-1.5 text-navy-600 transition hover:bg-navy-50 hover:text-navy-700"
               title="Изменить"
             >
               <Pencil className="h-4 w-4" />
@@ -202,7 +202,7 @@ export function Reminders() {
           )}
           <button
             onClick={() => removeReminder(r)}
-            className="rounded-lg p-1.5 text-navy-400 transition hover:bg-red-50 hover:text-red-600"
+            className="rounded-lg p-1.5 text-navy-600 transition hover:bg-red-50 hover:text-red-600"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />

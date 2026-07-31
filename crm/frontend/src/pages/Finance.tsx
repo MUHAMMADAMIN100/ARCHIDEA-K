@@ -351,7 +351,7 @@ function EntriesTab() {
               </Badge>
             )}
           </div>
-          {row.comment && <div className="mt-0.5 text-xs text-navy-400">{row.comment}</div>}
+          {row.comment && <div className="mt-0.5 text-xs text-navy-600">{row.comment}</div>}
         </div>
       ),
     },
@@ -380,7 +380,7 @@ function EntriesTab() {
             №{row.orderId.slice(-6).toUpperCase()}
           </span>
         ) : (
-          <span className="text-navy-300">—</span>
+          <span className="text-navy-500">—</span>
         ),
     },
     {
@@ -400,14 +400,14 @@ function EntriesTab() {
               setEditingEntry(row);
               setModalOpen(true);
             }}
-            className="rounded-lg p-1.5 text-navy-300 hover:bg-navy-50 hover:text-navy-700"
+            className="rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 hover:text-navy-700"
             title="Изменить"
           >
             <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={() => removeEntry(row)}
-            className="rounded-lg p-1.5 text-navy-300 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-500 hover:bg-rose-50 hover:text-rose-600"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -457,7 +457,7 @@ function EntriesTab() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <div className="card p-5">
           <h3 className="mb-1 font-bold text-navy-900">Разбивка по статьям за период</h3>
-          <p className="mb-3 text-xs text-navy-400">{CHART_HINT}</p>
+          <p className="mb-3 text-xs text-navy-600">{CHART_HINT}</p>
           {summary && summary.byCategory.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={summary.byCategory} layout="vertical" margin={{ left: 24 }}>
@@ -496,7 +496,7 @@ function EntriesTab() {
 
         <div className="card p-5">
           <h3 className="mb-1 font-bold text-navy-900">Динамика по месяцам</h3>
-          <p className="mb-3 text-xs text-navy-400">{CHART_HINT}</p>
+          <p className="mb-3 text-xs text-navy-600">{CHART_HINT}</p>
           {summary && summary.series && summary.series.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={summary.series}>
@@ -538,7 +538,7 @@ function EntriesTab() {
             </span>
             <div>
               <div className="font-bold text-navy-900">Книга доходов и расходов</div>
-              <div className="text-xs text-navy-400">Все денежные операции компании</div>
+              <div className="text-xs text-navy-600">Все денежные операции компании</div>
             </div>
           </div>
           <button
@@ -716,7 +716,7 @@ function FinanceDrilldownModal({
                 cell: (e) => (
                   <div>
                     <div className="font-medium text-navy-900">{e.title}</div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       {FINANCE_CATEGORY_LABEL[e.category]}
                       {e.source === 'AUTO' ? ' · авто' : ''}
                     </div>
@@ -755,7 +755,7 @@ function FinanceDrilldownModal({
             }
           />
 
-          <p className="mt-3 text-xs text-navy-400">
+          <p className="mt-3 text-xs text-navy-600">
             Нажмите на операцию, чтобы увидеть комментарий, привязку к заказу и автора записи.
           </p>
         </>
@@ -820,7 +820,7 @@ function EntryDetailModal({
       <dl className="divide-y divide-navy-50 rounded-xl border border-navy-100">
         {facts.map((f) => (
           <div key={f.label} className="flex gap-4 px-3 py-2.5 text-sm">
-            <dt className="w-40 shrink-0 text-navy-400">{f.label}</dt>
+            <dt className="w-40 shrink-0 text-navy-600">{f.label}</dt>
             <dd className="min-w-0 flex-1 text-navy-900">{f.value}</dd>
           </div>
         ))}
@@ -1022,7 +1022,7 @@ function OrderPicker({
         <span className="min-w-0 flex-1 truncate text-navy-700">{value.label}</span>
         <button
           type="button"
-          className="shrink-0 text-navy-400 hover:text-rose-600"
+          className="shrink-0 text-navy-600 hover:text-rose-600"
           onClick={() => onChange(null)}
           aria-label="Отвязать заказ"
         >
@@ -1035,7 +1035,7 @@ function OrderPicker({
   return (
     <div className="relative">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
         <input
           className="input pl-9"
           placeholder="Поиск заказа по имени или телефону клиента (необязательно)"
@@ -1045,9 +1045,9 @@ function OrderPicker({
       </div>
       {query.trim() && (
         <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-navy-100 bg-white shadow-card">
-          {searching && <div className="px-3 py-2 text-xs text-navy-400">Ищем…</div>}
+          {searching && <div className="px-3 py-2 text-xs text-navy-600">Ищем…</div>}
           {!searching && results.length === 0 && (
-            <div className="px-3 py-2 text-xs text-navy-400">Ничего не найдено</div>
+            <div className="px-3 py-2 text-xs text-navy-600">Ничего не найдено</div>
           )}
           {results.map((o) => (
             <button
@@ -1065,7 +1065,7 @@ function OrderPicker({
               }}
             >
               <div className="font-medium text-navy-900">{o.client?.fullName ?? '—'}</div>
-              <div className="text-xs text-navy-400">
+              <div className="text-xs text-navy-600">
                 {o.client?.phone ?? ''}
                 {o.address ? ` · ${o.address}` : ''}
               </div>
@@ -1194,7 +1194,7 @@ function BonusesTab() {
       render: (b) => (
         <div>
           <div className="font-medium text-navy-900">{b.recipientName}</div>
-          <div className="text-xs text-navy-400">{b.cleanerId ? 'Клинер' : 'Сотрудник CRM'}</div>
+          <div className="text-xs text-navy-600">{b.cleanerId ? 'Клинер' : 'Сотрудник CRM'}</div>
         </div>
       ),
     },
@@ -1242,7 +1242,7 @@ function BonusesTab() {
         <div className="flex justify-end">
           <button
             onClick={() => removeBonus(b)}
-            className="rounded-lg p-1.5 text-navy-300 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-500 hover:bg-rose-50 hover:text-rose-600"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -1261,7 +1261,7 @@ function BonusesTab() {
           </span>
           <div>
             <div className="font-bold text-navy-900">Выплаты и премии</div>
-            <div className="text-xs text-navy-400">
+            <div className="text-xs text-navy-600">
               Начисление премии автоматически создаёт расход в книге доходов и расходов
             </div>
           </div>

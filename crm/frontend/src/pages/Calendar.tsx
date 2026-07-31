@@ -11,18 +11,64 @@ import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { Spinner, PageHeader, ErrorState } from '../components/ui';
 import { TaskModal } from '../components/TaskModal';
+import { OrderModal } from '../components/OrderModal';
 import {
   TASK_TYPE_COLOR,
   TASK_TYPE_DOT,
   TASK_TYPE_LABEL,
   TASK_TYPE_ORDER,
   TASK_STATUS_LABEL,
+  STAGE_COLOR,
+  STAGE_LABEL,
+  STAGE_ORDER,
+  formatPrice,
 } from '../lib/labels';
 import { tempId, nowISO } from '../lib/util';
 import { useAuth } from '../auth/AuthContext';
-import type { Task, TaskType } from '../types';
+import type { BoardColumn, FunnelStage, Order, Task, TaskType } from '../types';
 
 type View = 'month' | 'week';
+/** Что показывает календарь: задачи сотрудников или заказы по датам уборки */
+type Mode = 'tasks' | 'orders';
+
+/**
+ * Цвет карточки заказа по этапу воронки. Берём тот же STAGE_COLOR, что и в
+ * самой воронке — этап должен выглядеть одинаково во всех разделах — и
+ * добавляем рамку, чтобы карточки не сливались в плотной сетке месяца.
+ */
+const STAGE_BORDER: Record<FunnelStage, string> = {
+  NEW: 'border-navy-200',
+  PROCESSING: 'border-blue-200',
+  INSPECTION: 'border-amber-200',
+  OFFER: 'border-purple-200',
+  CONFIRMED: 'border-cyan-200',
+  IN_PROGRESS: 'border-indigo-200',
+  DONE: 'border-teal-200',
+  PAID: 'border-green-200',
+  REJECTED: 'border-red-200',
+};
+
+/** Точка-маркер этапа для фильтра и легенды */
+const STAGE_DOT: Record<FunnelStage, string> = {
+  NEW: 'bg-navy-400',
+  PROCESSING: 'bg-blue-500',
+  INSPECTION: 'bg-amber-500',
+  OFFER: 'bg-purple-500',
+  CONFIRMED: 'bg-cyan-500',
+  IN_PROGRESS: 'bg-indigo-500',
+  DONE: 'bg-teal-500',
+  PAID: 'bg-green-500',
+  REJECTED: 'bg-red-500',
+};
+
+/**
+ * Дата уборки заказа: назначенная, а пока её нет — желаемая клиентом.
+ * Иначе заявки со свежего лендинга не попадали бы в календарь вообще,
+ * хотя дату клиент уже назвал.
+ */
+function orderDate(o: Order): string | null {
+  return o.scheduledDate ?? o.preferredDate ?? null;
+}
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const NO_DATE = 'no-date'; // droppable-колонка «Без срока»
@@ -97,6 +143,36 @@ function TaskCard({ task, compact }: { task: Task; compact: boolean }) {
   );
 }
 
+/** Карточка заказа в клетке календаря — цвет по этапу воронки */
+function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
+  return (
+    <div
+      className={`rounded-lg border px-2 py-1.5 text-left transition-shadow hover:shadow-sm ${
+        STAGE_COLOR[order.stage]
+      } ${STAGE_BORDER[order.stage]}`}
+    >
+      <div className="flex items-start gap-1.5">
+        <span
+          className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+            STAGE_DOT[order.stage]
+          }`}
+        />
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold">
+          {order.client?.fullName ?? 'Клиент'}
+        </span>
+      </div>
+      <div className="mt-0.5 truncate pl-3 text-[11px] font-medium tabular-nums">
+        {formatPrice(order.finalPrice ?? order.estimatedPrice)}
+      </div>
+      {!compact && order.address && (
+        <div className="truncate pl-3 text-[10px] opacity-80">
+          {order.address}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Calendar() {
   const toast = useToast();
   const { user } = useAuth();
@@ -118,6 +194,19 @@ export function Calendar() {
   const [view, setView] = useState<View>('month');
   const [cursor, setCursor] = useState(() => new Date());
   const [typeFilter, setTypeFilter] = useState<TaskType | 'ALL'>('ALL');
+  // задачи или заказы; этапы воронки — те же, что в разделе «Воронка»
+  const [mode, setMode] = useState<Mode>('tasks');
+  const [stageFilter, setStageFilter] = useState<FunnelStage | 'ALL'>('ALL');
+  const [openOrder, setOpenOrder] = useState<Order | null>(null);
+
+  /*
+   * Заказы берём из той же доски, что и воронка: один запрос, общий кэш —
+   * переключение между разделами мгновенное, а этапы гарантированно совпадают.
+   */
+  const boardQuery = useFetch<BoardColumn[]>(
+    mode === 'orders' ? '/orders/board' : null,
+    { pollMs: 20000 },
+  );
   // в модалке храним ТОЛЬКО id — саму задачу берём из свежих данных,
   // иначе статусы, изменённые внутри модалки, не были бы видны
   const [modal, setModal] = useState<
@@ -157,6 +246,27 @@ export function Calendar() {
     }
     return { byDay: map, undated: none };
   }, [data, typeFilter]);
+
+  // заказы по дням уборки (с учётом фильтра этапа)
+  const { ordersByDay, ordersUndated } = useMemo(() => {
+    const map = new Map<string, Order[]>();
+    const none: Order[] = [];
+    for (const col of boardQuery.data ?? []) {
+      if (stageFilter !== 'ALL' && col.stage !== stageFilter) continue;
+      for (const o of col.orders) {
+        const iso = orderDate(o);
+        if (!iso) {
+          none.push(o);
+          continue;
+        }
+        const key = dayKey(new Date(iso));
+        const list = map.get(key);
+        if (list) list.push(o);
+        else map.set(key, [o]);
+      }
+    }
+    return { ordersByDay: map, ordersUndated: none };
+  }, [boardQuery.data, stageFilter]);
 
   const title =
     view === 'week'
@@ -341,30 +451,73 @@ export function Calendar() {
         </div>
       </div>
 
-      {/* Фильтр по типу */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-navy-400">Тип:</span>
-        {(['ALL', ...TASK_TYPE_ORDER] as (TaskType | 'ALL')[]).map((t) => (
+      {/* Что показывать: задачи сотрудников или заказы по датам уборки */}
+      <div className="mb-3 inline-flex rounded-xl border border-navy-200 bg-white p-1">
+        {(['tasks', 'orders'] as Mode[]).map((m) => (
           <button
-            key={t}
-            onClick={() => setTypeFilter(t)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              typeFilter === t
-                ? 'bg-navy-500 text-white'
-                : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
+            key={m}
+            onClick={() => setMode(m)}
+            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+              mode === m
+                ? 'bg-navy-600 text-white'
+                : 'text-navy-600 hover:bg-navy-50'
             }`}
           >
-            {t !== 'ALL' && (
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  typeFilter === t ? 'bg-white' : TASK_TYPE_DOT[t]
-                }`}
-              />
-            )}
-            {t === 'ALL' ? 'Все' : TASK_TYPE_LABEL[t]}
+            {m === 'tasks' ? 'Задачи' : 'Заказы'}
           </button>
         ))}
       </div>
+
+      {/* Фильтр: по типу задачи либо по этапу воронки */}
+      {mode === 'tasks' ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-navy-600">Тип:</span>
+          {(['ALL', ...TASK_TYPE_ORDER] as (TaskType | 'ALL')[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                typeFilter === t
+                  ? 'bg-navy-500 text-white'
+                  : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
+              }`}
+            >
+              {t !== 'ALL' && (
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    typeFilter === t ? 'bg-white' : TASK_TYPE_DOT[t]
+                  }`}
+                />
+              )}
+              {t === 'ALL' ? 'Все' : TASK_TYPE_LABEL[t]}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-navy-600">Этап:</span>
+          {(['ALL', ...STAGE_ORDER] as (FunnelStage | 'ALL')[]).map((st) => (
+            <button
+              key={st}
+              onClick={() => setStageFilter(st)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                stageFilter === st
+                  ? 'bg-navy-500 text-white'
+                  : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
+              }`}
+            >
+              {st !== 'ALL' && (
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    stageFilter === st ? 'bg-white' : STAGE_DOT[st]
+                  }`}
+                />
+              )}
+              {st === 'ALL' ? 'Все' : STAGE_LABEL[st]}
+            </button>
+          ))}
+        </div>
+      )}
 
       <DragDropContext
         onDragStart={() => {
@@ -375,7 +528,7 @@ export function Calendar() {
         {/* Шапка дней недели */}
         <div className="mb-2 grid grid-cols-7 gap-1 sm:gap-2">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="text-xs font-semibold text-navy-400">
+            <div key={w} className="text-xs font-semibold text-navy-600">
               {w}
             </div>
           ))}
@@ -410,19 +563,38 @@ export function Calendar() {
                       >
                         {d.getDate()}
                       </span>
-                      <button
-                        onClick={() => setModal({ mode: 'create', date: key })}
-                        className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-500 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
-                          isTouch ? '' : 'opacity-0 group-hover:opacity-100'
-                        }`}
-                      >
-                        <Plus className="h-3 w-3 shrink-0" />
-                        <span className="hidden sm:inline">задача</span>
-                      </button>
+                      {mode === 'tasks' ? (
+                        <button
+                          onClick={() => setModal({ mode: 'create', date: key })}
+                          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-500 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
+                            isTouch ? '' : 'opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          <Plus className="h-3 w-3 shrink-0" />
+                          <span className="hidden sm:inline">задача</span>
+                        </button>
+                      ) : (
+                        (ordersByDay.get(key)?.length ?? 0) > 0 && (
+                          <span className="shrink-0 rounded-md bg-white/70 px-1.5 text-[11px] font-semibold text-navy-500">
+                            {ordersByDay.get(key)?.length}
+                          </span>
+                        )
+                      )}
                     </div>
 
                     <div className="flex-1 space-y-1.5">
-                      {list.map((t, index) => (
+                      {mode === 'orders' &&
+                        (ordersByDay.get(key) ?? []).map((o) => (
+                          <div
+                            key={o.id}
+                            onClick={() => setOpenOrder(o)}
+                            className="cursor-pointer"
+                          >
+                            <OrderCard order={o} compact={view === 'month'} />
+                          </div>
+                        ))}
+                      {mode === 'tasks' &&
+                        list.map((t, index) => (
                         <Draggable
                           key={t.id}
                           draggableId={t.id}
@@ -446,7 +618,7 @@ export function Calendar() {
                             </div>
                           )}
                         </Draggable>
-                      ))}
+                        ))}
                       {provided.placeholder}
                     </div>
                   </div>
@@ -468,22 +640,40 @@ export function Calendar() {
                   : 'border-navy-200 bg-white'
               }`}
             >
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-navy-400">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-navy-600">
                 <Inbox className="h-3.5 w-3.5" />
-                Без срока
-                {undated.length > 0 && (
-                  <span className="text-navy-500">· {undated.length}</span>
+                {mode === 'orders' ? 'Без даты уборки' : 'Без срока'}
+                {(mode === 'orders' ? ordersUndated : undated).length > 0 && (
+                  <span className="text-navy-500">
+                    · {(mode === 'orders' ? ordersUndated : undated).length}
+                  </span>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {undated.length === 0 && (
-                  <span className="text-xs text-navy-300">
+                {mode === 'orders' && ordersUndated.length === 0 && (
+                  <span className="text-xs text-navy-500">
+                    У всех заказов проставлена дата уборки
+                  </span>
+                )}
+                {mode === 'orders' &&
+                  ordersUndated.map((o) => (
+                    <div
+                      key={o.id}
+                      onClick={() => setOpenOrder(o)}
+                      className="w-44 cursor-pointer"
+                    >
+                      <OrderCard order={o} compact />
+                    </div>
+                  ))}
+                {mode === 'tasks' && undated.length === 0 && (
+                  <span className="text-xs text-navy-500">
                     {isTouch
                       ? 'Задачи без даты появятся здесь'
                       : 'Перетащите сюда, чтобы снять срок'}
                   </span>
                 )}
-                {undated.map((t, index) => (
+                {mode === 'tasks' &&
+                  undated.map((t, index) => (
                   <Draggable
                     key={t.id}
                     draggableId={t.id}
@@ -507,7 +697,7 @@ export function Calendar() {
                       </div>
                     )}
                   </Draggable>
-                ))}
+                  ))}
                 {provided.placeholder}
               </div>
             </div>
@@ -518,23 +708,44 @@ export function Calendar() {
       {/* Легенда */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold text-navy-400">Легенда:</span>
-          {TASK_TYPE_ORDER.map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-600"
-            >
-              <span className={`h-2.5 w-2.5 rounded-full ${TASK_TYPE_DOT[t]}`} />
-              {TASK_TYPE_LABEL[t]}
-            </span>
-          ))}
+          <span className="text-xs font-semibold text-navy-600">Легенда:</span>
+          {mode === 'tasks'
+            ? TASK_TYPE_ORDER.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-600"
+                >
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${TASK_TYPE_DOT[t]}`}
+                  />
+                  {TASK_TYPE_LABEL[t]}
+                </span>
+              ))
+            : STAGE_ORDER.map((st) => (
+                <span
+                  key={st}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-600"
+                >
+                  <span className={`h-2.5 w-2.5 rounded-full ${STAGE_DOT[st]}`} />
+                  {STAGE_LABEL[st]}
+                </span>
+              ))}
         </div>
-        <span className="text-xs text-navy-400">
-          {isTouch
-            ? '💡 Нажмите на задачу, чтобы изменить дату и статусы'
-            : '💡 Задачи можно перетаскивать на другой день'}
+        <span className="text-xs text-navy-600">
+          {mode === 'orders'
+            ? '💡 Нажмите на заказ, чтобы открыть его карточку'
+            : isTouch
+              ? '💡 Нажмите на задачу, чтобы изменить дату и статусы'
+              : '💡 Задачи можно перетаскивать на другой день'}
         </span>
       </div>
+
+      <OrderModal
+        orderId={openOrder?.id ?? null}
+        initial={openOrder ?? undefined}
+        onClose={() => setOpenOrder(null)}
+        onUpdated={boardQuery.reload}
+      />
 
       {modal && (modal.mode === 'create' || liveTask) && (
         <TaskModal

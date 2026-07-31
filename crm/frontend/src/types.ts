@@ -1,5 +1,10 @@
 export type Role = 'DIRECTOR' | 'MANAGER';
-export type LeadSource = 'SITE' | 'INSTAGRAM' | 'CALL' | 'RECOMMENDATION';
+export type LeadSource =
+  | 'SITE'
+  | 'INSTAGRAM'
+  | 'CALL'
+  | 'RECOMMENDATION'
+  | 'ANISA';
 export type FunnelStage =
   | 'NEW'
   | 'PROCESSING'
@@ -247,6 +252,8 @@ export interface Order {
   extras?: Record<string, number> | null;
   /** Скидка по заказу в сомони */
   discount?: number;
+  /** Сколько клиент уже заплатил, сомони. Остаток = итог − эта сумма */
+  paidAmount?: number;
   /** Дополнительные основные услуги заявки (мульти-выбор) — снапшот строк */
   additionalServices?:
     | {

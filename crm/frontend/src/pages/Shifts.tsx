@@ -378,17 +378,17 @@ function ShiftGroupCard({
               {SHIFT_GROUP_STATUS_LABEL[group.status]}
             </Badge>
             {(group.startTime || group.endTime) && (
-              <span className="text-xs text-navy-400">
+              <span className="text-xs text-navy-600">
                 {group.startTime ?? '—'}–{group.endTime ?? '—'}
               </span>
             )}
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-sm font-medium text-navy-800">
-            <MapPin className="h-4 w-4 shrink-0 text-navy-300" />
+            <MapPin className="h-4 w-4 shrink-0 text-navy-500" />
             {group.address}
           </div>
           {group.order?.client && (
-            <div className="mt-1 text-xs text-navy-400">
+            <div className="mt-1 text-xs text-navy-600">
               Заказ: {group.order.client.fullName}
               {group.order.address ? ` · ${group.order.address}` : ''}
             </div>
@@ -398,7 +398,7 @@ function ShiftGroupCard({
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <button
             onClick={onHistory}
-            className="rounded-lg px-2 py-1.5 text-xs font-medium text-navy-400 hover:bg-navy-50 hover:text-navy-700"
+            className="rounded-lg px-2 py-1.5 text-xs font-medium text-navy-600 hover:bg-navy-50 hover:text-navy-700"
           >
             История
           </button>
@@ -417,7 +417,7 @@ function ShiftGroupCard({
               </button>
               <button
                 onClick={onDelete}
-                className="rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                 title="В корзину"
               >
                 <Trash2 className="h-4 w-4" />
@@ -429,14 +429,14 @@ function ShiftGroupCard({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-navy-400">Бригада</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-navy-600">Бригада</div>
           <div className="text-sm text-navy-700">
             {group.brigadeName ?? '—'}
             {group.brigadierName ? ` · бригадир ${group.brigadierName}` : ''}
           </div>
         </div>
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-navy-400">
+          <div className="text-xs font-semibold uppercase tracking-wide text-navy-600">
             Ответственный менеджер
           </div>
           <div className="text-sm text-navy-700">{group.managerName ?? '—'}</div>
@@ -444,9 +444,9 @@ function ShiftGroupCard({
       </div>
 
       <div className="mt-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-navy-400">Состав</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-navy-600">Состав</div>
         {group.members.length === 0 ? (
-          <div className="mt-1 text-sm text-navy-400">Состав не назначен</div>
+          <div className="mt-1 text-sm text-navy-600">Состав не назначен</div>
         ) : (
           <div className="mt-1 flex flex-wrap gap-1.5">
             {group.members.map((m) => (
@@ -693,7 +693,7 @@ function ShiftGroupModal({
                   onClick={() =>
                     setGuests((prev) => prev.filter((_, j) => j !== i))
                   }
-                  className="shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                  className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                   aria-label="Убрать разового клинера"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -782,7 +782,7 @@ function OrderPicker({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="shrink-0 text-navy-400 hover:text-red-600"
+            className="shrink-0 text-navy-600 hover:text-red-600"
             aria-label="Убрать привязку к заказу"
           >
             <X className="h-4 w-4" />
@@ -799,11 +799,11 @@ function OrderPicker({
           {query.trim() && (
             <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-navy-100 bg-white shadow-card">
               {error ? (
-                <div className="p-3 text-sm text-navy-400">Не удалось загрузить заказы</div>
+                <div className="p-3 text-sm text-navy-600">Не удалось загрузить заказы</div>
               ) : loading && !data ? (
-                <div className="p-3 text-sm text-navy-400">Загрузка…</div>
+                <div className="p-3 text-sm text-navy-600">Загрузка…</div>
               ) : filtered.length === 0 ? (
-                <div className="p-3 text-sm text-navy-400">Ничего не найдено</div>
+                <div className="p-3 text-sm text-navy-600">Ничего не найдено</div>
               ) : (
                 filtered.map((o) => (
                   <button
@@ -818,7 +818,7 @@ function OrderPicker({
                     <div className="font-medium text-navy-900">
                       {o.client?.fullName ?? 'Без клиента'}
                     </div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       {o.address || 'без адреса'} · {STAGE_LABEL[o.stage]}
                     </div>
                   </button>
@@ -898,7 +898,7 @@ function PayrollSummarySection() {
           </span>
           <div>
             <div className="font-bold text-navy-900">Выплаты за период</div>
-            <div className="text-xs text-navy-400">
+            <div className="text-xs text-navy-600">
               Смены × ставка − штрафы = к выплате
             </div>
           </div>
@@ -932,7 +932,7 @@ function PayrollSummarySection() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400">
+              <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
                 <th className="py-2.5 pr-3 font-semibold">Клинер</th>
                 <th className="py-2.5 pr-3 font-semibold">Бригада</th>
                 <th className="py-2.5 pr-3 text-right font-semibold">Смены</th>
@@ -997,7 +997,7 @@ function PayrollSummarySection() {
                   </td>
                   <td
                     className={`py-2.5 pr-3 text-right ${
-                      r.fines > 0 ? '' : 'text-navy-300'
+                      r.fines > 0 ? '' : 'text-navy-500'
                     }`}
                   >
                     <DrillValue
@@ -1028,7 +1028,7 @@ function PayrollSummarySection() {
                   <td className="py-2.5 text-right">
                     <button
                       onClick={() => setFineFor(r.cleanerId)}
-                      className="rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                       title="Оштрафовать"
                     >
                       <AlertTriangle className="h-4 w-4" />
@@ -1100,7 +1100,7 @@ function PayrollSummarySection() {
             )}
           </table>
           {idle.length > 0 && (
-            <p className="mt-2 text-xs text-navy-400">
+            <p className="mt-2 text-xs text-navy-600">
               Без смен в этом месяце:{' '}
               <DrillValue
                 tone="muted"
@@ -1246,7 +1246,7 @@ function CleanerPayrollModal({
                 s.group ? (
                   <div>
                     <div className="text-navy-800">{s.group.address}</div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       Выезд
                       {s.group.startTime ? ` · ${s.group.startTime}` : ''}
                       {s.group.endTime ? `–${s.group.endTime}` : ''}
@@ -1254,7 +1254,7 @@ function CleanerPayrollModal({
                     </div>
                   </div>
                 ) : (
-                  <span className="text-navy-400">Отметка дня{s.note ? ` · ${s.note}` : ''}</span>
+                  <span className="text-navy-600">Отметка дня{s.note ? ` · ${s.note}` : ''}</span>
                 ),
             },
             {
@@ -1378,7 +1378,7 @@ function PayrollBreakdownModal({
             cell: (r) => (
               <div>
                 <div className="font-medium text-navy-900">{r.fullName}</div>
-                <div className="text-xs text-navy-400">{r.brigade ?? 'Без бригады'}</div>
+                <div className="text-xs text-navy-600">{r.brigade ?? 'Без бригады'}</div>
               </div>
             ),
           },
@@ -1397,7 +1397,7 @@ function PayrollBreakdownModal({
               r.fines > 0 ? (
                 <span className="text-red-600">− {formatPrice(r.fines)}</span>
               ) : (
-                <span className="text-navy-300">—</span>
+                <span className="text-navy-500">—</span>
               ),
           },
           {
@@ -1430,7 +1430,7 @@ function PayrollBreakdownModal({
         }
       />
 
-      <p className="mt-3 text-xs text-navy-400">
+      <p className="mt-3 text-xs text-navy-600">
         Нажмите на строку, чтобы посмотреть конкретные смены и штрафы клинера.
       </p>
     </DetailModal>
@@ -1503,7 +1503,7 @@ function FinesSection() {
           </span>
           <div>
             <div className="font-bold text-navy-900">Штрафы</div>
-            <div className="text-xs text-navy-400">Уменьшают сумму к выплате клинеру</div>
+            <div className="text-xs text-navy-600">Уменьшают сумму к выплате клинеру</div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1547,14 +1547,14 @@ function FinesSection() {
                 </span>
                 <button
                   onClick={() => removeFine(f)}
-                  className="shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-100 hover:text-red-600"
+                  className="shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-100 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
               <div className="mt-1 flex items-baseline justify-between gap-3 pl-6">
                 <span className="min-w-0 text-sm text-navy-500">{f.reason}</span>
-                <span className="shrink-0 text-xs text-navy-400">
+                <span className="shrink-0 text-xs text-navy-600">
                   {formatDate(f.date)}
                 </span>
               </div>

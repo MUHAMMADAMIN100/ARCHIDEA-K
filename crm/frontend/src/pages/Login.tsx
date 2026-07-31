@@ -67,7 +67,7 @@ export function Login() {
             />
             <span className="text-sm text-navy-700">
               Запомнить меня
-              <span className="mt-0.5 block text-xs text-navy-400">
+              <span className="mt-0.5 block text-xs text-navy-600">
                 Не спрашивать пароль 30 дней. Только на личном устройстве —
                 на чужом или общем компьютере не отмечайте.
               </span>

@@ -275,7 +275,7 @@ export function Tariffs() {
       />
 
       {/* Услуги */}
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-400">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-600">
         Услуги — цена по степени загрязнения
       </h3>
       <div className="mb-8 grid gap-4 lg:grid-cols-3">
@@ -303,7 +303,7 @@ export function Tariffs() {
                       <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Скрыта</Badge>
                     )}
                   </div>
-                  {meta.desc && <p className="mt-0.5 text-xs text-navy-400">{meta.desc}</p>}
+                  {meta.desc && <p className="mt-0.5 text-xs text-navy-600">{meta.desc}</p>}
                 </div>
               </div>
 
@@ -334,7 +334,7 @@ export function Tariffs() {
                             placeholder="0"
                             className="input pr-24 font-bold"
                           />
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-navy-400">
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-navy-600">
                             сомони / {t.unit}
                           </span>
                         </div>
@@ -362,7 +362,7 @@ export function Tariffs() {
                       placeholder="0"
                       className="input pr-28 text-lg font-bold"
                     />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-navy-400">
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-navy-600">
                       сомони / {t.unit}
                     </span>
                   </div>
@@ -372,7 +372,7 @@ export function Tariffs() {
               <button
                 onClick={() => saveTariff(t)}
                 disabled={!dirty}
-                className={`mt-4 w-full ${dirty ? 'btn-primary' : 'btn-ghost !text-navy-400'}`}
+                className={`mt-4 w-full ${dirty ? 'btn-primary' : 'btn-ghost !text-navy-600'}`}
               >
                 {dirty ? (
                   <>
@@ -414,7 +414,7 @@ export function Tariffs() {
                 </button>
                 {t.isSystem ? (
                   <span
-                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-300"
+                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500"
                     title="Базовая услуга — на неё завязаны лендинг и старые заказы, удалить нельзя. Можно только скрыть."
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -436,7 +436,7 @@ export function Tariffs() {
 
       {/* Доп. услуги */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-400">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-600">
           Дополнительные услуги — фиксированная цена
         </h3>
         <button className="btn-ghost text-sm" onClick={() => setExtraModal({ item: null })}>
@@ -484,7 +484,7 @@ export function Tariffs() {
                   placeholder="0"
                   className="input pr-24 text-lg font-bold"
                 />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-navy-400">
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-navy-600">
                   {e.hasQty ? 'сомони / шт' : 'сомони'}
                 </span>
               </div>
@@ -492,7 +492,7 @@ export function Tariffs() {
               <button
                 onClick={() => saveExtra(e.key)}
                 disabled={!dirty}
-                className={`mt-3 w-full ${dirty ? 'btn-primary' : 'btn-ghost !text-navy-400'}`}
+                className={`mt-3 w-full ${dirty ? 'btn-primary' : 'btn-ghost !text-navy-600'}`}
               >
                 {dirty ? (
                   <>
@@ -526,7 +526,7 @@ export function Tariffs() {
                 </button>
                 {e.isSystem ? (
                   <span
-                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-300"
+                    className="ml-auto inline-flex cursor-not-allowed items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-500"
                     title="Базовая доп. услуга — удалить нельзя, можно только скрыть."
                   >
                     <Trash2 className="h-3.5 w-3.5" />

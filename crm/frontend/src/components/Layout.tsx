@@ -282,7 +282,7 @@ export function Layout() {
                   <div className="text-sm font-semibold text-navy-900">
                     {user?.fullName}
                   </div>
-                  <div className="text-xs text-navy-400">
+                  <div className="text-xs text-navy-600">
                     {user?.role === 'DIRECTOR' ? 'Руководитель' : 'Менеджер'}
                   </div>
                 </div>
@@ -290,7 +290,7 @@ export function Layout() {
                   {user?.fullName?.[0] ?? '?'}
                 </div>
                 <ChevronDown
-                  className={`h-4 w-4 text-navy-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
+                  className={`h-4 w-4 text-navy-600 transition-transform ${profileOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -300,7 +300,7 @@ export function Layout() {
                     <div className="truncate text-sm font-semibold text-navy-900">
                       {user?.fullName}
                     </div>
-                    <div className="text-xs text-navy-400">@{user?.login}</div>
+                    <div className="text-xs text-navy-600">@{user?.login}</div>
                   </div>
                   <button
                     onClick={() => {
@@ -327,7 +327,7 @@ export function Layout() {
                     <ShieldOff className="mt-0.5 h-[18px] w-[18px] shrink-0" />
                     <span>
                       Выйти со всех устройств
-                      <span className="mt-0.5 block text-xs text-navy-400">
+                      <span className="mt-0.5 block text-xs text-navy-600">
                         Если доступ мог попасть к чужим
                       </span>
                     </span>

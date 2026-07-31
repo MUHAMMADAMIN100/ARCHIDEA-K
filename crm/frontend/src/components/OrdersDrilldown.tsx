@@ -76,7 +76,7 @@ export function OrdersDrilldownModal({
                 cell: (o) => (
                   <div>
                     <div className="font-medium text-navy-900">{o.client.fullName}</div>
-                    <div className="text-xs text-navy-400">{o.client.phone}</div>
+                    <div className="text-xs text-navy-600">{o.client.phone}</div>
                   </div>
                 ),
               },
@@ -86,7 +86,7 @@ export function OrdersDrilldownModal({
                 cell: (o) => (
                   <div>
                     <div className="text-navy-800">{o.typeLabel}</div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       {o.address || 'адрес не указан'}
                       {o.area > 0 ? ` · ${o.area} м²` : ''}
                     </div>
@@ -99,7 +99,7 @@ export function OrdersDrilldownModal({
                 cell: (o) => (
                   <div>
                     <div className="text-navy-800">{STAGE_LABEL[o.stage] ?? o.stage}</div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       {o.sourceLabel} · {formatDateTz(o.closedAt ?? o.createdAt)}
                     </div>
                   </div>

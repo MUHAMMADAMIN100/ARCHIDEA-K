@@ -86,7 +86,7 @@ function OrderCardBody({
           +992 {o.client.phone}
         </div>
       )}
-      <div className="mt-1 text-xs text-navy-400">
+      <div className="mt-1 text-xs text-navy-600">
         {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
       </div>
       <div className="mt-2 flex items-center justify-between">
@@ -94,13 +94,13 @@ function OrderCardBody({
           {formatPrice(o.finalPrice ?? o.estimatedPrice)}
         </span>
         {o.cleaners && o.cleaners.length > 0 && (
-          <span className="text-xs text-navy-400">👥 {o.cleaners.length}</span>
+          <span className="text-xs text-navy-600">👥 {o.cleaners.length}</span>
         )}
       </div>
 
       {/* Менеджер и дата заявки */}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-navy-100 pt-1.5 text-[11px]">
-        <span className="shrink-0 text-navy-400">{cardDate(o.createdAt)}</span>
+        <span className="shrink-0 text-navy-600">{cardDate(o.createdAt)}</span>
         {/* чип менеджера — сразу видно, кто ведёт заказ */}
         <span className="min-w-0 truncate rounded-md bg-navy-100 px-1.5 py-0.5 font-medium text-navy-600">
           {o.manager?.fullName ?? 'без менеджера'}
@@ -337,7 +337,7 @@ export function Funnel() {
 
       {canFilter && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-navy-400">Менеджер:</span>
+          <span className="text-xs font-medium text-navy-600">Менеджер:</span>
           <select
             className="input max-w-[240px]"
             value={managerFilter}
@@ -356,7 +356,7 @@ export function Funnel() {
           {managerFilter !== 'ALL' && (
             <button
               onClick={() => setManagerFilter('ALL')}
-              className="text-xs font-medium text-navy-400 underline-offset-2 hover:text-navy-600 hover:underline"
+              className="text-xs font-medium text-navy-600 underline-offset-2 hover:text-navy-600 hover:underline"
             >
               Сбросить
             </button>
@@ -399,7 +399,7 @@ export function Funnel() {
               <div className="mb-3 rounded-xl border border-navy-100 bg-white px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>
-                  <span className="shrink-0 text-sm font-bold text-navy-400">
+                  <span className="shrink-0 text-sm font-bold text-navy-600">
                     <DrillValue
                       tone="muted"
                       disabled={col.orders.length === 0}
@@ -471,7 +471,7 @@ export function Funnel() {
                     ))}
                     {provided.placeholder}
                     {col.orders.length === 0 && !snapshot.isDraggingOver && (
-                      <div className="rounded-xl border border-dashed border-navy-200 py-6 text-center text-xs text-navy-300">
+                      <div className="rounded-xl border border-dashed border-navy-200 py-6 text-center text-xs text-navy-500">
                         {isTouch ? 'Нет заказов' : 'Перетащите сюда'}
                       </div>
                     )}
@@ -491,6 +491,39 @@ export function Funnel() {
             setOpenOrder(o);
           }}
           onClose={() => setStageDrill(null)}
+        />
+      )}
+
+      {/*
+        Форма нового клиента — ТОТ ЖЕ компонент, что и в «Клиентах»: одна
+        форма, один вид. Кнопка в шапке взводила состояние, а этого блока
+        не было — клик выглядел «неработающим».
+      */}
+      {showAddClient && (
+        <AddClientModal
+          isDirector={canFilter}
+          onClose={() => setShowAddClient(false)}
+          onCreate={async (payload, _managerName, order: NewOrderInput | null) => {
+            try {
+              const client = (await api.post('/clients', payload)).data as {
+                id: string;
+              };
+              if (order) {
+                await api.post('/orders', {
+                  clientId: client.id,
+                  source: payload.source,
+                  managerId: payload.managerId,
+                  ...order,
+                });
+              }
+              reload();
+              toast.success(order ? 'Клиент и заявка созданы' : 'Клиент создан');
+            } catch (e: any) {
+              toast.error(
+                e?.response?.data?.message || 'Не удалось создать клиента',
+              );
+            }
+          }}
         />
       )}
 
@@ -559,7 +592,7 @@ function StageOrdersModal({
             cell: (o) => (
               <div>
                 <div className="font-medium text-navy-900">{o.client?.fullName}</div>
-                <div className="text-xs text-navy-400">{cardDate(o.createdAt)}</div>
+                <div className="text-xs text-navy-600">{cardDate(o.createdAt)}</div>
               </div>
             ),
           },
@@ -569,7 +602,7 @@ function StageOrdersModal({
             cell: (o) => (
               <div>
                 <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
-                <div className="text-xs text-navy-400">
+                <div className="text-xs text-navy-600">
                   {formatVolume(o)}
                   {o.address ? ` · ${o.address}` : ''}
                 </div>
@@ -604,7 +637,7 @@ function StageOrdersModal({
         }
       />
 
-      <p className="mt-3 text-xs text-navy-400">
+      <p className="mt-3 text-xs text-navy-600">
         Нажмите на заказ, чтобы открыть его карточку.
       </p>
     </DetailModal>

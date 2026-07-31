@@ -34,6 +34,7 @@ const SOURCE_LABEL: Record<string, string> = {
   INSTAGRAM: 'Instagram',
   CALL: 'Звонок',
   RECOMMENDATION: 'Рекомендация',
+  ANISA: 'От Анисы',
 };
 
 export type AnalyticsPeriod =

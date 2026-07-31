@@ -240,7 +240,7 @@ export function ReportView() {
                   <td className="border border-navy-200 px-2 py-1.5 text-navy-700">{w.role}</td>
                   <td className="border border-navy-200 px-2 py-1.5 text-center text-navy-900">{w.days}</td>
                   <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-900">{w.rate}</td>
-                  <td className={`border border-navy-200 px-2 py-1.5 text-right ${w.fine ? 'font-medium text-red-600' : 'text-navy-300'}`}>
+                  <td className={`border border-navy-200 px-2 py-1.5 text-right ${w.fine ? 'font-medium text-red-600' : 'text-navy-500'}`}>
                     {w.fine ? `− ${w.fine}` : '—'}
                   </td>
                   <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-900">
@@ -270,7 +270,7 @@ export function ReportView() {
           Доп. расходы
         </h3>
         {r.expenses.length === 0 ? (
-          <p className="text-sm text-navy-400">Дополнительных расходов нет</p>
+          <p className="text-sm text-navy-600">Дополнительных расходов нет</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -315,19 +315,19 @@ export function ReportView() {
         {/* Сводка */}
         <div className="mt-6 grid gap-3 rounded-xl bg-navy-50 p-4 text-sm sm:grid-cols-3">
           <div>
-            <div className="text-xs text-navy-400">Выручка по объекту</div>
+            <div className="text-xs text-navy-600">Выручка по объекту</div>
             <div className="text-lg font-extrabold text-navy-900">
               {formatPrice(r.totalPrice)}
             </div>
           </div>
           <div>
-            <div className="text-xs text-navy-400">Выплаты работникам</div>
+            <div className="text-xs text-navy-600">Выплаты работникам</div>
             <div className="text-lg font-extrabold text-navy-900">
               {formatPrice(workersSum)}
             </div>
           </div>
           <div>
-            <div className="text-xs text-navy-400">Доп. расходы</div>
+            <div className="text-xs text-navy-600">Доп. расходы</div>
             <div className="text-lg font-extrabold text-navy-900">
               {formatPrice(expensesSum)}
             </div>
@@ -341,7 +341,7 @@ export function ReportView() {
           </div>
           <div>Бригадир: подпись ____________________</div>
         </div>
-        <p className="mt-3 hidden text-xs text-navy-400 print:block">
+        <p className="mt-3 hidden text-xs text-navy-600 print:block">
           Примечание: подпись бригадира подтверждает получение оплаты в полном объёме.
         </p>
       </div>

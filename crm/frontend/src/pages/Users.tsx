@@ -112,7 +112,7 @@ export function UsersPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-navy-900">{u.fullName}</div>
-                  <div className="text-xs text-navy-400">@{u.login}</div>
+                  <div className="text-xs text-navy-600">@{u.login}</div>
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between">
@@ -132,7 +132,7 @@ export function UsersPage() {
                       toggleActive(u.id, !u.isActive);
                     }}
                     className={`text-xs font-semibold ${
-                      u.isActive ? 'text-green-600' : 'text-navy-400'
+                      u.isActive ? 'text-green-600' : 'text-navy-600'
                     }`}
                   >
                     {u.isActive ? '● Активен' : '○ Отключён'}
@@ -143,7 +143,7 @@ export function UsersPage() {
                         e.stopPropagation();
                         removeUser(u);
                       }}
-                      className="rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                       title="Удалить сотрудника"
                     >
                       <Trash2 className="h-4 w-4" />

@@ -285,7 +285,7 @@ export function ClientCard() {
             </Badge>
           )}
           {data.lastOrderAt && (
-            <span className="text-xs text-navy-400">
+            <span className="text-xs text-navy-600">
               Последний заказ: {formatDate(data.lastOrderAt)}
             </span>
           )}
@@ -319,7 +319,7 @@ export function ClientCard() {
 
           <div className="card p-5">
             <h3 className="font-bold text-navy-900">Предпочтения клиента</h3>
-            <p className="mb-3 mt-0.5 text-xs text-navy-400">
+            <p className="mb-3 mt-0.5 text-xs text-navy-600">
               Что важно учитывать при каждой уборке — видно менеджеру при оформлении нового заказа
             </p>
             <textarea
@@ -349,7 +349,7 @@ export function ClientCard() {
             </div>
 
             {/* Свободные теги (ТЗ 1.2): свой текст, сколько угодно */}
-            <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-400">
+            <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-600">
               Теги
             </h4>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -364,7 +364,7 @@ export function ClientCard() {
                     onClick={() =>
                       setLabels(curLabels.filter((x) => x !== l))
                     }
-                    className="text-navy-400 hover:text-red-600"
+                    className="text-navy-600 hover:text-red-600"
                     aria-label={`Убрать тег ${l}`}
                   >
                     ×
@@ -396,7 +396,7 @@ export function ClientCard() {
                 placeholder="тег и Enter"
               />
             </div>
-            <p className="mt-2 text-xs text-navy-400">
+            <p className="mt-2 text-xs text-navy-600">
               Сохраняются кнопкой «Сохранить…» ниже.
             </p>
           </div>
@@ -463,7 +463,7 @@ export function ClientCard() {
                           {STAGE_LABEL[o.stage]}
                         </Badge>
                       </div>
-                      <div className="mt-1 text-xs text-navy-400">
+                      <div className="mt-1 text-xs text-navy-600">
                         {formatVolume(o)}
                         {o.dirtLevel && ` · ${DIRT_LABEL[o.dirtLevel]}`} ·{' '}
                         {formatDate(o.createdAt)}
@@ -475,7 +475,7 @@ export function ClientCard() {
                         {formatPrice(o.finalPrice ?? o.estimatedPrice)}
                       </div>
                       {o.cleaners && o.cleaners.length > 0 && (
-                        <div className="text-xs text-navy-400">
+                        <div className="text-xs text-navy-600">
                           👥 {o.cleaners.map((c) => c.fullName).join(', ')}
                         </div>
                       )}
@@ -483,7 +483,7 @@ export function ClientCard() {
                   </button>
                 ))}
                 {(!data.orders || data.orders.length === 0) && (
-                  <div className="py-8 text-center text-sm text-navy-400">
+                  <div className="py-8 text-center text-sm text-navy-600">
                     Заказов пока нет — здесь появится вся история покупок клиента
                   </div>
                 )}
@@ -528,7 +528,7 @@ export function ClientCard() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <dt className="text-navy-400">{label}</dt>
+      <dt className="text-navy-600">{label}</dt>
       <dd className="font-medium text-navy-800">{value}</dd>
     </div>
   );
@@ -670,9 +670,9 @@ function AddOrderModal({
 
           {/* Ещё услуги в этой же заявке (ТЗ 1.3) */}
           {moreRows.map((r, i) => (
-            <div key={i} className="mt-2 flex items-center gap-2">
+            <div key={i} className="mt-2 rounded-lg border border-navy-100 p-2">
               <select
-                className="input h-9 min-w-0 flex-1"
+                className="input h-9 w-full"
                 value={r.key}
                 onChange={(e) =>
                   setMoreServices((prev) =>
@@ -686,6 +686,7 @@ function AddOrderModal({
                   <option key={t.key} value={t.key}>{t.title}</option>
                 ))}
               </select>
+              <div className="mt-1.5 flex items-center gap-2">
               <input
                 type="number"
                 min={1}
@@ -708,11 +709,12 @@ function AddOrderModal({
                 onClick={() =>
                   setMoreServices((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="shrink-0 rounded-lg p-1 text-navy-300 hover:text-red-600"
+                className="shrink-0 rounded-lg p-1 text-navy-500 hover:text-red-600"
                 aria-label="Убрать услугу"
               >
                 ×
               </button>
+              </div>
             </div>
           ))}
           <button
@@ -829,7 +831,7 @@ function AddOrderModal({
         <div>
           <label className="label">Команда (по желанию)</label>
           {cleaners.length === 0 ? (
-            <p className="text-xs text-navy-400">Нет активных клинеров — назначьте позже, в карточке заказа</p>
+            <p className="text-xs text-navy-600">Нет активных клинеров — назначьте позже, в карточке заказа</p>
           ) : (
             <CleanerPicker value={cleanerIds} onChange={setCleanerIds} />
           )}

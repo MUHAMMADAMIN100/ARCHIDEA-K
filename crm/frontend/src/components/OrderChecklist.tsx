@@ -381,7 +381,7 @@ export function OrderChecklistCard({
             <div className="space-y-4">
               {groupBySection(checklist.items).map((group) => (
                 <div key={group.section}>
-                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-navy-400">
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-navy-600">
                     {group.section}
                   </div>
                   <div className="space-y-1.5">
@@ -508,7 +508,7 @@ function ChecklistItemRow({
         <div
           className={`text-sm ${
             !usesLevels && item.isDone
-              ? 'text-navy-400 line-through'
+              ? 'text-navy-600 line-through'
               : 'text-navy-900'
           }`}
         >
@@ -521,7 +521,7 @@ function ChecklistItemRow({
         </div>
         {/* подсказка из бумажной формы: на что смотреть и почему это важно */}
         {item.hint && (
-          <div className="mt-0.5 text-xs italic text-navy-400">{item.hint}</div>
+          <div className="mt-0.5 text-xs italic text-navy-600">{item.hint}</div>
         )}
         {usesLevels && (
           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -541,7 +541,7 @@ function ChecklistItemRow({
           </div>
         )}
         {!usesLevels && item.isDone && item.doneByName && (
-          <div className="mt-0.5 text-xs text-navy-400">
+          <div className="mt-0.5 text-xs text-navy-600">
             Отметил(а) {item.doneByName}
             {item.doneAt ? ` · ${formatDateTimeTz(item.doneAt)}` : ''}
           </div>
@@ -551,7 +551,7 @@ function ChecklistItemRow({
       {canEdit && (
         <button
           onClick={onRemove}
-          className="shrink-0 rounded-lg p-1 text-navy-300 hover:bg-red-50 hover:text-red-600"
+          className="shrink-0 rounded-lg p-1 text-navy-500 hover:bg-red-50 hover:text-red-600"
           title="Удалить пункт"
         >
           <X className="h-3.5 w-3.5" />

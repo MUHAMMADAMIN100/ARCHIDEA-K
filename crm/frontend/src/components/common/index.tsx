@@ -104,7 +104,7 @@ export function DataTable<T>({
                   key={c.key}
                   className="flex items-start justify-between gap-3 border-b border-navy-50 py-1.5 last:border-0"
                 >
-                  <span className="shrink-0 text-[11px] uppercase tracking-wide text-navy-400">
+                  <span className="shrink-0 text-[11px] uppercase tracking-wide text-navy-600">
                     {c.title}
                   </span>
                   <span className="min-w-0 break-words text-right text-sm text-navy-800">
@@ -123,7 +123,7 @@ export function DataTable<T>({
                   key={c.key}
                   className="flex items-center justify-between gap-3 py-1 text-sm"
                 >
-                  <span className="text-[11px] uppercase tracking-wide text-navy-400">
+                  <span className="text-[11px] uppercase tracking-wide text-navy-600">
                     {c.title}
                   </span>
                   <span className="tabular-nums">{totals[c.key]}</span>
@@ -136,7 +136,7 @@ export function DataTable<T>({
       <div className="hidden overflow-x-auto rounded-2xl border border-navy-100 bg-white md:block">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
-            <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400">
+            <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
               {columns.map((c) => (
                 <th
                   key={c.key}
@@ -306,7 +306,7 @@ export function PeriodFilter({
             onChange={(v) => onChange({ ...value, from: v })}
           />
         </div>
-        <span className="shrink-0 text-xs text-navy-400">—</span>
+        <span className="shrink-0 text-xs text-navy-600">—</span>
         <div className="min-w-0 flex-1">
           <DatePicker
             compact
@@ -391,7 +391,7 @@ export function CleanerPicker({
       {groups.map((g) => (
         <div key={g.id}>
           {g.name && (
-            <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-navy-400">
+            <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-navy-600">
               {g.name}
             </div>
           )}
@@ -531,13 +531,13 @@ export function StatCard({
 
   const body = (
     <>
-      <div className="text-xs uppercase tracking-wide text-navy-400">
+      <div className="text-xs uppercase tracking-wide text-navy-600">
         {label}
       </div>
       <div className={`mt-1 text-2xl font-semibold tabular-nums ${toneClass}`}>
         {value}
       </div>
-      {hint && <div className="mt-0.5 text-xs text-navy-400">{hint}</div>}
+      {hint && <div className="mt-0.5 text-xs text-navy-600">{hint}</div>}
     </>
   );
 
@@ -585,7 +585,7 @@ export function MoneyInput({
           onChange(digits ? Number(digits) : 0);
         }}
       />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-navy-400">
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-navy-600">
         {suffix}
       </span>
     </div>
@@ -603,7 +603,7 @@ export function SearchInput({
 }) {
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-500" />
       <input
         className="input pl-9"
         value={value}

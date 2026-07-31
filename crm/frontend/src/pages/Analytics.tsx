@@ -73,14 +73,14 @@ function BreakdownCard<T>({
   return (
     <div className="card min-w-0 p-4 sm:p-5">
       <h3 className="font-bold text-navy-900">{title}</h3>
-      {hint && <p className="mt-0.5 mb-3 text-xs text-navy-400">{hint}</p>}
+      {hint && <p className="mt-0.5 mb-3 text-xs text-navy-600">{hint}</p>}
       {rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-navy-400">{emptyText}</p>
+        <p className="py-8 text-center text-sm text-navy-600">{emptyText}</p>
       ) : (
         <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-400">
+              <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-600">
                 {columns.map((c) => (
                   <th
                     key={c.key}
@@ -164,7 +164,7 @@ export function Analytics() {
         <Spinner />
       ) : !data ? null : (
         <>
-          <p className="mb-5 text-xs text-navy-400">
+          <p className="mb-5 text-xs text-navy-600">
             Воронка, типы уборки, источники заявок и выручка ниже посчитаны за один и тот же
             период — цифры на странице сопоставимы между собой.
           </p>
@@ -361,7 +361,7 @@ export function Analytics() {
             {data.revenueSeries && (
               <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
                 <h3 className="mb-1 font-bold text-navy-900">Доход за 14 дней</h3>
-                <p className="mb-3 text-xs text-navy-400">{HINT}</p>
+                <p className="mb-3 text-xs text-navy-600">{HINT}</p>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={data.revenueSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
@@ -391,9 +391,9 @@ export function Analytics() {
             {/* Заказы по типам уборки — за выбранный период */}
             <div className="card min-w-0 overflow-hidden p-5">
               <h3 className="mb-1 font-bold text-navy-900">Заказы по типам уборки</h3>
-              <p className="mb-3 text-xs text-navy-400">{HINT}</p>
+              <p className="mb-3 text-xs text-navy-600">{HINT}</p>
               {data.byType.length === 0 ? (
-                <p className="py-10 text-center text-sm text-navy-400">
+                <p className="py-10 text-center text-sm text-navy-600">
                   За период заявок не было
                 </p>
               ) : (
@@ -426,9 +426,9 @@ export function Analytics() {
             {/* Источники заявок — за выбранный период */}
             <div className="card min-w-0 overflow-hidden p-5">
               <h3 className="mb-1 font-bold text-navy-900">Источники заявок</h3>
-              <p className="mb-3 text-xs text-navy-400">{HINT}</p>
+              <p className="mb-3 text-xs text-navy-600">{HINT}</p>
               {data.sources.length === 0 ? (
-                <p className="py-10 text-center text-sm text-navy-400">
+                <p className="py-10 text-center text-sm text-navy-600">
                   За период заявок не было
                 </p>
               ) : (
@@ -640,7 +640,7 @@ export function Analytics() {
                           <span>
                             {r.name}
                             {r.leader && (
-                              <span className="block text-xs text-navy-400">
+                              <span className="block text-xs text-navy-600">
                                 бригадир: {r.leader}
                               </span>
                             )}
@@ -836,12 +836,12 @@ export function Analytics() {
             {data.managerWorkload && (
               <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
                 <h3 className="mb-1 font-bold text-navy-900">Загруженность сотрудников</h3>
-                <p className="mb-3 text-xs text-navy-400">
+                <p className="mb-3 text-xs text-navy-600">
                   Текущая нагрузка (не зависит от периода выше): сколько заказов сейчас в работе
                   и сколько всего доведено до оплаты. {HINT}
                 </p>
                 {data.managerWorkload.length === 0 ? (
-                  <p className="py-10 text-center text-sm text-navy-400">
+                  <p className="py-10 text-center text-sm text-navy-600">
                     Пока ни один заказ не назначен ответственному
                   </p>
                 ) : (
@@ -1016,7 +1016,7 @@ function WorkDrillModal({
                       {formatDateTz(r.date)}
                     </div>
                     {r.startTime && (
-                      <div className="text-xs text-navy-400">{r.startTime}</div>
+                      <div className="text-xs text-navy-600">{r.startTime}</div>
                     )}
                   </div>
                 ),
@@ -1027,7 +1027,7 @@ function WorkDrillModal({
                 cell: (r: WorkDrillRow) => (
                   <div>
                     <div className="text-navy-800">{r.address}</div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       {SHIFT_GROUP_STATUS_LABEL[r.status] ?? r.status}
                       {isVisits && r.managerName ? ` · ${r.managerName}` : ''}
                       {!isVisits && r.brigadeName ? ` · ${r.brigadeName}` : ''}

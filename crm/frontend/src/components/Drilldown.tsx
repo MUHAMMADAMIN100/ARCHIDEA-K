@@ -78,7 +78,7 @@ export function DetailStats({
     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
       {items.map((s) => (
         <div key={s.label} className="rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2">
-          <div className="text-[11px] uppercase tracking-wide text-navy-400">{s.label}</div>
+          <div className="text-[11px] uppercase tracking-wide text-navy-600">{s.label}</div>
           <div
             className={`mt-0.5 text-base font-bold tabular-nums ${
               s.tone === 'danger'
@@ -161,7 +161,7 @@ export function DetailTable<T>({
     <div className="max-h-[52vh] overflow-auto rounded-xl border border-navy-100">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-white">
-          <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-400">
+          <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-600">
             {columns.map((c) => (
               <th
                 key={c.key}

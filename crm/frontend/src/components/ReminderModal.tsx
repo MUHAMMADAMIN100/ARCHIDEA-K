@@ -191,7 +191,7 @@ export function ReminderModal({
                 setMode('custom');
               }}
             />
-            <span className="text-xs text-navy-400">своя дата и время</span>
+            <span className="text-xs text-navy-600">своя дата и время</span>
           </div>
         </div>
 

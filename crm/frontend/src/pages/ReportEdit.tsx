@@ -524,7 +524,7 @@ export function ReportEdit() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
               <thead>
-                <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400">
+                <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
                   <th className="py-2 pr-2 font-semibold">Сотрудник</th>
                   <th className="w-28 py-2 pr-2 font-semibold">Должность</th>
                   <th className="w-16 py-2 pr-2 font-semibold">Дней</th>
@@ -637,7 +637,7 @@ export function ReportEdit() {
                         onClick={() =>
                           setWorkers((p) => p.filter((x) => x.key !== w.key))
                         }
-                        className="rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                        className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -675,14 +675,14 @@ export function ReportEdit() {
         </div>
 
         {expenses.length === 0 ? (
-          <p className="text-sm text-navy-400">
+          <p className="text-sm text-navy-600">
             Расходов нет. Например: такси, расходные материалы, обед бригады.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400">
+                <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
                   <th className="py-2 pr-2 font-semibold">Наименование</th>
                   <th className="w-36 py-2 pr-2 font-semibold">Инициатор</th>
                   <th className="w-24 py-2 pr-2 font-semibold">Сумма</th>
@@ -738,7 +738,7 @@ export function ReportEdit() {
                         onClick={() =>
                           setExpenses((p) => p.filter((x) => x.key !== e.key))
                         }
-                        className="rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                        className="rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

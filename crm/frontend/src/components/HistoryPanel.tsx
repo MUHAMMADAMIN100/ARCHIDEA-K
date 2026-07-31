@@ -71,9 +71,9 @@ export function AuditEntryRow({
       >
         {hasChanges ? (
           open ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-navy-400" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-navy-600" />
           ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 text-navy-400" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-navy-600" />
           )
         ) : (
           <span className="h-4 w-4 shrink-0" />
@@ -89,7 +89,7 @@ export function AuditEntryRow({
         <span className="text-sm font-medium text-navy-800">
           {entry.actorName}
         </span>
-        <span className="text-xs text-navy-400">
+        <span className="text-xs text-navy-600">
           {formatDateTimeTz(entry.createdAt)}
         </span>
       </div>
@@ -149,7 +149,7 @@ export function HistoryPanel({
   }
   if (loading && !data) {
     return compact ? (
-      <div className="py-3 text-center text-xs text-navy-400">
+      <div className="py-3 text-center text-xs text-navy-600">
         Загрузка истории…
       </div>
     ) : (

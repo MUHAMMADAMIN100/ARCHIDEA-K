@@ -12,6 +12,7 @@ import {
   TAG_LABEL,
   TAG_COLOR,
   SOURCE_LABEL,
+  SOURCE_ORDER,
   cleaningTypeForKey,
   TYPE_LABEL,
   ACTIVE_TYPES,
@@ -40,7 +41,8 @@ import type {
 } from '../types';
 
 const TAGS: ClientTag[] = ['VIP', 'REGULAR', 'POTENTIAL', 'REFUSED'];
-const SOURCES: LeadSource[] = ['SITE', 'INSTAGRAM', 'CALL', 'RECOMMENDATION'];
+// один общий порядок источников на весь проект — см. lib/labels.ts
+const SOURCES = SOURCE_ORDER;
 
 type OrdersFilter = 'all' | 'repeat' | 'none';
 
@@ -187,7 +189,7 @@ export function Clients() {
               </Badge>
             )}
           </div>
-          <div className="text-xs text-navy-400">{formatPhone(c.phone)}</div>
+          <div className="text-xs text-navy-600">{formatPhone(c.phone)}</div>
         </div>
       ),
     },
@@ -204,7 +206,7 @@ export function Clients() {
       render: (c) => (
         <div className="flex flex-wrap gap-1">
           {c.tags.length === 0 && !(c.labels ?? []).length ? (
-            <span className="text-navy-300">—</span>
+            <span className="text-navy-500">—</span>
           ) : (
             <>
               {c.tags.map((t) => (
@@ -262,12 +264,12 @@ export function Clients() {
       key: 'lastOrderAt',
       title: 'Последний заказ',
       hideOnMobile: true,
-      render: (c) => <span className="text-navy-400">{formatDate(c.lastOrderAt)}</span>,
+      render: (c) => <span className="text-navy-600">{formatDate(c.lastOrderAt)}</span>,
     },
     {
       key: 'lastContactAt',
       title: 'Контакт',
-      render: (c) => <span className="text-navy-400">{formatDate(c.lastContactAt)}</span>,
+      render: (c) => <span className="text-navy-600">{formatDate(c.lastContactAt)}</span>,
     },
   ];
 
@@ -537,7 +539,7 @@ export function AddClientModal({
               onClick={() =>
                 setExtraPhones((prev) => prev.filter((_, j) => j !== i))
               }
-              className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+              className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-500 hover:bg-red-50 hover:text-red-600"
               aria-label="Убрать номер"
             >
               <X className="h-4 w-4" />
@@ -595,7 +597,7 @@ export function AddClientModal({
               >
                 {l}
                 <X
-                  className="h-3 w-3 cursor-pointer text-navy-400 hover:text-red-600"
+                  className="h-3 w-3 cursor-pointer text-navy-600 hover:text-red-600"
                   onClick={() =>
                     setLabels((prev) => prev.filter((x) => x !== l))
                   }
@@ -676,9 +678,9 @@ export function AddClientModal({
 
               {/* Ещё услуги в этой же заявке (ТЗ 1.3) */}
               {moreRows.map((r, i) => (
-                <div key={i} className="mt-2 flex items-center gap-2">
+                <div key={i} className="mt-2 rounded-lg border border-navy-100 p-2">
                   <select
-                    className="input h-9 min-w-0 flex-1"
+                    className="input h-9 w-full"
                     value={r.key}
                     onChange={(e) =>
                       setMoreServices((prev) =>
@@ -692,6 +694,7 @@ export function AddClientModal({
                       <option key={t.key} value={t.key}>{t.title}</option>
                     ))}
                   </select>
+                  <div className="mt-1.5 flex items-center gap-2">
                   <input
                     type="number"
                     min={1}
@@ -716,11 +719,12 @@ export function AddClientModal({
                         prev.filter((_, j) => j !== i),
                       )
                     }
-                    className="shrink-0 rounded-lg p-1 text-navy-300 hover:text-red-600"
+                    className="shrink-0 rounded-lg p-1 text-navy-500 hover:text-red-600"
                     aria-label="Убрать услугу"
                   >
                     <X className="h-4 w-4" />
                   </button>
+                  </div>
                 </div>
               ))}
               <button
@@ -910,7 +914,7 @@ function ClientOrdersModal({
                 cell: (o) => (
                   <div>
                     <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
-                    <div className="text-xs text-navy-400">
+                    <div className="text-xs text-navy-600">
                       {o.address || 'адрес не указан'}
                     </div>
                   </div>

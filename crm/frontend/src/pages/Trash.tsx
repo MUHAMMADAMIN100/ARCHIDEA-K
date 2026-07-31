@@ -273,7 +273,7 @@ export function Trash() {
       render: (row) => (
         <div>
           <div>{formatDateTimeTz(row.deletedAt)}</div>
-          <div className="text-xs text-navy-400">{row.deletedBy ?? 'неизвестно'}</div>
+          <div className="text-xs text-navy-600">{row.deletedBy ?? 'неизвестно'}</div>
         </div>
       ),
     },

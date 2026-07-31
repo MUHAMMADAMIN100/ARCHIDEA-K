@@ -248,7 +248,7 @@ function ProposalsTab() {
       render: (p) => (
         <div>
           <div className="font-medium text-navy-900">{p.clientName}</div>
-          {p.clientPhone && <div className="text-xs text-navy-400">{p.clientPhone}</div>}
+          {p.clientPhone && <div className="text-xs text-navy-600">{p.clientPhone}</div>}
         </div>
       ),
     },
@@ -256,7 +256,7 @@ function ProposalsTab() {
       key: 'order',
       title: 'Заказ',
       hideOnMobile: true,
-      render: (p) => (p.orderId ? p.address || 'без адреса' : <span className="text-navy-300">без заказа</span>),
+      render: (p) => (p.orderId ? p.address || 'без адреса' : <span className="text-navy-500">без заказа</span>),
     },
     {
       key: 'total',
@@ -292,10 +292,10 @@ function ProposalsTab() {
         p.sentAt ? (
           <div>
             <div className="text-navy-700">{p.sentByName}</div>
-            <div className="text-xs text-navy-400">{formatDateTimeTz(p.sentAt)}</div>
+            <div className="text-xs text-navy-600">{formatDateTimeTz(p.sentAt)}</div>
           </div>
         ) : (
-          <span className="text-navy-300">не отправлено</span>
+          <span className="text-navy-500">не отправлено</span>
         ),
     },
     {
@@ -315,7 +315,7 @@ function ProposalsTab() {
                 e.stopPropagation();
                 markSent(p);
               }}
-              className="rounded-lg p-1.5 text-navy-400 transition hover:bg-sky-50 hover:text-sky-600"
+              className="rounded-lg p-1.5 text-navy-600 transition hover:bg-sky-50 hover:text-sky-600"
               title="Отметить отправленным"
             >
               <Send className="h-4 w-4" />
@@ -328,7 +328,7 @@ function ProposalsTab() {
                   e.stopPropagation();
                   changeStatus(p, 'ACCEPTED');
                 }}
-                className="rounded-lg p-1.5 text-navy-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-emerald-50 hover:text-emerald-600"
                 title="Принято клиентом"
               >
                 <CheckCircle2 className="h-4 w-4" />
@@ -338,7 +338,7 @@ function ProposalsTab() {
                   e.stopPropagation();
                   changeStatus(p, 'REJECTED');
                 }}
-                className="rounded-lg p-1.5 text-navy-400 transition hover:bg-rose-50 hover:text-rose-600"
+                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-600"
                 title="Отклонено клиентом"
               >
                 <XCircle className="h-4 w-4" />
@@ -350,7 +350,7 @@ function ProposalsTab() {
               e.stopPropagation();
               removeProposal(p);
             }}
-            className="rounded-lg p-1.5 text-navy-400 transition hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-600"
             title="Удалить в корзину"
           >
             <Trash2 className="h-4 w-4" />
@@ -474,7 +474,7 @@ function ProposalTotalModal({
                   {i.volume} × {formatPrice(i.unitPrice)}
                 </span>
               ) : (
-                <span className="text-navy-300">фиксированная</span>
+                <span className="text-navy-500">фиксированная</span>
               ),
           },
           {
@@ -654,9 +654,9 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between rounded-xl border border-navy-200 bg-navy-50/60 px-3 py-2.5">
               <div>
                 <div className="font-medium text-navy-900">{client.fullName}</div>
-                <div className="text-xs text-navy-400">{formatPhone(client.phone)}</div>
+                <div className="text-xs text-navy-600">{formatPhone(client.phone)}</div>
               </div>
-              <button onClick={clearClient} className="text-navy-400 hover:text-navy-700">
+              <button onClick={clearClient} className="text-navy-600 hover:text-navy-700">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -671,10 +671,10 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
               {(searching || clientResults.length > 0) && clientQuery.trim() && (
                 <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-navy-100 bg-white shadow-card">
                   {searching && (
-                    <div className="px-3 py-2 text-sm text-navy-400">Поиск…</div>
+                    <div className="px-3 py-2 text-sm text-navy-600">Поиск…</div>
                   )}
                   {!searching && clientResults.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-navy-400">
+                    <div className="px-3 py-2 text-sm text-navy-600">
                       Клиент не найден — проверьте имя в базе клиентов
                     </div>
                   )}
@@ -686,7 +686,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
                     >
                       <div className="font-medium text-navy-900">{c.fullName}</div>
-                      <div className="text-xs text-navy-400">{formatPhone(c.phone)}</div>
+                      <div className="text-xs text-navy-600">{formatPhone(c.phone)}</div>
                     </button>
                   ))}
                 </div>
@@ -769,14 +769,14 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           {items.length === 0 ? (
-            <p className="text-xs text-navy-400">
+            <p className="text-xs text-navy-600">
               Без позиций сумма считается по площади и цене за м². Добавьте позиции, если нужна
               детальная смета.
             </p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-navy-100">
               <table className="w-full min-w-[520px] text-sm">
-                <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-400">
+                <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-600">
                   <tr>
                     <th className="px-2 py-2 text-left font-medium">Наименование</th>
                     <th className="px-2 py-2 text-left font-medium">Объём</th>
@@ -822,7 +822,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                         <button
                           type="button"
                           onClick={() => removeItem(idx)}
-                          className="text-navy-300 hover:text-rose-600"
+                          className="text-navy-500 hover:text-rose-600"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -945,7 +945,7 @@ function TemplatesTab() {
               {t.intro && (
                 <p className="mt-2 line-clamp-3 text-sm text-navy-500">{t.intro}</p>
               )}
-              <p className="mt-2 text-xs text-navy-400">
+              <p className="mt-2 text-xs text-navy-600">
                 Действует {t.validDays} {t.validDays === 1 ? 'день' : 'дней'} с даты составления
               </p>
               <div className="mt-3 flex justify-end gap-2">

@@ -287,7 +287,7 @@ export function TaskModal({
           </label>
           <div className="max-h-52 space-y-1 overflow-y-auto rounded-xl border border-navy-200 p-1.5">
             {options.length === 0 && (
-              <div className="px-2 py-3 text-sm text-navy-400">
+              <div className="px-2 py-3 text-sm text-navy-600">
                 Загрузка сотрудников…
               </div>
             )}
@@ -313,7 +313,7 @@ export function TaskModal({
                         {p.fullName}
                       </span>
                       {p.position && (
-                        <span className="block truncate text-xs text-navy-400">
+                        <span className="block truncate text-xs text-navy-600">
                           {p.position}
                         </span>
                       )}
@@ -343,7 +343,7 @@ export function TaskModal({
             })}
           </div>
           {mode === 'edit' && (
-            <p className="mt-1.5 flex items-center gap-1 text-xs text-navy-400">
+            <p className="mt-1.5 flex items-center gap-1 text-xs text-navy-600">
               <Users className="h-3 w-3" />
               Статус меняет исполнитель у себя — здесь видно, кто на каком этапе
             </p>

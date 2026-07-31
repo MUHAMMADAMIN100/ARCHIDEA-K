@@ -165,14 +165,14 @@ export function DatePicker({
          * Фиксированная высота держит её в одну линию с соседними полями.
          */}
         <span
-          className={`truncate ${selected ? 'text-navy-900' : 'text-navy-300'}`}
+          className={`truncate ${selected ? 'text-navy-900' : 'text-navy-500'}`}
         >
           {label}
         </span>
         <span className="flex shrink-0 items-center gap-1">
           {clearable && selected && (
             <X
-              className="h-3.5 w-3.5 text-navy-300 hover:text-navy-600"
+              className="h-3.5 w-3.5 text-navy-500 hover:text-navy-600"
               onClick={(e) => {
                 e.stopPropagation();
                 onChange('');
@@ -181,7 +181,7 @@ export function DatePicker({
             />
           )}
           <Calendar
-            className={`shrink-0 text-navy-400 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`}
+            className={`shrink-0 text-navy-600 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`}
           />
         </span>
       </button>

@@ -32,7 +32,7 @@ export function PasswordInput({
         type="button"
         tabIndex={-1}
         onClick={() => setShow((s) => !s)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-navy-400 transition-colors hover:text-navy-700"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-navy-600 transition-colors hover:text-navy-700"
         aria-label={show ? 'Скрыть пароль' : 'Показать пароль'}
       >
         {show ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
@@ -87,7 +87,7 @@ export function Badge({
 
 export function EmptyState({ text }: { text: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-navy-200 bg-white/60 py-12 text-center text-sm text-navy-400">
+    <div className="rounded-2xl border border-dashed border-navy-200 bg-white/60 py-12 text-center text-sm text-navy-600">
       {text}
     </div>
   );
@@ -174,7 +174,7 @@ export function Modal({
           <h2 className="text-lg font-bold text-navy-900">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-navy-400 hover:bg-navy-50 hover:text-navy-700"
+            className="rounded-lg p-1 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
           >
             <X className="h-5 w-5" />
           </button>

@@ -198,7 +198,7 @@ export function Tasks() {
                     {t.description && (
                       <p className="mt-1 text-sm text-navy-500">{t.description}</p>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-navy-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-navy-600">
                       <span>{TASK_TYPE_LABEL[t.type]}</span>
                       {t.deadline && (
                         <span className="inline-flex items-center gap-1">
@@ -216,7 +216,7 @@ export function Tasks() {
                         e.stopPropagation();
                         remove(t.id);
                       }}
-                      className="rounded-lg p-2 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-2 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       title="Удалить задачу"
                     >
                       <Trash2 className="h-4 w-4" />

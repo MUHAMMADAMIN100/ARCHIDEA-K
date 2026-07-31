@@ -177,7 +177,7 @@ export function UserDetail() {
             <div className="text-xl font-bold text-navy-900">
               {data.fullName}
             </div>
-            <div className="text-sm text-navy-400">
+            <div className="text-sm text-navy-600">
               @{data.login}
               {data.position && (
                 <span className="text-navy-600"> · {data.position}</span>
@@ -217,14 +217,14 @@ export function UserDetail() {
 
         <dl className="mt-6 grid gap-x-8 gap-y-3 border-t border-navy-100 pt-5 text-sm sm:grid-cols-2">
           <div className="flex items-center justify-between">
-            <dt className="text-navy-400">Телефон</dt>
+            <dt className="text-navy-600">Телефон</dt>
             <dd className="flex items-center gap-1.5 font-medium text-navy-800">
-              <Phone className="h-4 w-4 text-navy-400" />
+              <Phone className="h-4 w-4 text-navy-600" />
               {data.phone || '—'}
             </dd>
           </div>
           <div className="flex items-center justify-between">
-            <dt className="text-navy-400">В системе с</dt>
+            <dt className="text-navy-600">В системе с</dt>
             <dd className="font-medium text-navy-800">
               {formatDate(data.createdAt)}
             </dd>
@@ -235,7 +235,7 @@ export function UserDetail() {
           <div className="mt-5 border-t border-navy-100 pt-5">
             {data.duties && (
               <>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-400">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
                   Отвечает за
                 </div>
                 <ul className="grid gap-1.5 sm:grid-cols-2">
@@ -248,7 +248,7 @@ export function UserDetail() {
                         key={d}
                         className="flex items-start gap-2 text-sm text-navy-800"
                       >
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-navy-400" />
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-navy-600" />
                         {d}
                       </li>
                     ))}
@@ -282,7 +282,7 @@ export function UserDetail() {
               >
                 <s.icon className="h-5 w-5" />
               </span>
-              <ChevronRight className="h-4 w-4 text-navy-300" />
+              <ChevronRight className="h-4 w-4 text-navy-500" />
             </div>
             <div className="mt-3 text-2xl font-extrabold text-navy-900">
               {s.value}
@@ -323,7 +323,7 @@ export function UserDetail() {
                   }`}
                 >
                   <span className="font-medium text-navy-900">{it.primary}</span>
-                  <span className="text-sm text-navy-400">{it.secondary}</span>
+                  <span className="text-sm text-navy-600">{it.secondary}</span>
                 </div>
               );
             })}
@@ -523,7 +523,7 @@ function EditUserModal({
             onChange={setPassword}
             placeholder="оставьте пустым, чтобы не менять"
           />
-          <p className="mt-1 text-xs text-navy-400">
+          <p className="mt-1 text-xs text-navy-600">
             Минимум 8 символов. После смены сотрудник будет разлогинен на всех
             устройствах — старые сессии перестанут действовать.
           </p>
@@ -602,7 +602,7 @@ function PeriodAnalytics({
   return (
     <div className="mt-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-400">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-600">
           Работа за период
         </h3>
         <PeriodFilter value={period} onChange={setPeriod} />
@@ -667,7 +667,7 @@ function PeriodAnalytics({
                         <div className="font-medium text-navy-900">
                           {o.client?.fullName ?? '—'}
                         </div>
-                        <div className="text-xs text-navy-400">
+                        <div className="text-xs text-navy-600">
                           {o.client?.phone ?? ''}
                         </div>
                       </div>

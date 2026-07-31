@@ -376,6 +376,7 @@ export class OrdersService {
           comment: dto.comment,
           sourceDetail: dto.sourceDetail?.trim() || null,
           discount,
+          paidAmount: dto.paidAmount ?? 0,
           ...(additional !== null
             ? { additionalServices: additional as unknown as Prisma.InputJsonValue }
             : {}),
@@ -509,6 +510,8 @@ export class OrdersService {
     );
     if (dto.extras !== undefined) data.extras = dto.extras;
     if (dto.discount !== undefined) data.discount = dto.discount;
+    // Оплата клиента — учёт долга по заказу, на расчёт цены не влияет
+    if (dto.paidAmount !== undefined) data.paidAmount = dto.paidAmount;
     if (dto.additionalServices !== undefined) {
       data.additionalServices = (additional ??
         []) as unknown as Prisma.InputJsonValue;

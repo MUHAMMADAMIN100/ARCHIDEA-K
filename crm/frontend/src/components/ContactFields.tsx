@@ -46,7 +46,7 @@ export function PhoneInput({
         </label>
       )}
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-navy-400">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-navy-600">
           +992
         </span>
         <input
@@ -65,7 +65,7 @@ export function PhoneInput({
       {error ? (
         <div className="mt-1 text-xs text-rose-600">{error}</div>
       ) : (
-        <div className="mt-1 text-xs text-navy-400">
+        <div className="mt-1 text-xs text-navy-600">
           {phoneDigits(value).length}/{PHONE_DIGITS} цифр
         </div>
       )}

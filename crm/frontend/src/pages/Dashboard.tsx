@@ -107,7 +107,7 @@ export function Dashboard() {
                 >
                   <c.icon className="h-5 w-5" />
                 </span>
-                <ArrowRight className="h-4 w-4 text-navy-300" />
+                <ArrowRight className="h-4 w-4 text-navy-500" />
               </div>
               <div className="mt-4 text-3xl font-extrabold text-navy-900">{c.value}</div>
               <div className="text-sm text-navy-500">{c.label}</div>
@@ -187,7 +187,7 @@ export function Dashboard() {
                   <div className="text-sm font-semibold text-navy-800">
                     {o.client?.fullName}
                   </div>
-                  <div className="text-xs text-navy-400">
+                  <div className="text-xs text-navy-600">
                     {formatVolume(o)} · {formatPhone(o.client?.phone)}
                   </div>
                 </div>
@@ -197,7 +197,7 @@ export function Dashboard() {
               </Link>
             ))}
             {(!orders || orders.length === 0) && (
-              <div className="py-6 text-center text-sm text-navy-400">
+              <div className="py-6 text-center text-sm text-navy-600">
                 Новых заявок нет
               </div>
             )}
@@ -219,13 +219,13 @@ export function Dashboard() {
                 className="flex items-center justify-between rounded-xl border border-navy-100 px-3 py-2.5"
               >
                 <div className="text-sm font-medium text-navy-800">{t.title}</div>
-                <span className="text-xs text-navy-400">
+                <span className="text-xs text-navy-600">
                   {t.deadline ? new Date(t.deadline).toLocaleDateString('ru-RU') : ''}
                 </span>
               </div>
             ))}
             {openTasks.length === 0 && (
-              <div className="py-6 text-center text-sm text-navy-400">
+              <div className="py-6 text-center text-sm text-navy-600">
                 Открытых задач нет
               </div>
             )}

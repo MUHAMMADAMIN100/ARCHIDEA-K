@@ -92,7 +92,7 @@ export function NotificationsBell() {
             Уведомления
           </div>
           {items.length === 0 && (
-            <div className="px-3 py-6 text-center text-sm text-navy-400">
+            <div className="px-3 py-6 text-center text-sm text-navy-600">
               Уведомлений нет
             </div>
           )}
@@ -116,7 +116,7 @@ export function NotificationsBell() {
                   {n.title}
                 </div>
                 <div className="text-sm text-navy-600">{n.message}</div>
-                <div className="mt-0.5 text-xs text-navy-400">
+                <div className="mt-0.5 text-xs text-navy-600">
                   {formatDateTime(n.createdAt)}
                 </div>
               </button>

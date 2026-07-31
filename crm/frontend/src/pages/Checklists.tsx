@@ -146,7 +146,7 @@ export function Checklists() {
         <div>
           <div className="font-medium text-navy-900">{t.name}</div>
           {!t.isActive && (
-            <div className="text-xs text-navy-400">Отключён — не предлагается в заказах</div>
+            <div className="text-xs text-navy-600">Отключён — не предлагается в заказах</div>
           )}
         </div>
       ),
@@ -185,14 +185,14 @@ export function Checklists() {
               <div className="flex justify-end gap-1">
                 <button
                   onClick={() => setModalTemplate(t)}
-                  className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-50 hover:text-navy-700"
+                  className="rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                   title="Редактировать"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => removeTemplate(t)}
-                  className="rounded-lg p-1.5 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                   title="Удалить"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -404,11 +404,11 @@ function TemplateModal({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="label mb-0">Пункты чек-листа</label>
-            <span className="text-xs text-navy-400">{items.length} / {MAX_ITEMS}</span>
+            <span className="text-xs text-navy-600">{items.length} / {MAX_ITEMS}</span>
           </div>
 
           {items.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-navy-200 bg-white/60 py-6 text-center text-sm text-navy-400">
+            <div className="rounded-xl border border-dashed border-navy-200 bg-white/60 py-6 text-center text-sm text-navy-600">
               Пунктов пока нет — добавьте первый ниже
             </div>
           ) : (
@@ -423,7 +423,7 @@ function TemplateModal({
                       type="button"
                       onClick={() => move(index, -1)}
                       disabled={index === 0}
-                      className="rounded p-0.5 text-navy-400 hover:bg-navy-50 hover:text-navy-700 disabled:opacity-30"
+                      className="rounded p-0.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700 disabled:opacity-30"
                       aria-label="Переместить выше"
                     >
                       <ArrowUp className="h-3.5 w-3.5" />
@@ -432,7 +432,7 @@ function TemplateModal({
                       type="button"
                       onClick={() => move(index, 1)}
                       disabled={index === items.length - 1}
-                      className="rounded p-0.5 text-navy-400 hover:bg-navy-50 hover:text-navy-700 disabled:opacity-30"
+                      className="rounded p-0.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700 disabled:opacity-30"
                       aria-label="Переместить ниже"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
@@ -475,7 +475,7 @@ function TemplateModal({
                   <button
                     type="button"
                     onClick={() => removeItem(it.uid)}
-                    className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                    className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                     title="Удалить пункт"
                   >
                     <X className="h-4 w-4" />

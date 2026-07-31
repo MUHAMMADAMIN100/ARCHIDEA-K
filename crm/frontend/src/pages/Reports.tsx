@@ -99,7 +99,7 @@ export function Reports() {
                     {REPORT_STATUS_LABEL[r.status]}
                   </Badge>
                 </div>
-                <div className="mt-0.5 text-xs text-navy-400">
+                <div className="mt-0.5 text-xs text-navy-600">
                   {r.workDate ? formatDate(r.workDate) : formatDate(r.createdAt)}
                   {r.address && ` · ${r.address}`}
                   {isDirector && r.managerName && ` · ${r.managerName}`}
@@ -126,7 +126,7 @@ export function Reports() {
                 >
                   {formatPrice(r.totalPrice)}
                 </DrillValue>
-                <div className="text-xs text-navy-400">
+                <div className="text-xs text-navy-600">
                   выплаты{' '}
                   <DrillValue
                     tone="muted"
@@ -153,7 +153,7 @@ export function Reports() {
                 </div>
               </div>
 
-              <ChevronRight className="h-4 w-4 shrink-0 text-navy-300" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-navy-500" />
             </Link>
           ))}
         </div>
@@ -238,7 +238,7 @@ function ReportBreakdownModal({
               cell: (w) => (
                 <div>
                   <div className="font-medium text-navy-900">{w.fullName}</div>
-                  <div className="text-xs text-navy-400">{w.role}</div>
+                  <div className="text-xs text-navy-600">{w.role}</div>
                 </div>
               ),
             },
@@ -287,7 +287,7 @@ function ReportBreakdownModal({
               cell: (e) => (
                 <div>
                   <div className="font-medium text-navy-900">{e.title}</div>
-                  {e.comment && <div className="text-xs text-navy-400">{e.comment}</div>}
+                  {e.comment && <div className="text-xs text-navy-600">{e.comment}</div>}
                 </div>
               ),
             },
