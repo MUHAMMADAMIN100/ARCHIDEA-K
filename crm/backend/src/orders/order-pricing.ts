@@ -35,6 +35,8 @@ export interface PricingInput {
   extras?: Record<string, number> | null;
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   discount?: number | null;
+  /** Сумма дополнительных ОСНОВНЫХ услуг (мульти-выбор) — уже посчитана */
+  additionalWork?: number | null;
 }
 
 /** Доп. услуга из справочника — для расчёта её вклада в сумму */
@@ -134,7 +136,9 @@ export function calculatePrice(
       : unitPrice(tariff, input.dirtLevel);
 
   // ограничиваем сверху, чтобы опечатка в площади не переполнила Int
-  const workTotal = Math.min(units * pricePerUnit, 2_000_000_000);
+  const mainWork = Math.min(units * pricePerUnit, 2_000_000_000);
+  const addWork = Math.max(0, Math.round(Number(input.additionalWork) || 0));
+  const workTotal = Math.min(mainWork + addWork, 2_000_000_000);
   const extras = extrasTotal(input.extras, extrasCatalogue);
   const subtotal = Math.min(workTotal + extras, 2_000_000_000);
 

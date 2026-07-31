@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsInt,
@@ -48,6 +49,27 @@ export class CreateClientDto {
   @Max(1_000_000_000)
   discount?: number;
 
+  /** Запасные номера «на всякий случай» — та же проверка, что и у основного */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsTjPhone({ each: true })
+  extraPhones?: string[];
+
+  /** Свободные теги для сегментации — в дополнение к единственному статусу */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  labels?: string[];
+
+  /** «От кого» пришёл клиент — рекомендатель или партнёр */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  sourceDetail?: string;
+
   @IsOptional()
   @IsArray()
   @IsEnum(ClientTag, { each: true })
@@ -72,6 +94,12 @@ export class UpdateClientDto {
   @IsOptional() @IsString() @MaxLength(2000) preferences?: string;
   /** Постоянная скидка клиента в сомони */
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000_000) discount?: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(5) @IsTjPhone({ each: true })
+  extraPhones?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  labels?: string[];
+  @IsOptional() @IsString() @MaxLength(120) sourceDetail?: string;
   @IsOptional() @IsArray() @IsEnum(ClientTag, { each: true }) tags?: ClientTag[];
   @IsOptional() @IsString() managerId?: string;
 }

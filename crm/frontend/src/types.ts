@@ -198,6 +198,12 @@ export interface Client {
   preferences?: string | null;
   /** Постоянная скидка клиента в сомони — подставляется в новые заказы */
   discount?: number;
+  /** Запасные номера «на всякий случай» */
+  extraPhones?: string[];
+  /** Свободные теги для сегментации — в дополнение к единственному статусу */
+  labels?: string[];
+  /** «От кого» пришёл клиент — рекомендатель или партнёр */
+  sourceDetail?: string | null;
   lastContactAt: string;
   managerId?: string;
   manager?: { id: string; fullName: string } | null;
@@ -241,6 +247,19 @@ export interface Order {
   extras?: Record<string, number> | null;
   /** Скидка по заказу в сомони */
   discount?: number;
+  /** Дополнительные основные услуги заявки (мульти-выбор) — снапшот строк */
+  additionalServices?:
+    | {
+        key: string;
+        title: string;
+        unit: string;
+        qty: number;
+        pricePerUnit: number;
+        total: number;
+      }[]
+    | null;
+  /** «От кого» пришла заявка */
+  sourceDetail?: string | null;
   isLarge: boolean;
   createdAt: string;
   closedAt?: string | null;
@@ -249,6 +268,7 @@ export interface Order {
     id: string;
     fullName: string;
     phone: string;
+    extraPhones?: string[];
     preferences?: string | null;
     isRepeat?: boolean;
     paidOrdersCount?: number;
@@ -422,9 +442,10 @@ export type ShiftGroupStatus = 'PLANNED' | 'IN_PROGRESS' | 'CLOSED';
 
 export interface ShiftGroupMember {
   id: string;
-  cleanerId: string;
+  /** null — разовый клинер (замена), не заведённый в базе */
+  cleanerId: string | null;
   fullName: string;
-  role: string; // «Бригадир» / «Клинер»
+  role: string; // «Бригадир» / «Клинер» / «Разовый»
   rate?: number;
 }
 
@@ -843,7 +864,7 @@ export interface ShiftGroupSnapshot {
   brigadierName?: string | null;
   managerName?: string | null;
   orderId?: string | null;
-  members: { cleanerId: string; fullName: string; role: string; rate: number }[];
+  members: { cleanerId: string | null; fullName: string; role: string; rate: number }[];
 }
 
 export interface ShiftGroup {

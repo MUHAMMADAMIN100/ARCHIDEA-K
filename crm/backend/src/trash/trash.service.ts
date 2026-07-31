@@ -34,8 +34,8 @@ function isRecordNotFound(e: unknown): boolean {
 
 /** По сколько записей каждого типа показывать в общем виде корзины (без фильтра type) */
 const MIXED_VIEW_TAKE = 20;
-/** Значение по умолчанию, если TRASH_RETENTION_DAYS не задан в окружении */
-const DEFAULT_RETENTION_DAYS = 90;
+/** По ТЗ записи корзины живут 45 дней, затем стираются автоматически */
+const DEFAULT_RETENTION_DAYS = 45;
 
 /** Заведомо несуществующий id — способ вернуть «ничего» без отдельной ветки запроса */
 const NOTHING = '__forbidden__';

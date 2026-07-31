@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -10,6 +11,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import {
   AccessMethod,
@@ -22,6 +24,26 @@ import {
 // Верхняя граница для целых полей — ниже int32 (Prisma Int), чтобы
 // огромное число давало 400 (валидация), а не 500 (переполнение БД).
 const MAX_INT = 2_000_000_000;
+
+/** Строка дополнительной основной услуги заявки (мульти-выбор, ТЗ 1.3) */
+export class AdditionalServiceDto {
+  @IsString()
+  @MaxLength(40)
+  key: string;
+
+  /** Объём: м² или количество — в единицах услуги */
+  @IsInt()
+  @Min(1)
+  @Max(MAX_INT)
+  qty: number;
+
+  /** Цена за единицу, если менеджер поправил её руками */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_INT)
+  pricePerUnit?: number;
+}
 
 export class CreateOrderDto {
   @IsString() clientId: string;
@@ -48,6 +70,20 @@ export class CreateOrderDto {
   @Min(0)
   @Max(MAX_INT)
   discount?: number;
+
+  /** Дополнительные основные услуги заявки (ТЗ 1.3) */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => AdditionalServiceDto)
+  additionalServices?: AdditionalServiceDto[];
+
+  /** «От кого» пришла заявка (ТЗ 1.4) */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  sourceDetail?: string;
 
   @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
@@ -96,6 +132,15 @@ export class UpdateOrderDto {
   @IsOptional() @IsObject() extras?: Record<string, number>;
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) discount?: number;
+  /** Дополнительные основные услуги заявки (ТЗ 1.3) */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => AdditionalServiceDto)
+  additionalServices?: AdditionalServiceDto[];
+  /** «От кого» пришла заявка (ТЗ 1.4) */
+  @IsOptional() @IsString() @MaxLength(120) sourceDetail?: string;
   @IsOptional() @IsString() createdAt?: string;
   @IsOptional() @IsString() preferredDate?: string;
   @IsOptional() @IsString() @MaxLength(20) preferredTime?: string;

@@ -58,6 +58,9 @@ export function ClientCard() {
 
   const [notes, setNotes] = useState<string | null>(null);
   const [tags, setTags] = useState<ClientTag[] | null>(null);
+  // свободные теги (ТЗ 1.2) — редактируются вместе со статусом
+  const [labels, setLabels] = useState<string[] | null>(null);
+  const [labelInput, setLabelInput] = useState('');
   const [preferences, setPreferences] = useState<string | null>(null);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -71,6 +74,7 @@ export function ClientCard() {
 
   const curNotes = notes ?? data.notes ?? '';
   const curTags = tags ?? data.tags;
+  const curLabels = labels ?? data.labels ?? [];
   const curPreferences = preferences ?? data.preferences ?? '';
 
   /*
@@ -103,6 +107,7 @@ export function ClientCard() {
   const createOrder = (payload: {
     cleaningType: CleaningType;
     serviceKey?: string;
+    additionalServices?: { key: string; qty: number }[];
     dirtLevel?: DirtLevel;
     area: number;
     seats?: number;
@@ -158,21 +163,30 @@ export function ClientCard() {
   const saveMeta = async () => {
     const nextNotes = curNotes;
     const nextTags = curTags;
+    const nextLabels = curLabels;
     const nextPrefs = curPreferences.trim() || null;
     // оптимистично применяем изменения сразу
     setData((c) =>
       c
-        ? { ...c, notes: nextNotes, tags: nextTags, preferences: nextPrefs }
+        ? {
+            ...c,
+            notes: nextNotes,
+            tags: nextTags,
+            labels: nextLabels,
+            preferences: nextPrefs,
+          }
         : c,
     );
     setNotes(null);
     setTags(null);
+    setLabels(null);
     setPreferences(null);
     setSavingMeta(true);
     try {
       await api.patch(`/clients/${id}`, {
         notes: nextNotes,
         tags: nextTags,
+        labels: nextLabels,
         preferences: nextPrefs,
       });
       toast.success('Сохранено');
@@ -285,7 +299,18 @@ export function ClientCard() {
             <h3 className="mb-3 font-bold text-navy-900">Информация</h3>
             <dl className="space-y-2 text-sm">
               <Row label="Телефон" value={formatPhone(data.phone)} />
+              {(data.extraPhones ?? []).length > 0 && (
+                <Row
+                  label="Доп. номера"
+                  value={(data.extraPhones ?? [])
+                    .map((p) => formatPhone(p))
+                    .join(', ')}
+                />
+              )}
               <Row label="Источник" value={SOURCE_LABEL[data.source]} />
+              {data.sourceDetail && (
+                <Row label="От кого" value={data.sourceDetail} />
+              )}
               <Row label="Менеджер" value={data.manager?.fullName ?? '—'} />
               <Row label="Последний контакт" value={formatDate(data.lastContactAt)} />
               <Row label="Всего заказов" value={String(data.orders?.length ?? 0)} />
@@ -322,6 +347,58 @@ export function ClientCard() {
                 </button>
               ))}
             </div>
+
+            {/* Свободные теги (ТЗ 1.2): свой текст, сколько угодно */}
+            <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-400">
+              Теги
+            </h4>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {curLabels.map((l) => (
+                <span
+                  key={l}
+                  className="inline-flex items-center gap-1 rounded-lg bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700"
+                >
+                  {l}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLabels(curLabels.filter((x) => x !== l))
+                    }
+                    className="text-navy-400 hover:text-red-600"
+                    aria-label={`Убрать тег ${l}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                className="input h-8 w-36 text-xs"
+                value={labelInput}
+                maxLength={40}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const v = labelInput.trim();
+                    if (v && !curLabels.includes(v)) {
+                      setLabels([...curLabels, v]);
+                    }
+                    setLabelInput('');
+                  }
+                }}
+                onBlur={() => {
+                  const v = labelInput.trim();
+                  if (v && !curLabels.includes(v)) {
+                    setLabels([...curLabels, v]);
+                  }
+                  setLabelInput('');
+                }}
+                placeholder="тег и Enter"
+              />
+            </div>
+            <p className="mt-2 text-xs text-navy-400">
+              Сохраняются кнопкой «Сохранить…» ниже.
+            </p>
           </div>
 
           <div className="card p-5">
@@ -469,6 +546,7 @@ function AddOrderModal({
   onCreate: (payload: {
     cleaningType: CleaningType;
     serviceKey?: string;
+    additionalServices?: { key: string; qty: number }[];
     dirtLevel?: DirtLevel;
     area: number;
     seats?: number;
@@ -490,6 +568,10 @@ function AddOrderModal({
   const [manualPrice, setManualPrice] = useState(false);
   const [managerId, setManagerId] = useState('');
   const [cleanerIds, setCleanerIds] = useState<string[]>([]);
+  // ещё услуги в заявке (ТЗ 1.3)
+  const [moreServices, setMoreServices] = useState<
+    { key: string; qty: string }[]
+  >([]);
   const { data: managers } = useFetch<Manager[]>(
     isDirector ? '/users/managers' : null,
   );
@@ -521,7 +603,27 @@ function AddOrderModal({
 
   const units = Math.round(Number(isFurniture ? seats : area)) || 0;
   const unitPrice = Math.round(Number(pricePerUnit)) || 0;
-  const computed = units * unitPrice;
+  const moreRows = moreServices.map((r) => {
+    const t = serviceOptions.find((x) => x.key === r.key);
+    const qty = Math.max(0, Math.round(Number(r.qty) || 0));
+    const price = !t
+      ? 0
+      : !t.hasLevels
+        ? t.priceMedium || t.pricePerSqm
+        : dirtLevel === 'LIGHT'
+          ? t.priceLight
+          : dirtLevel === 'HEAVY'
+            ? t.priceHeavy
+            : t.priceMedium;
+    return {
+      ...r,
+      title: t?.title ?? r.key,
+      qtyN: qty,
+      total: qty * (price || 0),
+    };
+  });
+  const moreSum = moreRows.reduce((sum, r) => sum + r.total, 0);
+  const computed = units * unitPrice + moreSum;
 
   useEffect(() => {
     if (!manualPrice) setEstimatedPrice(computed ? String(computed) : '');
@@ -532,6 +634,9 @@ function AddOrderModal({
     onCreate({
       cleaningType: cleaningTypeForKey(serviceKey),
       serviceKey,
+      additionalServices: moreRows
+        .filter((r) => r.qtyN > 0)
+        .map((r) => ({ key: r.key, qty: r.qtyN })),
       dirtLevel: hasLevels ? dirtLevel : undefined,
       area: isFurniture ? 0 : toInt(area),
       seats: isFurniture ? toInt(seats) : undefined,
@@ -562,6 +667,71 @@ function AddOrderModal({
                   <option key={t} value={t}>{TYPE_LABEL[t]}</option>
                 ))}
           </select>
+
+          {/* Ещё услуги в этой же заявке (ТЗ 1.3) */}
+          {moreRows.map((r, i) => (
+            <div key={i} className="mt-2 flex items-center gap-2">
+              <select
+                className="input h-9 min-w-0 flex-1"
+                value={r.key}
+                onChange={(e) =>
+                  setMoreServices((prev) =>
+                    prev.map((x, j) =>
+                      j === i ? { ...x, key: e.target.value } : x,
+                    ),
+                  )
+                }
+              >
+                {serviceOptions.map((t) => (
+                  <option key={t.key} value={t.key}>{t.title}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={1}
+                className="input h-9 w-20"
+                value={r.qty}
+                onChange={(e) =>
+                  setMoreServices((prev) =>
+                    prev.map((x, j) =>
+                      j === i ? { ...x, qty: e.target.value } : x,
+                    ),
+                  )
+                }
+                aria-label="Объём"
+              />
+              <span className="w-20 shrink-0 text-right text-xs tabular-nums text-navy-600">
+                {r.total > 0 ? formatPrice(r.total) : '—'}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setMoreServices((prev) => prev.filter((_, j) => j !== i))
+                }
+                className="shrink-0 rounded-lg p-1 text-navy-300 hover:text-red-600"
+                aria-label="Убрать услугу"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setMoreServices((prev) => [
+                ...prev,
+                {
+                  key:
+                    serviceOptions.find((t) => t.key !== serviceKey)?.key ??
+                    serviceKey,
+                  qty: '1',
+                },
+              ])
+            }
+            className="mt-1.5 text-sm font-medium text-brand-600 hover:underline"
+          >
+            + ещё услуга
+          </button>
         </div>
         {hasLevels && (
           <div>

@@ -1,18 +1,37 @@
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
   IsISO8601,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { ShiftGroupStatus } from '@prisma/client';
 
 /** «09:30» — местное время Душанбе */
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Разовый клинер на выезде (ТЗ 2): человек не заведён в базе клинеров */
+export class GuestCleanerDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  fullName: string;
+
+  /** Выплата за смену, сомони */
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  rate: number;
+}
 
 export class CreateShiftGroupDto {
   /** День выезда, «ГГГГ-ММ-ДД» */
@@ -48,6 +67,14 @@ export class CreateShiftGroupDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   cleanerIds?: string[];
+
+  /** Разовые клинеры (замены): имя и выплата за смену — без записи в базе */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => GuestCleanerDto)
+  guests?: GuestCleanerDto[];
 }
 
 export class UpdateShiftGroupDto {
@@ -82,6 +109,14 @@ export class UpdateShiftGroupDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   cleanerIds?: string[];
+
+  /** Разовые клинеры: список задаётся целиком, как и состав */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => GuestCleanerDto)
+  guests?: GuestCleanerDto[];
 }
 
 export class CloseShiftGroupDto {

@@ -121,8 +121,24 @@ export class ShiftGroupsService {
     return group;
   }
 
+  /** Гостевые строки состава: имя + выплата, без ссылки на базу клинеров */
+  private guestRows(guests?: { fullName: string; rate: number }[]) {
+    return (guests ?? [])
+      .map((g) => ({
+        cleanerId: null,
+        isGuest: true,
+        fullName: g.fullName.trim(),
+        rate: Math.max(0, Math.round(Number(g.rate) || 0)),
+        role: 'Разовый',
+      }))
+      .filter((g) => g.fullName.length > 0);
+  }
+
   async create(user: AuthUser, dto: CreateShiftGroupDto) {
-    const members = await this.resolveMembers(dto.cleanerIds);
+    const members = [
+      ...(await this.resolveMembers(dto.cleanerIds)),
+      ...this.guestRows(dto.guests),
+    ];
 
     // Бригада и ответственные хранятся снапшотом: бригаду могут переименовать
     // или расформировать, а история выезда должна остаться читаемой
@@ -326,10 +342,37 @@ export class ShiftGroupsService {
       data.managerName = manager?.fullName ?? null;
     }
 
-    const members =
-      dto.cleanerIds !== undefined
-        ? await this.resolveMembers(dto.cleanerIds)
-        : null;
+    /*
+     * Состав задаётся целиком. Если пришли только гости (или только штатные),
+     * второй список берём из текущего состава — правка одного не стирает другой.
+     */
+    const touchingMembers =
+      dto.cleanerIds !== undefined || dto.guests !== undefined;
+    const members = touchingMembers
+      ? [
+          ...(dto.cleanerIds !== undefined
+            ? await this.resolveMembers(dto.cleanerIds)
+            : before.members
+                .filter((m) => m.cleanerId)
+                .map((m) => ({
+                  cleanerId: m.cleanerId,
+                  fullName: m.fullName,
+                  rate: m.rate,
+                  role: m.role,
+                }))),
+          ...(dto.guests !== undefined
+            ? this.guestRows(dto.guests)
+            : before.members
+                .filter((m) => !m.cleanerId)
+                .map((m) => ({
+                  cleanerId: null,
+                  isGuest: true,
+                  fullName: m.fullName,
+                  rate: m.rate,
+                  role: m.role,
+                }))),
+        ]
+      : null;
 
     const after = await this.prisma.$transaction(async (tx) => {
       if (members) {
@@ -427,13 +470,17 @@ export class ShiftGroupsService {
     const closed = await this.prisma.$transaction(async (tx) => {
       // начисляем смены участникам; уже отмеченные за этот день не дублируем
       await tx.shift.createMany({
-        data: group.members.map((m) => ({
-          date: group.date,
-          cleanerId: m.cleanerId,
-          rate: m.rate,
-          note: group.address,
-          groupId: group.id,
-        })),
+        data: group.members
+          .filter(
+            (m): m is typeof m & { cleanerId: string } => !!m.cleanerId,
+          )
+          .map((m) => ({
+            date: group.date,
+            cleanerId: m.cleanerId,
+            rate: m.rate,
+            note: group.address,
+            groupId: group.id,
+          })),
         skipDuplicates: true,
       });
 

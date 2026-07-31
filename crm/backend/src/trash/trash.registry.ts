@@ -95,7 +95,7 @@ const STAGE_LABEL: Record<FunnelStage, string> = {
   OFFER: 'Коммерческое предложение',
   CONFIRMED: 'Подтверждён',
   IN_PROGRESS: 'В работе',
-  DONE: 'Выполнено',
+  DONE: 'К оплате',
   PAID: 'Оплачено / Закрыто',
   REJECTED: 'Отказ',
 };

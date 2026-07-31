@@ -113,6 +113,10 @@ export class ClientsService {
     managerId?: string;
     tags?: ClientTag[];
     notes?: string;
+    discount?: number;
+    extraPhones?: string[];
+    labels?: string[];
+    sourceDetail?: string;
   }) {
     const phone = canonicalPhone(data.phone);
     if (!phone) {
@@ -145,6 +149,13 @@ export class ClientsService {
         managerId: data.managerId,
         tags: data.tags ?? [],
         notes: data.notes,
+        discount: data.discount ?? 0,
+        // запасные номера храним в едином формате — 9 цифр
+        extraPhones: (data.extraPhones ?? [])
+          .map((p) => normalizePhone(p))
+          .filter((p): p is string => !!p),
+        labels: (data.labels ?? []).map((l) => l.trim()).filter(Boolean),
+        sourceDetail: data.sourceDetail?.trim() || null,
       },
     });
     return { client, created: true };
@@ -202,6 +213,7 @@ export class ClientsService {
         'notes',
         'preferences',
         'discount',
+        'sourceDetail',
         'managerId',
       ]),
     });

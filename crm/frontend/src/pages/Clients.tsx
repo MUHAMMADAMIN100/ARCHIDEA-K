@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Download, Repeat2 } from 'lucide-react';
+import { Plus, Download, Repeat2, X } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
@@ -49,6 +49,8 @@ export interface NewOrderInput {
   cleaningType: CleaningType;
   /** ключ услуги из справочника — своя услуга директора тоже сюда */
   serviceKey?: string;
+  /** ещё услуги в этой же заявке (ТЗ 1.3): сервер сам посчитает цены */
+  additionalServices?: { key: string; qty: number }[];
   dirtLevel?: DirtLevel;
   area: number;
   seats?: number;
@@ -100,6 +102,9 @@ export function Clients() {
       managerId?: string;
       /** постоянная скидка клиента в сомони */
       discount?: number;
+      extraPhones?: string[];
+      labels?: string[];
+      sourceDetail?: string;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -111,6 +116,7 @@ export function Clients() {
       phone: payload.phone,
       source: payload.source,
       tags: [],
+      labels: payload.labels ?? [],
       lastContactAt: nowISO(),
       managerId: payload.managerId,
       manager: managerName
@@ -197,14 +203,21 @@ export function Clients() {
       hideOnMobile: true,
       render: (c) => (
         <div className="flex flex-wrap gap-1">
-          {c.tags.length === 0 ? (
+          {c.tags.length === 0 && !(c.labels ?? []).length ? (
             <span className="text-navy-300">—</span>
           ) : (
-            c.tags.map((t) => (
-              <Badge key={t} className={TAG_COLOR[t]}>
-                {TAG_LABEL[t]}
-              </Badge>
-            ))
+            <>
+              {c.tags.map((t) => (
+                <Badge key={t} className={TAG_COLOR[t]}>
+                  {TAG_LABEL[t]}
+                </Badge>
+              ))}
+              {(c.labels ?? []).map((l) => (
+                <Badge key={l} className="bg-navy-100 text-navy-600">
+                  {l}
+                </Badge>
+              ))}
+            </>
           )}
         </div>
       ),
@@ -326,6 +339,7 @@ export function Clients() {
           onClose={() => setShowAdd(false)}
           onCreate={createClient}
           isDirector={userSeesAll(user)}
+          knownLabels={[...new Set((data ?? []).flatMap((c) => c.labels ?? []))]}
         />
       )}
 
@@ -344,7 +358,10 @@ export function AddClientModal({
   onClose,
   onCreate,
   isDirector,
+  knownLabels = [],
 }: {
+  /** уже использованные теги — для подсказки при вводе */
+  knownLabels?: string[];
   onClose: () => void;
   onCreate: (
     payload: {
@@ -354,6 +371,9 @@ export function AddClientModal({
       managerId?: string;
       /** постоянная скидка клиента в сомони */
       discount?: number;
+      extraPhones?: string[];
+      labels?: string[];
+      sourceDetail?: string;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -362,12 +382,23 @@ export function AddClientModal({
 }) {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  // запасные номера «на всякий случай» (ТЗ 1.1)
+  const [extraPhones, setExtraPhones] = useState<string[]>([]);
+  // свободные теги (ТЗ 1.2) — в дополнение к единственному статусу
+  const [labels, setLabels] = useState<string[]>([]);
+  const [labelInput, setLabelInput] = useState('');
   const [source, setSource] = useState<LeadSource>('CALL');
+  // «От кого» — рекомендатель или партнёр (ТЗ 1.4)
+  const [sourceDetail, setSourceDetail] = useState('');
   // постоянная скидка: подставляется в новые заказы клиента
   const [discount, setDiscount] = useState('');
   const [managerId, setManagerId] = useState('');
   // заявка в воронке
   const [makeOrder, setMakeOrder] = useState(true);
+  // ещё услуги в заявке (ТЗ 1.3): ключ + объём, цена подставится из справочника
+  const [moreServices, setMoreServices] = useState<
+    { key: string; qty: string }[]
+  >([]);
   const [serviceKey, setServiceKey] = useState('GENERAL');
   const [dirtLevel, setDirtLevel] = useState<DirtLevel>('LIGHT');
   const [area, setArea] = useState('');
@@ -414,7 +445,29 @@ export function AddClientModal({
 
   const units = Math.round(Number(isFurniture ? seats : area)) || 0;
   const unitPrice = Math.round(Number(pricePerUnit)) || 0;
-  const computed = units * unitPrice;
+  // строки «ещё услуг»: цена из справочника по выбранной степени загрязнения
+  const moreRows = moreServices.map((r) => {
+    const t = serviceOptions.find((x) => x.key === r.key);
+    const qty = Math.max(0, Math.round(Number(r.qty) || 0));
+    const price = !t
+      ? 0
+      : !t.hasLevels
+        ? t.priceMedium || t.pricePerSqm
+        : dirtLevel === 'LIGHT'
+          ? t.priceLight
+          : dirtLevel === 'HEAVY'
+            ? t.priceHeavy
+            : t.priceMedium;
+    return {
+      ...r,
+      title: t?.title ?? r.key,
+      unit: t?.unit ?? 'м²',
+      qtyN: qty,
+      total: qty * (price || 0),
+    };
+  });
+  const moreSum = moreRows.reduce((sum, r) => sum + r.total, 0);
+  const computed = units * unitPrice + moreSum;
 
   useEffect(() => {
     if (!manualPrice) setPrice(computed ? String(computed) : '');
@@ -432,6 +485,9 @@ export function AddClientModal({
       ? {
           cleaningType: cleaningTypeForKey(serviceKey),
           serviceKey,
+          additionalServices: moreRows
+            .filter((r) => r.qtyN > 0)
+            .map((r) => ({ key: r.key, qty: r.qtyN })),
           dirtLevel: hasLevels ? dirtLevel : undefined,
           area: isFurniture ? 0 : toInt(area),
           seats: isFurniture ? toInt(seats) : undefined,
@@ -447,6 +503,9 @@ export function AddClientModal({
         source,
         managerId: managerId || undefined,
         discount: Math.max(0, Math.round(Number(discount) || 0)),
+        extraPhones: extraPhones.filter((p) => isValidPhone(p)),
+        labels,
+        sourceDetail: sourceDetail.trim() || undefined,
       },
       managerName,
       order,
@@ -459,6 +518,39 @@ export function AddClientModal({
       <div className="space-y-3">
         <NameInput value={fullName} onChange={setFullName} autoFocus />
         <PhoneInput value={phone} onChange={setPhone} required />
+
+        {/* Запасные номера (ТЗ 1.1): необязательные, «на всякий случай» */}
+        {extraPhones.map((p, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <PhoneInput
+                value={p}
+                onChange={(v) =>
+                  setExtraPhones((prev) =>
+                    prev.map((x, j) => (j === i ? v : x)),
+                  )
+                }
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setExtraPhones((prev) => prev.filter((_, j) => j !== i))
+              }
+              className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+              aria-label="Убрать номер"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setExtraPhones((prev) => [...prev, ''])}
+          className="text-sm font-medium text-brand-600 hover:underline"
+        >
+          + ещё номер телефона
+        </button>
         <div>
           {/*
             Постоянная скидка клиента. Подставляется в его новые заказы,
@@ -482,6 +574,62 @@ export function AddClientModal({
               <option key={s} value={s}>{SOURCE_LABEL[s]}</option>
             ))}
           </select>
+          {/* «От кого» (ТЗ 1.4): рекомендатель или партнёр */}
+          <input
+            className="input mt-2"
+            value={sourceDetail}
+            maxLength={120}
+            onChange={(e) => setSourceDetail(e.target.value)}
+            placeholder="От кого — например: От Анисы, От Ибодат"
+          />
+        </div>
+
+        {/* Свободные теги (ТЗ 1.2): свой текст, сколько угодно */}
+        <div>
+          <label className="label">Теги</label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {labels.map((l) => (
+              <span
+                key={l}
+                className="inline-flex items-center gap-1 rounded-lg bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700"
+              >
+                {l}
+                <X
+                  className="h-3 w-3 cursor-pointer text-navy-400 hover:text-red-600"
+                  onClick={() =>
+                    setLabels((prev) => prev.filter((x) => x !== l))
+                  }
+                />
+              </span>
+            ))}
+            <input
+              className="input h-9 w-40"
+              value={labelInput}
+              maxLength={40}
+              list="client-label-hints"
+              onChange={(e) => setLabelInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const v = labelInput.trim();
+                  if (v && !labels.includes(v)) setLabels((p) => [...p, v]);
+                  setLabelInput('');
+                }
+              }}
+              onBlur={() => {
+                const v = labelInput.trim();
+                if (v && !labels.includes(v)) setLabels((p) => [...p, v]);
+                setLabelInput('');
+              }}
+              placeholder="тег и Enter"
+            />
+            {/* подсказка из уже использованных тегов */}
+            <datalist id="client-label-hints">
+              {knownLabels.map((l) => (
+                <option key={l} value={l} />
+              ))}
+            </datalist>
+          </div>
         </div>
         {isDirector && (
           <div>
@@ -525,6 +673,73 @@ export function AddClientModal({
                       <option key={t} value={t}>{TYPE_LABEL[t]}</option>
                     ))}
               </select>
+
+              {/* Ещё услуги в этой же заявке (ТЗ 1.3) */}
+              {moreRows.map((r, i) => (
+                <div key={i} className="mt-2 flex items-center gap-2">
+                  <select
+                    className="input h-9 min-w-0 flex-1"
+                    value={r.key}
+                    onChange={(e) =>
+                      setMoreServices((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, key: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  >
+                    {serviceOptions.map((t) => (
+                      <option key={t.key} value={t.key}>{t.title}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    className="input h-9 w-20"
+                    value={r.qty}
+                    onChange={(e) =>
+                      setMoreServices((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, qty: e.target.value } : x,
+                        ),
+                      )
+                    }
+                    aria-label="Объём"
+                  />
+                  <span className="w-20 shrink-0 text-right text-xs tabular-nums text-navy-600">
+                    {r.total > 0 ? formatPrice(r.total) : '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMoreServices((prev) =>
+                        prev.filter((_, j) => j !== i),
+                      )
+                    }
+                    className="shrink-0 rounded-lg p-1 text-navy-300 hover:text-red-600"
+                    aria-label="Убрать услугу"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setMoreServices((prev) => [
+                    ...prev,
+                    {
+                      key:
+                        serviceOptions.find((t) => t.key !== serviceKey)?.key ??
+                        serviceKey,
+                      qty: '1',
+                    },
+                  ])
+                }
+                className="mt-1.5 text-sm font-medium text-brand-600 hover:underline"
+              >
+                + ещё услуга
+              </button>
             </div>
             {hasLevels && (
               <div>

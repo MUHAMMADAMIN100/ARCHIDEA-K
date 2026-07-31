@@ -147,6 +147,14 @@ export function OrderModal({
   const [editPreferredDate, setEditPreferredDate] = useState('');
   const [editPreferredTime, setEditPreferredTime] = useState('');
   const [editComment, setEditComment] = useState('');
+  // «От кого» пришла заявка (ТЗ 1.4)
+  const [editSourceDetail, setEditSourceDetail] = useState('');
+  // запасные номера клиента (ТЗ 1.1)
+  const [clientExtraPhones, setClientExtraPhones] = useState<string[]>([]);
+  // дополнительные основные услуги (ТЗ 1.3): ключ, объём, цена за единицу
+  const [addServices, setAddServices] = useState<
+    { key: string; qty: string; pricePerUnit: string }[]
+  >([]);
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [error, setError] = useState('');
 
@@ -208,7 +216,27 @@ export function OrderModal({
   const unitLabel = selectedTariff?.unit ?? (isSeatsUnit ? 'место' : 'м²');
   const unitsNow = Number((isSeatsUnit ? editSeats : editArea) || 0);
 
-  const workSum = Math.round(Number(pricePerSqm) || 0) * unitsNow;
+  /*
+   * Дополнительные основные услуги (ТЗ 1.3): каждая строка — объём × цена.
+   * Цена подставляется из справочника, менеджер может её поправить.
+   */
+  const addRows = addServices.map((r) => {
+    const t = serviceOptions.find((x) => x.key === r.key);
+    const qty = Math.max(0, Math.round(Number(r.qty) || 0));
+    const price = Math.max(0, Math.round(Number(r.pricePerUnit) || 0));
+    return {
+      ...r,
+      title: t?.title ?? r.key,
+      unit: t?.unit ?? 'м²',
+      qtyN: qty,
+      priceN: price,
+      total: qty * price,
+    };
+  });
+  const addSum = addRows.reduce((sum, r) => sum + r.total, 0);
+
+  const workSum =
+    Math.round(Number(pricePerSqm) || 0) * unitsNow + addSum;
   const subtotalSum = workSum + extrasSum;
   // скидка не может быть больше стоимости — так же считает сервер
   const discountSum = Math.min(
@@ -254,6 +282,7 @@ export function OrderModal({
     if (!skip('client')) {
       setClientName(o.client?.fullName ?? '');
       setClientPhone(o.client?.phone ?? '');
+      setClientExtraPhones(o.client?.extraPhones ?? []);
     }
     if (!skip('request')) {
       setEditSource(o.source);
@@ -263,6 +292,16 @@ export function OrderModal({
       setEditPreferredDate(o.preferredDate?.slice(0, 10) ?? '');
       setEditPreferredTime(o.preferredTime ?? '');
       setEditComment(o.comment ?? '');
+      setEditSourceDetail(o.sourceDetail ?? '');
+    }
+    if (!skip('addServices')) {
+      setAddServices(
+        (o.additionalServices ?? []).map((r) => ({
+          key: r.key,
+          qty: String(r.qty),
+          pricePerUnit: String(r.pricePerUnit),
+        })),
+      );
     }
     if (!skip('cleaners')) setSelectedCleaners((o.cleaners ?? []).map((c) => c.id));
   };
@@ -469,6 +508,14 @@ export function OrderModal({
         discount: discountSum,
         // данные заявки — правятся прямо в карточке
         source: editSource,
+        sourceDetail: editSourceDetail.trim(),
+        additionalServices: addRows
+          .filter((r) => r.qtyN > 0)
+          .map((r) => ({
+            key: r.key,
+            qty: r.qtyN,
+            pricePerUnit: r.priceN,
+          })),
         comment: editComment.trim(),
         ...(editManagerId ? { managerId: editManagerId } : {}),
         ...(editCreatedAt ? { createdAt: editCreatedAt } : {}),
@@ -481,6 +528,9 @@ export function OrderModal({
         await api.patch(`/clients/${order.clientId}`, {
           fullName: clientName.trim(),
           phone: normalizePhone(clientPhone) ?? clientPhone,
+          extraPhones: clientExtraPhones
+            .map((p) => normalizePhone(p))
+            .filter((p): p is string => !!p),
         });
       }
       if (cleanersChangedFlag) {
@@ -601,6 +651,45 @@ export function OrderModal({
                         setClientPhone(v);
                       }}
                     />
+                    {/* запасные номера (ТЗ 1.1) */}
+                    {clientExtraPhones.map((p, i) => (
+                      <div key={i} className="mt-2 flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <PhoneInput
+                            value={p}
+                            onChange={(v) => {
+                              markTouched('client');
+                              setClientExtraPhones((prev) =>
+                                prev.map((x, j) => (j === i ? v : x)),
+                              );
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            markTouched('client');
+                            setClientExtraPhones((prev) =>
+                              prev.filter((_, j) => j !== i),
+                            );
+                          }}
+                          className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Убрать номер"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markTouched('client');
+                        setClientExtraPhones((prev) => [...prev, '']);
+                      }}
+                      className="mt-1.5 text-xs font-medium text-brand-600 hover:underline"
+                    >
+                      + ещё номер
+                    </button>
                   </div>
                   <div>
                     <label className="label">Источник</label>
@@ -615,6 +704,14 @@ export function OrderModal({
                         </option>
                       ))}
                     </select>
+                    {/* «От кого» (ТЗ 1.4): рекомендатель или партнёр */}
+                    <input
+                      className="input mt-2"
+                      value={editSourceDetail}
+                      maxLength={120}
+                      onChange={(e) => setEditSourceDetail(e.target.value)}
+                      placeholder="От кого — например: От Анисы"
+                    />
                   </div>
                   <div>
                     <label className="label">Ответственный менеджер</label>
@@ -866,6 +963,132 @@ export function OrderModal({
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Несколько услуг в одной заявке (ТЗ 1.3) */}
+              <div className="space-y-2 rounded-xl border border-navy-100 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-navy-800">
+                    Ещё услуги в этой заявке
+                  </span>
+                  <span className="text-xs text-navy-400">
+                    {addSum > 0 ? formatPrice(addSum) : 'не добавлены'}
+                  </span>
+                </div>
+                {addRows.map((r, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-navy-100 px-2.5 py-2"
+                  >
+                    <select
+                      className="input h-9 min-w-[9rem] flex-1"
+                      value={r.key}
+                      onChange={(e) => {
+                        const key = e.target.value;
+                        const t = serviceOptions.find((x) => x.key === key);
+                        markTouched('addServices');
+                        setAddServices((prev) =>
+                          prev.map((x, j) =>
+                            j === i
+                              ? {
+                                  ...x,
+                                  key,
+                                  pricePerUnit: String(
+                                    t
+                                      ? suggestUnitPrice(t, editDirt) ??
+                                          t.priceMedium ??
+                                          0
+                                      : 0,
+                                  ),
+                                }
+                              : x,
+                          ),
+                        );
+                      }}
+                    >
+                      {serviceOptions.map((t) => (
+                        <option key={t.key} value={t.key}>
+                          {t.title}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      className="input h-9 w-20"
+                      value={r.qty}
+                      onChange={(e) => {
+                        markTouched('addServices');
+                        setAddServices((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, qty: e.target.value } : x,
+                          ),
+                        );
+                      }}
+                      aria-label="Объём"
+                    />
+                    <span className="text-xs text-navy-400">{r.unit} ×</span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="input h-9 w-20"
+                      value={r.pricePerUnit}
+                      onChange={(e) => {
+                        markTouched('addServices');
+                        setAddServices((prev) =>
+                          prev.map((x, j) =>
+                            j === i
+                              ? { ...x, pricePerUnit: e.target.value }
+                              : x,
+                          ),
+                        );
+                      }}
+                      aria-label="Цена за единицу"
+                    />
+                    <span className="min-w-[5.5rem] text-right text-sm font-medium tabular-nums text-navy-800">
+                      {formatPrice(r.total)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markTouched('addServices');
+                        setAddServices((prev) =>
+                          prev.filter((_, j) => j !== i),
+                        );
+                      }}
+                      className="shrink-0 rounded-lg p-1 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                      aria-label="Убрать услугу"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    markTouched('addServices');
+                    const first = serviceOptions.find(
+                      (t) => t.key !== serviceKey,
+                    );
+                    setAddServices((prev) => [
+                      ...prev,
+                      {
+                        key: first?.key ?? serviceKey,
+                        qty: '1',
+                        pricePerUnit: String(
+                          first
+                            ? suggestUnitPrice(first, editDirt) ??
+                                first.priceMedium ??
+                                0
+                            : 0,
+                        ),
+                      },
+                    ]);
+                  }}
+                  className="text-sm font-medium text-brand-600 hover:underline"
+                >
+                  + ещё услуга
+                </button>
               </div>
 
               {/*

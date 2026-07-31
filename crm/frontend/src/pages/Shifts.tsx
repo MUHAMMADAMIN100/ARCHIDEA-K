@@ -176,6 +176,7 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
         managerId: payload.managerId || undefined,
         note: payload.note || undefined,
         cleanerIds: payload.cleanerIds,
+        guests: payload.guests,
       })
       .then(() => reload())
       .catch((e: any) => {
@@ -230,6 +231,7 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
         managerId: payload.managerId || null,
         note: payload.note ?? '',
         cleanerIds: payload.cleanerIds,
+        guests: payload.guests,
       })
       .then(() => reload())
       .catch((e: any) => {
@@ -491,6 +493,8 @@ interface CreatePayload {
   managerId: string;
   note: string;
   cleanerIds: string[];
+  /** Разовые клинеры (ТЗ 2): имя и выплата за смену, без записи в базе */
+  guests: { fullName: string; rate: number }[];
 }
 
 function ShiftGroupModal({
@@ -517,7 +521,15 @@ function ShiftGroupModal({
   const [managerId, setManagerId] = useState<string | null>(initial?.managerId ?? null);
   const [note, setNote] = useState(initial?.note ?? '');
   const [cleanerIds, setCleanerIds] = useState<string[]>(
-    initial?.members.map((m) => m.cleanerId) ?? [],
+    initial?.members
+      .filter((m) => m.cleanerId)
+      .map((m) => m.cleanerId as string) ?? [],
+  );
+  // разовые клинеры (ТЗ 2): имя + выплата за смену
+  const [guests, setGuests] = useState<{ fullName: string; rate: string }[]>(
+    initial?.members
+      .filter((m) => !m.cleanerId)
+      .map((m) => ({ fullName: m.fullName, rate: String(m.rate ?? '') })) ?? [],
   );
 
   const brigadeCleaners = brigadeId
@@ -539,6 +551,12 @@ function ShiftGroupModal({
       managerId: managerId ?? '',
       note,
       cleanerIds,
+      guests: guests
+        .map((g) => ({
+          fullName: g.fullName.trim(),
+          rate: Math.max(0, Math.round(Number(g.rate) || 0)),
+        }))
+        .filter((g) => g.fullName.length > 1),
     });
   };
 
@@ -630,6 +648,68 @@ function ShiftGroupModal({
         <div>
           <label className="label">Состав — кто поехал</label>
           <CleanerPicker value={cleanerIds} onChange={setCleanerIds} />
+        </div>
+
+        {/*
+          Разовые клинеры (ТЗ 2): замена, не заведённая в базе. Имя и выплата
+          за смену живут только в этом выезде — попадают в его состав и в
+          «Начислено», но не в постоянный список клинеров и не в выплаты.
+        */}
+        <div>
+          <label className="label">Разовые клинеры (замены)</label>
+          <div className="space-y-2">
+            {guests.map((g, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <input
+                  className="input h-10 min-w-[9rem] flex-1"
+                  value={g.fullName}
+                  maxLength={120}
+                  placeholder="Имя разового клинера"
+                  onChange={(e) =>
+                    setGuests((prev) =>
+                      prev.map((x, j) =>
+                        j === i ? { ...x, fullName: e.target.value } : x,
+                      ),
+                    )
+                  }
+                />
+                <input
+                  type="number"
+                  min={0}
+                  className="input h-10 w-32"
+                  value={g.rate}
+                  placeholder="Выплата"
+                  onChange={(e) =>
+                    setGuests((prev) =>
+                      prev.map((x, j) =>
+                        j === i ? { ...x, rate: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  aria-label="Выплата за смену, сомони"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setGuests((prev) => prev.filter((_, j) => j !== i))
+                  }
+                  className="shrink-0 rounded-lg p-1.5 text-navy-300 hover:bg-red-50 hover:text-red-600"
+                  aria-label="Убрать разового клинера"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setGuests((prev) => [...prev, { fullName: '', rate: '' }])
+              }
+              className="text-sm font-medium text-brand-600 hover:underline"
+            >
+              + разовый клинер
+            </button>
+          </div>
         </div>
 
         <div>

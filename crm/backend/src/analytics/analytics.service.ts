@@ -450,6 +450,7 @@ export class AnalyticsService {
       byBrigade.set(key, row);
 
       for (const m of g.members) {
+        if (!m.cleanerId) continue; // разовый клинер — без персонального разреза
         const c = byCleaner.get(m.cleanerId) ?? {
           id: m.cleanerId,
           name: m.fullName,

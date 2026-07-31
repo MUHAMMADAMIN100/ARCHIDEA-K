@@ -6,6 +6,7 @@ import {
 import {
   AuditAction,
   ClientTag,
+  DirtLevel,
   FunnelStage,
   NotificationType,
   Prisma,
@@ -24,7 +25,12 @@ import {
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { formatDate, parseDate } from '../common/time/dushanbe';
-import { calculatePrice, PricingExtra, PricingTariff } from './order-pricing';
+import {
+  calculatePrice,
+  PricingExtra,
+  PricingTariff,
+  unitPrice,
+} from './order-pricing';
 import {
   AssignCleanersDto,
   ChangeStageDto,
@@ -42,7 +48,7 @@ const STAGE_LABEL: Record<FunnelStage, string> = {
   OFFER: 'Коммерческое предложение',
   CONFIRMED: 'Подтверждён',
   IN_PROGRESS: 'В работе',
-  DONE: 'Выполнено',
+  DONE: 'К оплате',
   PAID: 'Оплачено / Закрыто',
   REJECTED: 'Отказ',
 };
@@ -65,6 +71,7 @@ const orderDetailInclude = {
       id: true,
       fullName: true,
       phone: true,
+      extraPhones: true,
       preferences: true,
       isRepeat: true,
       paidOrdersCount: true,
@@ -148,6 +155,57 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Строки дополнительных основных услуг (ТЗ 1.3) со снапшотом цены.
+   *
+   * Цена за единицу: ручная, если менеджер её задал, иначе из справочника по
+   * степени загрязнения заявки. Название и единица фиксируются в строке,
+   * чтобы история заказа не менялась от последующих правок справочника.
+   */
+  private async enrichAdditional(
+    rows: { key: string; qty: number; pricePerUnit?: number }[] | undefined,
+    dirtLevel: DirtLevel | null,
+  ): Promise<
+    | {
+        key: string;
+        title: string;
+        unit: string;
+        qty: number;
+        pricePerUnit: number;
+        total: number;
+      }[]
+    | null
+  > {
+    if (!rows || rows.length === 0) return rows === undefined ? null : [];
+    const tariffs = await this.prisma.tariff.findMany({
+      where: { key: { in: rows.map((r) => r.key) } },
+      select: {
+        key: true,
+        title: true,
+        unit: true,
+        hasLevels: true,
+        priceLight: true,
+        priceMedium: true,
+        priceHeavy: true,
+        pricePerSqm: true,
+      },
+    });
+    return rows.map((r) => {
+      const t = tariffs.find((x) => x.key === r.key);
+      const manual = Math.round(Number(r.pricePerUnit) || 0);
+      const price = manual > 0 ? manual : unitPrice(t ?? null, dirtLevel);
+      const qty = Math.max(1, Math.round(Number(r.qty) || 1));
+      return {
+        key: r.key,
+        title: t?.title ?? r.key,
+        unit: t?.unit ?? 'м²',
+        qty,
+        pricePerUnit: price,
+        total: Math.min(qty * price, 2_000_000_000),
+      };
+    });
+  }
+
   /** Услуга заказа для расчёта цены (ТЗ 5) */
   private async tariffFor(
     serviceKey?: string | null,
@@ -196,7 +254,15 @@ export class OrdersService {
   /** Доска воронки: заказы, сгруппированные по этапам */
   async board(user: AuthUser) {
     const orders = await this.list(user, {});
-    const stages = Object.keys(STAGE_LABEL) as FunnelStage[];
+    /*
+     * «Обработка» и «КП» исключены из процесса (ТЗ 3): колонки не показываем.
+     * Значения остаются в перечислении ради истории — существующие сделки
+     * миграция перенесла на соседние этапы.
+     */
+    const HIDDEN: FunnelStage[] = [FunnelStage.PROCESSING, FunnelStage.OFFER];
+    const stages = (Object.keys(STAGE_LABEL) as FunnelStage[]).filter(
+      (s) => !HIDDEN.includes(s),
+    );
     return stages.map((stage) => {
       const inStage = orders.filter((o) => o.stage === stage);
       return {
@@ -262,6 +328,15 @@ export class OrdersService {
       select: { discount: true },
     });
     const discount = dto.discount ?? clientDiscount?.discount ?? 0;
+    // дополнительные основные услуги (ТЗ 1.3): снапшот строк + их сумма
+    const additional = await this.enrichAdditional(
+      dto.additionalServices,
+      dirtLevel,
+    );
+    const additionalWork = (additional ?? []).reduce(
+      (sum, r) => sum + r.total,
+      0,
+    );
     const priced = calculatePrice(
       {
         serviceKey,
@@ -271,6 +346,7 @@ export class OrdersService {
         pricePerSqm: dto.pricePerSqm,
         extras: dto.extras,
         discount,
+        additionalWork,
       },
       tariff,
       extrasList,
@@ -298,6 +374,11 @@ export class OrdersService {
           preferences: dto.preferences?.trim() || null,
           source: dto.source ?? 'CALL',
           comment: dto.comment,
+          sourceDetail: dto.sourceDetail?.trim() || null,
+          discount,
+          ...(additional !== null
+            ? { additionalServices: additional as unknown as Prisma.InputJsonValue }
+            : {}),
           isLarge: (finalPrice || estimatedPrice) >= LARGE_ORDER_THRESHOLD,
           // ТЗ 3.1 — команда назначается сразу при оформлении
           ...(cleanerIds.length
@@ -394,6 +475,24 @@ export class OrdersService {
         ? dto.extras
         : ((before.extras as Record<string, number> | null) ?? undefined);
     const nextDiscount = dto.discount !== undefined ? dto.discount : before.discount;
+    /*
+     * Дополнительные услуги: новые строки обогащаем заново (цены могли
+     * поправить руками), нетронутые берём из заказа как есть — их снапшоты
+     * не пересчитываются от правок справочника.
+     */
+    const nextDirt = ((data.dirtLevel as any) ?? before.dirtLevel) as
+      | DirtLevel
+      | null;
+    const additional =
+      dto.additionalServices !== undefined
+        ? await this.enrichAdditional(dto.additionalServices, nextDirt)
+        : ((before.additionalServices as
+            | { total: number }[]
+            | null) ?? null);
+    const additionalWork = (additional ?? []).reduce(
+      (sum, r) => sum + (Number(r.total) || 0),
+      0,
+    );
     const priced = calculatePrice(
       {
         serviceKey,
@@ -403,12 +502,20 @@ export class OrdersService {
         pricePerSqm: dto.pricePerSqm ?? before.pricePerSqm,
         extras: nextExtras,
         discount: nextDiscount,
+        additionalWork,
       },
       tariff,
       extrasList,
     );
     if (dto.extras !== undefined) data.extras = dto.extras;
     if (dto.discount !== undefined) data.discount = dto.discount;
+    if (dto.additionalServices !== undefined) {
+      data.additionalServices = (additional ??
+        []) as unknown as Prisma.InputJsonValue;
+    }
+    if (dto.sourceDetail !== undefined) {
+      data.sourceDetail = dto.sourceDetail.trim() || null;
+    }
     if (dto.pricePerSqm !== undefined || priced.pricePerUnit) {
       data.pricePerSqm = priced.pricePerUnit || null;
     }

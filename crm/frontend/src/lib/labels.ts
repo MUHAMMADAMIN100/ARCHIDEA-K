@@ -26,16 +26,18 @@ export const STAGE_LABEL: Record<FunnelStage, string> = {
   OFFER: 'Коммерческое предложение',
   CONFIRMED: 'Подтверждён',
   IN_PROGRESS: 'В работе',
-  DONE: 'Выполнено',
+  DONE: 'К оплате',
   PAID: 'Оплачено / Закрыто',
   REJECTED: 'Отказ',
 };
 
+/*
+ * «Обработка» и «КП» исключены из процесса (ТЗ 3): в воронке их нет.
+ * Сами значения остаются в типе ради старых записей истории.
+ */
 export const STAGE_ORDER: FunnelStage[] = [
   'NEW',
-  'PROCESSING',
   'INSPECTION',
-  'OFFER',
   'CONFIRMED',
   'IN_PROGRESS',
   'DONE',

@@ -364,8 +364,11 @@ model ShiftGroupMember {
   id        String     @id @default(cuid())
   group     ShiftGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   groupId   String
-  cleaner   Cleaner    @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
-  cleanerId String
+  /// null — разовый клинер (замена): человек не заведён в базе,
+  /// есть только имя и выплата за эту смену
+  cleaner   Cleaner?   @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  cleanerId String?
+  isGuest   Boolean    @default(false)
   fullName  String // снапшот ФИО
   role      String     @default("Клинер") // «Бригадир» / «Клинер» на этом выезде
   rate      Int // снапшот ставки
@@ -395,6 +398,13 @@ model Client {
   id            String      @id @default(cuid())
   fullName      String
   phone         String      @unique // защита от дублей по телефону
+  /// Запасные номера «на всякий случай» — второй, третий и т.д.
+  extraPhones   String[]    @default([])
+  /// Свободные теги для сегментации («офис», «срочные») — в дополнение
+  /// к единственному статусу (tags), который остаётся из фиксированного набора
+  labels        String[]    @default([])
+  /// «От кого» — рекомендатель или партнёр («От Анисы», «От Ибодат»)
+  sourceDetail  String?
   email         String?
   source        LeadSource  @default(SITE)
   tags          ClientTag[] @default([])
@@ -465,6 +475,12 @@ model Order {
   accessMethod  AccessMethod?
   comment       String?
   extras        Json? // выбранные доп. услуги: ключ → количество
+  /// Дополнительные ОСНОВНЫЕ услуги заявки (мульти-выбор): снапшот строк
+  /// {key, title, unit, qty, pricePerUnit, total} — история не зависит от
+  /// последующих правок справочника
+  additionalServices Json?
+  /// «От кого» пришла заявка — рекомендатель или партнёр
+  sourceDetail  String?
   /// Скидка по заказу в сомони. Вычитается из суммы работ и доп. услуг.
   discount      Int              @default(0)
 
