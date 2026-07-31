@@ -625,6 +625,8 @@ function AddOrderModal({
     return {
       ...r,
       title: t?.title ?? r.key,
+      unit: t?.unit ?? 'м²',
+      pricePerUnit: price || 0,
       qtyN: qty,
       total: qty * (price || 0),
     };
@@ -708,7 +710,10 @@ function AddOrderModal({
                 }
                 aria-label="Объём"
               />
-              <span className="w-20 shrink-0 text-right text-xs tabular-nums text-navy-600">
+              <span className="shrink-0 text-xs font-medium text-navy-700">
+                {r.unit} × {r.pricePerUnit.toLocaleString('ru-RU')}
+              </span>
+              <span className="min-w-0 flex-1 text-right text-xs font-semibold tabular-nums text-navy-800">
                 {r.total > 0 ? formatPrice(r.total) : '—'}
               </span>
               <button
