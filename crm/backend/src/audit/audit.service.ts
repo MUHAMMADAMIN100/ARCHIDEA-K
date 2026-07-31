@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AuditAction, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthUser } from '../common/decorators/current-user.decorator';
+import {
+  AuthUser,
+  seesAll,
+} from '../common/decorators/current-user.decorator';
 import { can } from '../common/permissions';
 import { momentRange } from '../common/time/dushanbe';
 import {
@@ -150,6 +153,17 @@ export class AuditService {
     if (q.entityId) where.entityId = q.entityId;
     if (q.actorId) where.actorId = q.actorId;
     if (q.action) where.action = q.action;
+
+    /*
+     * Область данных та же, что и везде: у кого она своя, тот видит в общей
+     * ленте только СВОИ действия. Иначе раздел «История изменений» стал бы
+     * обходным путём к чужой базе — по нему читаются и названия объектов,
+     * и что именно в них меняли.
+     *
+     * История конкретного заказа или клиента живёт отдельно (forEntity) и
+     * открывается из карточки, доступ к которой уже проверен.
+     */
+    if (!seesAll(user)) where.actorId = user.id;
 
     // Финансовая история не показывается тем, у кого нет доступа к финансам
     if (!can(user, 'finance:view')) {

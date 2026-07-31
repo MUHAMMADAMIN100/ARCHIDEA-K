@@ -6,7 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { userManagesTasks, userSeesAll, userSeesTrash } from './types';
+import { userSeesTrash } from './types';
 import type { Role } from './types';
 
 // Разделы грузятся по требованию (code-splitting) — тяжёлые библиотеки
@@ -56,22 +56,6 @@ function RoleOnly({
   return children;
 }
 
-/** Финансовые разделы — скрыты от ops-менеджеров (директор и обычные менеджеры видят) */
-function NoOpsFinance({ children }: { children: JSX.Element }) {
-  const { user } = useAuth();
-  if (user && user.canManageOps && user.role !== 'DIRECTOR') {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-}
-
-/** Разделы для расширенного доступа: директор + ops-менеджер */
-function SeesAllOnly({ children }: { children: JSX.Element }) {
-  const { user } = useAuth();
-  if (user && !userSeesAll(user)) return <Navigate to="/" replace />;
-  return children;
-}
-
 /**
  * Корзина закрыта не только в меню, но и по адресу: иначе раздел
  * открывался бы прямой ссылкой у любого, кто её знает.
@@ -79,16 +63,6 @@ function SeesAllOnly({ children }: { children: JSX.Element }) {
 function TrashOnly({ children }: { children: JSX.Element }) {
   const { user } = useAuth();
   if (user && !userSeesTrash(user)) return <Navigate to="/" replace />;
-  return children;
-}
-
-/**
- * Полный доступ к модулю задач (ТЗ 1.2).
- * Директор, ops-менеджер и сотрудники с личным флагом canManageTasks (Ирода).
- */
-function TasksAccessOnly({ children }: { children: JSX.Element }) {
-  const { user } = useAuth();
-  if (user && !userManagesTasks(user)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -124,34 +98,23 @@ export default function App() {
           <Route path="/clients" element={<Clients />} />
           <Route path="/clients/:id" element={<ClientCard />} />
           <Route path="/tasks" element={<Tasks />} />
-          {/* Календарь задач идёт вместе с доступом к задачам: иначе полный
-              доступ Ироды получается наполовину нерабочим */}
-          <Route
-            path="/calendar"
-            element={
-              <TasksAccessOnly>
-                <Calendar />
-              </TasksAccessOnly>
-            }
-          />
+          {/* Календарь открыт всем: сотрудник ведёт в нём свои звонки и выезды.
+              Чужие задачи в него попадают только у тех, кто ведёт задачи
+              компании — это решает бэкенд, а не маршрут. */}
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/team" element={<Team />} />
           {/* Смены и выезды — операционный раздел: адрес, состав группы,
-              кто куда ездил. Денежные вкладки внутри скрыты от ops-менеджера
-              отдельно, а сам раздел ему нужен по работе (ТЗ 4). */}
+              кто куда ездил. Суммы внутри вырезает бэкенд (ТЗ 4). */}
           <Route path="/shifts" element={<Shifts />} />
-          <Route path="/reports" element={<NoOpsFinance><Reports /></NoOpsFinance>} />
-          <Route path="/reports/new" element={<NoOpsFinance><ReportEdit /></NoOpsFinance>} />
-          <Route path="/reports/:id" element={<NoOpsFinance><ReportView /></NoOpsFinance>} />
-          <Route path="/reports/:id/edit" element={<NoOpsFinance><ReportEdit /></NoOpsFinance>} />
+          {/* Ведомости: сотрудник видит и составляет только свои — область
+              данных ограничивает сервер, поэтому отдельный запрет не нужен */}
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/reports/new" element={<ReportEdit />} />
+          <Route path="/reports/:id" element={<ReportView />} />
+          <Route path="/reports/:id/edit" element={<ReportEdit />} />
           <Route path="/analytics" element={<Analytics />} />
-          <Route
-            path="/tariffs"
-            element={
-              <RoleOnly roles={['DIRECTOR']}>
-                <Tariffs />
-              </RoleOnly>
-            }
-          />
+          {/* Услуги и цены — рабочий справочник компании, открыт всем сотрудникам */}
+          <Route path="/tariffs" element={<Tariffs />} />
           <Route
             path="/users"
             element={
@@ -189,7 +152,9 @@ export default function App() {
               </RoleOnly>
             }
           />
-          <Route path="/history" element={<SeesAllOnly><History /></SeesAllOnly>} />
+          {/* История изменений: сотруднику показываются его собственные
+              действия, руководству — вся лента. Отбор делает бэкенд. */}
+          <Route path="/history" element={<History />} />
           <Route path="/checklists" element={<Checklists />} />
           <Route path="/offers" element={<Offers />} />
           <Route path="/offers/:id" element={<OfferView />} />

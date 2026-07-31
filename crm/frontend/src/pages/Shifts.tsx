@@ -42,9 +42,7 @@ import {
 } from '../lib/labels';
 import { formatDateTz, formatDateTimeTz, monthRange, shiftMonth, todayISO } from '../lib/date';
 import { tempId, withRetry } from '../lib/util';
-import { userSeesAll,
-  userIsOpsOnly,
-} from '../types';
+import { userManagesOps, userSeesFinance } from '../types';
 import type {
   Brigade,
   Cleaner,
@@ -62,15 +60,16 @@ type ShiftsTab = 'visits' | 'payroll' | 'fines';
 
 export function Shifts() {
   const { user } = useAuth();
-  const canManageVisits = userSeesAll(user);
+  // выезды ведёт любой сотрудник: бригада и адрес — операционные данные
+  const canManageVisits = userManagesOps(user);
   const [tab, setTab] = useState<ShiftsTab>('visits');
 
   /*
-   * Выплаты и штрафы — деньги, и бэкенд закрывает их от ops-менеджера
-   * (NoOpsFinanceGuard). Раньше вкладки показывались всем, и ops упирался
-   * в 403 на уже открытой вкладке. Теперь их просто нет в списке.
+   * Выплаты и штрафы — деньги, и бэкенд отдаёт их только руководителю.
+   * Показывать вкладки остальным нельзя: человек упирался бы в 403 на уже
+   * открытой вкладке. Поэтому их просто нет в списке.
    */
-  const showMoney = !userIsOpsOnly(user);
+  const showMoney = userSeesFinance(user);
   const tabs = [
     { value: 'visits' as const, label: 'Выезды' },
     ...(showMoney
@@ -1261,7 +1260,10 @@ function CleanerPayrollModal({
               key: 'rate',
               header: 'Ставка',
               align: 'right',
-              cell: (s) => formatPrice(s.rate),
+              // расшифровка открывается только из «Выплат», то есть у
+              // руководителя — но ставки может и не быть в данных, и тогда
+              // строка должна остаться читаемой, а не показать «NaN»
+              cell: (s) => formatPrice(s.rate ?? 0),
             },
           ]}
           footer={
@@ -1272,7 +1274,7 @@ function CleanerPayrollModal({
                   {shifts.length === 1 ? 'смену' : shifts.length < 5 ? 'смены' : 'смен'}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
-                  {formatPrice(shifts.reduce((sum, s) => sum + s.rate, 0))}
+                  {formatPrice(shifts.reduce((sum, s) => sum + (s.rate ?? 0), 0))}
                 </td>
               </tr>
             ) : undefined

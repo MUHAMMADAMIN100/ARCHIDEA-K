@@ -9,7 +9,7 @@ import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { ACTIVE_TYPES, TYPE_LABEL } from '../lib/labels';
 import { tempId } from '../lib/util';
-import { userSeesAll } from '../types';
+import { userManagesCatalogs } from '../types';
 import type { ChecklistTemplate, CleaningType } from '../types';
 
 /** Пункт шаблона в редакторе — с локальным устойчивым ключом для React и переупорядочивания */
@@ -41,15 +41,15 @@ interface TemplatePayload {
 const MAX_ITEMS = 100;
 
 /**
- * Шаблоны чек-листов контроля качества (ТЗ 8). Смотреть может любой сотрудник
- * (чтобы понимать, какие пункты будут в заказе), править — только руководство
- * (совпадает с бэкендовым правом `checklists:manage`, см. `userSeesAll`).
+ * Шаблоны чек-листов контроля качества (ТЗ 8). Смотреть и править может любой
+ * сотрудник компании — это рабочий инструмент бригад, а не деньги
+ * (совпадает с бэкендовым правом `checklists:manage`).
  */
 export function Checklists() {
   const { user } = useAuth();
   const toast = useToast();
   const dialog = useDialog();
-  const canManage = userSeesAll(user);
+  const canManage = userManagesCatalogs(user);
 
   const { data, loading, error, reload, setData } = useFetch<ChecklistTemplate[]>(
     '/checklist-templates',

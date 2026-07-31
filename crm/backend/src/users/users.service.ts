@@ -78,13 +78,24 @@ export class UsersService {
 
   /**
    * Сотрудники, которым можно ставить задачи.
-   * Доступ у тех, кто ведёт задачи компании: руководитель, операционный
-   * управляющий и сотрудник с личным доступом к модулю задач (ТЗ 1.2).
-   * Без этого Ирода получала 403 и не могла выбрать исполнителя.
+   *
+   * Кто ведёт задачи компании (руководитель, операционный управляющий, Ирода) —
+   * получает весь список. Остальные заводят задачи только себе, поэтому им
+   * возвращается ровно одна строка — они сами. Отвечать 403 нельзя: форма
+   * задачи в календаре открыта всем, и без списка она бы просто не работала.
    */
   assignable(user: AuthUser) {
     if (!seesAll(user) && !seesAllTasks(user)) {
-      throw new ForbiddenException('Нет доступа');
+      return this.prisma.user.findMany({
+        where: { id: user.id },
+        select: {
+          id: true,
+          fullName: true,
+          position: true,
+          role: true,
+          isActive: true,
+        },
+      });
     }
     return this.prisma.user.findMany({
       where: { ...NOT_DELETED, isActive: true },

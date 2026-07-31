@@ -39,6 +39,15 @@ export function Tasks() {
    * но не могла ни поставить, ни назначить, ни удалить ни одной.
    */
   const canAssign = userManagesTasks(user);
+  /*
+   * Завести задачу может каждый — но сотрудник без доступа к задачам компании
+   * только САМОМУ СЕБЕ (список исполнителей ему бэкенд отдаёт из одной строки).
+   * Без этого календарь и раздел задач для него — экран «только чтение»,
+   * в который нельзя записать ни звонок, ни выезд.
+   */
+  const isOwnPersonalTask = (t: Task) =>
+    t.creatorId === user?.id &&
+    t.assignments.every((a) => a.userId === user?.id);
   const inFlightRef = useRef(0);
   const { data, loading, reload, setData } = useFetch<Task[]>('/tasks', {
     pollMs: 20000,
@@ -149,14 +158,14 @@ export function Tasks() {
     <div>
       <PageHeader
         title="Задачи"
-        subtitle={canAssign ? 'Постановка задач сотрудникам' : 'Задачи от руководителя'}
+        subtitle={
+          canAssign ? 'Постановка задач сотрудникам' : 'Задачи от руководителя и свои'
+        }
         action={
-          canAssign && (
-            <button onClick={() => setShowAdd(true)} className="btn-primary">
-              <Plus className="h-4 w-4" />
-              Новая задача
-            </button>
-          )
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Новая задача
+          </button>
         }
       />
 
@@ -210,7 +219,7 @@ export function Tasks() {
                     </div>
                   </div>
 
-                  {canAssign && (
+                  {(canAssign || isOwnPersonalTask(t)) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

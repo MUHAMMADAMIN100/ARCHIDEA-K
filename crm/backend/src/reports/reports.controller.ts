@@ -10,14 +10,21 @@ import {
 } from '@nestjs/common';
 import { ReportsService, ReportInput } from './reports.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { NoOpsFinanceGuard } from '../common/guards/no-ops-finance.guard';
 import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
 
-/** Платёжные ведомости (отчёты менеджеров основателю) */
-@UseGuards(JwtAuthGuard, NoOpsFinanceGuard)
+/**
+ * Платёжные ведомости (отчёты менеджеров основателю).
+ *
+ * Раздел открыт каждому сотруднику, но `ReportsService.scope()` показывает
+ * не-руководителю ТОЛЬКО его собственные ведомости — свою он и составляет.
+ * Общего доступа к чужим выплатам здесь нет, поэтому отдельный финансовый
+ * запрет на весь контроллер не нужен: он лишь отбирал у операционного
+ * управляющего его же ведомости.
+ */
+@UseGuards(JwtAuthGuard)
 @Controller('reports')
 export class ReportsController {
   constructor(private service: ReportsService) {}

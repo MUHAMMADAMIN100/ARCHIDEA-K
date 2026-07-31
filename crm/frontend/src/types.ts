@@ -45,9 +45,33 @@ export interface AuthUser {
   canSeeTrash?: boolean;
 }
 
-/** Видит ли пользователь данные всей компании (директор или ops-менеджер) */
+/**
+ * Видит ли пользователь ДАННЫЕ всей компании (чужих клиентов, заказы, задачи).
+ *
+ * Не путать с доступом к РАЗДЕЛАМ: менеджер работает во всех разделах, кроме
+ * финансовых, но клиентов и заказы видит только своих. Права на разделы —
+ * это userManagesOps / userManagesCatalogs ниже (на бэкенде — permissions.ts).
+ */
 export function userSeesAll(u?: AuthUser | null): boolean {
   return !!u && (u.role === 'DIRECTOR' || u.canManageOps === true);
+}
+
+/**
+ * Операционное управление: команда, бригады, выезды, учёт смен (право
+ * `ops:manage`). Есть у каждого сотрудника компании — у бригады и выезда
+ * нет владельца, «моих клинеров» не бывает.
+ */
+export function userManagesOps(u?: AuthUser | null): boolean {
+  return !!u;
+}
+
+/**
+ * Справочники компании: услуги и цены, шаблоны чек-листов и КП
+ * (права `services:manage`, `checklists:manage`, `proposals:templates`).
+ * Открыты всем сотрудникам — это рабочие инструменты, а не деньги компании.
+ */
+export function userManagesCatalogs(u?: AuthUser | null): boolean {
+  return !!u;
 }
 
 /** Ведёт ли пользователь ВСЕ задачи компании, а не только свои (ТЗ 1.2) */
@@ -76,17 +100,17 @@ export function userIsOpsOnly(u?: AuthUser | null): boolean {
 }
 
 /**
- * Корзина — по личному праву, а не по роли.
+ * Корзина — только руководителю и только с личным правом.
  *
  * Руководителей в компании несколько, но разбирать удалённое доверено
- * конкретным людям, поэтому доступ выдаётся флагом в карточке сотрудника.
- * Очищать безвозвратно вправе только руководитель с этим доступом.
+ * конкретным людям, поэтому мало быть руководителем — нужен ещё и флаг
+ * в карточке сотрудника. Менеджерам раздел закрыт целиком (решение владельца).
  */
 export function userSeesTrash(u?: AuthUser | null): boolean {
-  return u?.canSeeTrash === true;
+  return u?.canSeeTrash === true && u?.role === 'DIRECTOR';
 }
 export function userCanPurge(u?: AuthUser | null): boolean {
-  return userSeesTrash(u) && u?.role === 'DIRECTOR';
+  return userSeesTrash(u);
 }
 
 export interface Manager {
@@ -110,7 +134,11 @@ export interface Cleaner {
   id: string;
   fullName: string;
   phone?: string;
-  rate: number;
+  /**
+   * Ставка за смену. Приходит ТОЛЬКО тем, кому открыты финансы — остальным
+   * сервер вырезает её из ответа (зарплата сотрудника не операционные данные).
+   */
+  rate?: number;
   duties?: string | null;
   isActive: boolean;
   managerId?: string;
@@ -131,7 +159,8 @@ export interface Shift {
   id: string;
   date: string;
   cleanerId: string;
-  rate: number;
+  /** Начисление за смену — приходит только при доступе к финансам */
+  rate?: number;
   note?: string | null;
   /** выезд, который породил эту оплачиваемую смену (ТЗ 4) */
   groupId?: string | null;
@@ -147,7 +176,7 @@ export interface Shift {
   cleaner?: {
     id: string;
     fullName: string;
-    rate: number;
+    rate?: number;
     brigade?: { id: string; name: string } | null;
   };
 }

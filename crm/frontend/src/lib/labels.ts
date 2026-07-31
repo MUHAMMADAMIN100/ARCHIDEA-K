@@ -443,7 +443,7 @@ export const AUDIT_FIELD_LABEL: Record<string, string> = {
   login: 'Логин',
   role: 'Роль',
   isActive: 'Активен',
-  canManageOps: 'Расширенный доступ',
+  canManageOps: 'Видит базу всей компании',
   canManageTasks: 'Полный доступ к задачам',
   rate: 'Ставка',
   amount: 'Сумма',

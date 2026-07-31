@@ -99,6 +99,31 @@ export class TasksService {
     return { ...task, assignments };
   }
 
+  /** Числится ли сотрудник исполнителем задачи (учитывая старые задачи без assignments) */
+  private isParticipant(
+    task: { assigneeId: string; assignments: { userId: string }[] },
+    userId: string,
+  ): boolean {
+    return task.assignments.length
+      ? task.assignments.some((a) => a.userId === userId)
+      : task.assigneeId === userId;
+  }
+
+  /**
+   * Личная задача сотрудника: он же поставил, он же единственный исполнитель.
+   * Такую он вправе править и удалять сам — это его запись в календаре,
+   * а не поручение руководства.
+   */
+  private isOwnPersonalTask(
+    task: { creatorId: string; assigneeId: string; assignments: { userId: string }[] },
+    userId: string,
+  ): boolean {
+    if (task.creatorId !== userId) return false;
+    return task.assignments.length
+      ? task.assignments.every((a) => a.userId === userId)
+      : task.assigneeId === userId;
+  }
+
   /**
    * Директор и ops-менеджер видят все задачи; обычный менеджер — только те,
    * где он исполнитель (в т.ч. один из нескольких).
@@ -135,7 +160,14 @@ export class TasksService {
     return sorted.map((t) => this.shape(t));
   }
 
-  /** Постановка задачи (директор или ops-менеджер) + уведомления исполнителям */
+  /**
+   * Постановка задачи + уведомления исполнителям.
+   *
+   * Кто ведёт задачи компании (`tasks:all`) — ставит их кому угодно.
+   * Обычный сотрудник тоже может завести задачу, но только САМОМУ СЕБЕ:
+   * без этого календарь для него — экран «только чтение», в который нельзя
+   * записать ни звонок, ни выезд.
+   */
   async create(
     user: AuthUser,
     dto: {
@@ -148,10 +180,6 @@ export class TasksService {
       deadline?: string;
     },
   ) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Нет прав ставить задачи');
-    }
-
     const title = (dto.title ?? '').trim();
     if (!title) throw new BadRequestException('Укажите название задачи');
     if (title.length > 200) {
@@ -179,6 +207,11 @@ export class TasksService {
     if (ids.length > MAX_ASSIGNEES) {
       throw new BadRequestException(
         `Слишком много исполнителей (макс. ${MAX_ASSIGNEES})`,
+      );
+    }
+    if (!seesAll(user) && (ids.length !== 1 || ids[0] !== user.id)) {
+      throw new ForbiddenException(
+        'Ставить задачи другим сотрудникам может руководство. Себе — можно.',
       );
     }
     const people = await this.prisma.user.findMany({
@@ -289,13 +322,19 @@ export class TasksService {
     return this.shape(updated);
   }
 
-  /** Перенос задачи на другой день (перетаскивание в календаре) */
+  /**
+   * Перенос задачи на другой день (перетаскивание в календаре).
+   * Руководство двигает любые задачи, сотрудник — те, где он исполнитель.
+   */
   async updateDate(user: AuthUser, id: string, deadline: string | null) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Нет прав переносить задачи');
-    }
-    const exists = await this.prisma.task.findFirst({ where: { id, deletedAt: null } });
+    const exists = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
+      include: { assignments: { select: { userId: true } } },
+    });
     if (!exists) throw new NotFoundException('Задача не найдена');
+    if (!seesAll(user) && !this.isParticipant(exists, user.id)) {
+      throw new ForbiddenException('Переносить можно только свои задачи');
+    }
     const task = await this.prisma.task.update({
       where: { id },
       data: { deadline: deadline ? this.parseDate(deadline) : null },
@@ -304,7 +343,11 @@ export class TasksService {
     return this.shape(task);
   }
 
-  /** Редактирование задачи (директор или ops-менеджер), в т.ч. смена состава */
+  /**
+   * Редактирование задачи, в т.ч. смена состава исполнителей.
+   * Руководство правит любые; сотрудник — только свою личную запись
+   * в календаре, и без права переназначить её на другого.
+   */
   async update(
     user: AuthUser,
     id: string,
@@ -317,14 +360,26 @@ export class TasksService {
       assigneeIds?: string[];
     },
   ) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Нет прав редактировать задачи');
-    }
     const task = await this.prisma.task.findFirst({
       where: { id, deletedAt: null },
       include: taskInclude,
     });
     if (!task) throw new NotFoundException('Задача не найдена');
+    if (!seesAll(user)) {
+      if (!this.isOwnPersonalTask(task, user.id)) {
+        throw new ForbiddenException(
+          'Редактировать можно только задачи, которые вы поставили себе',
+        );
+      }
+      if (
+        dto.assigneeIds !== undefined &&
+        (dto.assigneeIds.length !== 1 || dto.assigneeIds[0] !== user.id)
+      ) {
+        throw new ForbiddenException(
+          'Назначать задачу другому сотруднику может руководство',
+        );
+      }
+    }
 
     const data: Prisma.TaskUpdateInput = {};
     if (dto.title !== undefined) {
@@ -441,13 +496,16 @@ export class TasksService {
 
   /** Удаление задачи — перенос в корзину (ТЗ 6) */
   async remove(user: AuthUser, id: string, reason?: string) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Нет прав удалять задачи');
-    }
     const task = await this.prisma.task.findFirst({
       where: { id, ...NOT_DELETED },
+      include: { assignments: { select: { userId: true } } },
     });
     if (!task) throw new NotFoundException('Задача не найдена');
+    if (!seesAll(user) && !this.isOwnPersonalTask(task, user.id)) {
+      throw new ForbiddenException(
+        'Удалять можно только задачи, которые вы поставили себе',
+      );
+    }
 
     const removed = await this.prisma.task.update({
       where: { id },

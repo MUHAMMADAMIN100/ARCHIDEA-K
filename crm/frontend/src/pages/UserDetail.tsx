@@ -456,7 +456,9 @@ function EditUserModal({
           </div>
         </div>
 
-        {/* Расширенный доступ — только для менеджеров (директор и так видит всё) */}
+        {/* Общая база — только для менеджеров (руководитель и так видит всё).
+            Разделы менеджеру открыты и без этого флага; он расширяет именно
+            ОБЛАСТЬ ДАННЫХ: свои клиенты и заказы → вся компания. */}
         {role === 'MANAGER' && (
           <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
             <input
@@ -466,11 +468,11 @@ function EditUserModal({
               className="mt-0.5 h-4 w-4 accent-navy-500"
             />
             <span className="text-sm text-navy-800">
-              <span className="font-medium">Расширенный доступ (без финансов)</span>
+              <span className="font-medium">Видит базу всей компании</span>
               <span className="mt-0.5 block text-xs text-navy-600">
-                Видит клиентов, заказы, команду и аналитику всей компании, ставит
-                задачи любому сотруднику. Без разделов «Смены и выплаты», «Отчёты»,
-                «Тарифы» и без данных о доходах.
+                Без флага сотрудник работает во всех разделах, но видит только
+                своих клиентов и свои заказы. С флагом — чужие тоже, плюс задачи
+                всей компании. Доходы, расходы и выплаты остаются закрыты.
               </span>
             </span>
           </label>
@@ -498,23 +500,26 @@ function EditUserModal({
           </label>
         )}
 
-        {/* Корзина — персональное право: руководителей несколько, а разбирать
-            удалённое доверено конкретным людям, поэтому от роли не зависит */}
-        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
-          <input
-            type="checkbox"
-            checked={canSeeTrash}
-            onChange={(e) => setCanSeeTrash(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-navy-500"
-          />
-          <span className="text-sm text-navy-800">
-            <span className="font-medium">Доступ к корзине</span>
-            <span className="mt-0.5 block text-xs text-navy-600">
-              Видит удалённые записи и возвращает их. Удалять безвозвратно
-              может только руководитель с этим доступом.
+        {/* Корзина — только руководителю и только с этим флагом: руководителей
+            несколько, а разбирать удалённое доверено конкретным людям.
+            Менеджерам раздел закрыт целиком, поэтому им флаг не показываем. */}
+        {role === 'DIRECTOR' && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={canSeeTrash}
+              onChange={(e) => setCanSeeTrash(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-navy-500"
+            />
+            <span className="text-sm text-navy-800">
+              <span className="font-medium">Доступ к корзине</span>
+              <span className="mt-0.5 block text-xs text-navy-600">
+                Видит удалённые записи, возвращает их и очищает безвозвратно.
+                Раздел доступен только руководителям.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         <div>
           <label className="label">Новый пароль (необязательно)</label>

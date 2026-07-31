@@ -36,7 +36,7 @@ import {
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import { formatDateTz, formatDateTimeTz, rangeOf } from '../lib/date';
-import { userSeesAll } from '../types';
+import { userManagesCatalogs, userSeesAll } from '../types';
 import type {
   Client,
   Order,
@@ -96,7 +96,8 @@ type TabKey = 'proposals' | 'templates';
 
 export function Offers() {
   const { user } = useAuth();
-  const canManageTemplates = userSeesAll(user); // = право proposals:templates на бэкенде
+  // = право proposals:templates на бэкенде: шаблоны КП ведут все сотрудники
+  const canManageTemplates = userManagesCatalogs(user);
   const [tab, setTab] = useState<TabKey>('proposals');
 
   return (

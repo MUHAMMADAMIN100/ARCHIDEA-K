@@ -15,8 +15,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import {
   CurrentUser,
   AuthUser,
-  seesAll,
 } from '../common/decorators/current-user.decorator';
+import { managesOps, seesFinance } from '../common/permissions';
 import { CreateFineDto, MarkDayDto } from './dto/payroll.dto';
 
 /**
@@ -47,10 +47,10 @@ export class PayrollController {
     }
   }
 
-  /** Операционные данные по сменам — руководство компании */
+  /** Операционные данные по сменам — любой сотрудник компании */
   private assertOps(user: AuthUser) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Учёт смен доступен руководству');
+    if (!managesOps(user)) {
+      throw new ForbiddenException('Учёт смен доступен сотрудникам компании');
     }
   }
 
@@ -64,15 +64,25 @@ export class PayrollController {
     return this.service.summary(from, to);
   }
 
+  /**
+   * Отметки смен: кто в какой день работал. Это операционные данные, они нужны
+   * всем. Ставка в строке смены — уже деньги, поэтому её вырезаем тем, кому
+   * финансы закрыты: иначе список смен показывал бы зарплату всей бригады.
+   */
   @Get('shifts')
-  listShifts(
+  async listShifts(
     @CurrentUser() user: AuthUser,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('cleanerId') cleanerId?: string,
   ) {
     this.assertOps(user);
-    return this.service.listShifts(from, to, cleanerId);
+    const shifts = await this.service.listShifts(from, to, cleanerId);
+    if (seesFinance(user)) return shifts;
+    return shifts.map(({ rate: _rate, cleaner, ...shift }) => ({
+      ...shift,
+      ...(cleaner ? { cleaner: { ...cleaner, rate: undefined } } : {}),
+    }));
   }
 
   @Post('shifts/day')

@@ -1,4 +1,4 @@
-import { useState, type MutableRefObject } from 'react';
+import { useEffect, useState, type MutableRefObject } from 'react';
 import { Trash2, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
@@ -86,6 +86,18 @@ export function TaskModal({
   const [assigneeIds, setAssigneeIds] = useState<string[]>(
     task?.assignments.map((a) => a.userId) ?? [],
   );
+
+  /*
+   * Сотрудник без доступа к задачам компании ставит их только себе, и бэкенд
+   * отдаёт ему список из одной строки — его самого. Отмечаем её сразу: иначе
+   * человек жмёт «Создать» и получает «Выберите хотя бы одного исполнителя»
+   * при единственном возможном выборе.
+   */
+  useEffect(() => {
+    if (mode !== 'create') return;
+    if (assigneeIds.length > 0) return;
+    if (people?.length === 1) setAssigneeIds([people[0].id]);
+  }, [mode, people, assigneeIds.length]);
 
   const toggleAssignee = (id: string) =>
     setAssigneeIds((prev) =>

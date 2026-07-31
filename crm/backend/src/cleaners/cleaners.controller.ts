@@ -16,8 +16,15 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import {
   CurrentUser,
   AuthUser,
-  seesAll,
 } from '../common/decorators/current-user.decorator';
+import { managesOps, seesFinance } from '../common/permissions';
+
+/** Ставка — это зарплата: из ответа её видит только тот, кому открыты финансы */
+function withoutRate<T extends { rate?: number }>(row: T, user: AuthUser): T {
+  if (seesFinance(user)) return row;
+  const { rate: _rate, ...rest } = row;
+  return rest as T;
+}
 import {
   CreateBrigadeDto,
   CreateCleanerDto,
@@ -28,9 +35,9 @@ import {
 /**
  * Клинеры и бригады.
  *
- * Раньше здесь не было ни одной проверки прав: любой менеджер мог поменять
- * ставку выплаты клинеру и удалить бригаду. Ставка — это деньги, поэтому её
- * правит только руководитель; состав бригад ведёт руководство.
+ * Состав команды ведут все сотрудники (право `ops:manage`): бригада — общая
+ * сущность компании, «своих» клинеров у менеджера не бывает. А вот ставка
+ * выплаты — это деньги, и менять её по-прежнему вправе только руководитель.
  */
 @UseGuards(JwtAuthGuard)
 @Controller('cleaners')
@@ -38,8 +45,8 @@ export class CleanersController {
   constructor(private service: CleanersService) {}
 
   private assertManages(user: AuthUser) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Управление командой доступно руководству');
+    if (!managesOps(user)) {
+      throw new ForbiddenException('Управление командой доступно сотрудникам компании');
     }
   }
 
@@ -54,8 +61,15 @@ export class CleanersController {
 
   /** activeOnly=true — для формы назначения на заказ (уволенных там быть не должно) */
   @Get()
-  list(@CurrentUser() user: AuthUser, @Query('activeOnly') activeOnly?: string) {
-    return this.service.list(user, activeOnly === 'true' || activeOnly === '1');
+  async list(
+    @CurrentUser() user: AuthUser,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    const cleaners = await this.service.list(
+      user,
+      activeOnly === 'true' || activeOnly === '1',
+    );
+    return cleaners.map((c) => withoutRate(c, user));
   }
 
   @Get('team-tasks')
@@ -98,14 +112,18 @@ export class BrigadesController {
   constructor(private service: CleanersService) {}
 
   private assertManages(user: AuthUser) {
-    if (!seesAll(user)) {
-      throw new ForbiddenException('Управление бригадами доступно руководству');
+    if (!managesOps(user)) {
+      throw new ForbiddenException('Управление бригадами доступно сотрудникам компании');
     }
   }
 
   @Get()
-  list() {
-    return this.service.listBrigades();
+  async list(@CurrentUser() user: AuthUser) {
+    const brigades = await this.service.listBrigades();
+    return brigades.map((b) => ({
+      ...b,
+      cleaners: b.cleaners.map((c) => withoutRate(c, user)),
+    }));
   }
 
   @Post()

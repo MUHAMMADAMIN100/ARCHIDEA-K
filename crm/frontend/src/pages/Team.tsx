@@ -18,6 +18,7 @@ import { PhoneInput } from '../components/ContactFields';
 import { sanitizePersonName } from '../lib/contact';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
+import { userSeesFinance } from '../types';
 import { Spinner, PageHeader, Modal, EmptyState, Badge } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
@@ -34,6 +35,12 @@ export function Team() {
   const dialog = useDialog();
   const { user } = useAuth();
   const isDirector = user?.role === 'DIRECTOR';
+  /*
+   * Ставки клинеров — зарплатный фонд компании. Состав бригад ведут все
+   * сотрудники, а суммы видит только руководитель: сервер их и не присылает,
+   * поэтому показывать поле остальным нечем — вышло бы «undefined с/смена».
+   */
+  const showRates = userSeesFinance(user);
 
   const { data: staff } = useFetch<Manager[]>(
     isDirector ? '/users' : '/users/managers',
@@ -302,10 +309,12 @@ export function Team() {
                             {c.phone || 'телефон не указан'}
                           </div>
                         </div>
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
-                          <Wallet className="h-3.5 w-3.5 text-navy-600" />
-                          {c.rate} с/смена
-                        </span>
+                        {showRates && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
+                            <Wallet className="h-3.5 w-3.5 text-navy-600" />
+                            {c.rate} с/смена
+                          </span>
+                        )}
                         {isLeader && c.duties && (
                           <button
                             onClick={() =>
@@ -368,10 +377,12 @@ export function Team() {
                     {c.phone || 'телефон не указан'}
                   </div>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
-                  <Wallet className="h-3.5 w-3.5 text-navy-600" />
-                  {c.rate} с/смена
-                </span>
+                {showRates && (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
+                    <Wallet className="h-3.5 w-3.5 text-navy-600" />
+                    {c.rate} с/смена
+                  </span>
+                )}
                 <button
                   onClick={() => setEditCleaner(c)}
                   className="rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
@@ -446,6 +457,7 @@ export function Team() {
         <BrigadeCostModal
           brigade={brigadeDrill.brigade}
           members={brigadeDrill.members}
+          showRates={showRates}
           onPick={(c) => {
             setBrigadeDrill(null);
             setEditCleaner(c);
@@ -461,19 +473,24 @@ export function Team() {
  * Состав бригады со ставками и стоимостью её выезда. На самой карточке ставки
  * тоже видны, но сумму «сколько стоит смена этой бригады» никто не считает
  * глазами — а именно она нужна, когда прикидываешь себестоимость заказа.
+ *
+ * Без доступа к финансам окно остаётся полезным: показывает состав и роли,
+ * но без единой суммы — ставок в данных просто нет.
  */
 function BrigadeCostModal({
   brigade,
   members,
+  showRates,
   onPick,
   onClose,
 }: {
   brigade: Brigade;
   members: Cleaner[];
+  showRates: boolean;
   onPick: (cleaner: Cleaner) => void;
   onClose: () => void;
 }) {
-  const total = members.reduce((s, c) => s + c.rate, 0);
+  const total = members.reduce((s, c) => s + (c.rate ?? 0), 0);
 
   return (
     <DetailModal
@@ -484,11 +501,21 @@ function BrigadeCostModal({
       <DetailStats
         items={[
           { label: 'В бригаде', value: `${members.length} чел.` },
-          { label: 'Смена бригады', value: `${total} сомони`, tone: 'success' },
-          {
-            label: 'Средняя ставка',
-            value: members.length ? `${Math.round(total / members.length)} сомони` : '—',
-          },
+          ...(showRates
+            ? [
+                {
+                  label: 'Смена бригады',
+                  value: `${total} сомони`,
+                  tone: 'success' as const,
+                },
+                {
+                  label: 'Средняя ставка',
+                  value: members.length
+                    ? `${Math.round(total / members.length)} сомони`
+                    : '—',
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -520,15 +547,21 @@ function BrigadeCostModal({
                 <span className="text-navy-600">Клинер</span>
               ),
           },
-          {
-            key: 'rate',
-            header: 'Ставка',
-            align: 'right',
-            cell: (c) => <span className="font-bold text-navy-900">{c.rate} с</span>,
-          },
+          ...(showRates
+            ? [
+                {
+                  key: 'rate',
+                  header: 'Ставка',
+                  align: 'right' as const,
+                  cell: (c: Cleaner) => (
+                    <span className="font-bold text-navy-900">{c.rate} с</span>
+                  ),
+                },
+              ]
+            : []),
         ]}
         footer={
-          members.length > 0 ? (
+          showRates && members.length > 0 ? (
             <tr className="border-t border-navy-100 font-bold text-navy-900">
               <td className="px-3 py-2" colSpan={2}>
                 Стоимость одной смены бригады
@@ -540,7 +573,9 @@ function BrigadeCostModal({
       />
 
       <p className="mt-3 text-xs text-navy-600">
-        Нажмите на клинера, чтобы изменить его ставку или бригаду.
+        {showRates
+          ? 'Нажмите на клинера, чтобы изменить его ставку или бригаду.'
+          : 'Нажмите на клинера, чтобы изменить его данные или бригаду.'}
       </p>
     </DetailModal>
   );
@@ -683,6 +718,15 @@ function CleanerModal({
   }) => void;
 }) {
   const toast = useToast();
+  const { user } = useAuth();
+  /*
+   * Ставка — зарплата клинера: её видит и меняет только руководитель, сервер
+   * вырезает её из ответа остальным. Поле обязано быть скрыто и здесь: иначе
+   * менеджер открыл бы карточку с пустой ставкой, форма подставила бы 230 и
+   * запрос ушёл бы с чужой зарплатой — сервер ответил бы 403, а на вид
+   * «сохранение просто не работает».
+   */
+  const canEditRate = userSeesFinance(user);
   const [fullName, setFullName] = useState(cleaner?.fullName ?? '');
   const [phone, setPhone] = useState(cleaner?.phone ?? '');
   const [rate, setRate] = useState(String(cleaner?.rate ?? 230));
@@ -695,7 +739,8 @@ function CleanerModal({
     onSubmit({
       fullName: fullName.trim(),
       phone: phone.trim() || null, // null очищает телефон (undefined бы игнорировался)
-      rate: rate ? Number(rate) : undefined, // пустое поле — ставку не менять
+      // пустое поле или нет доступа к ставкам — ставку не трогаем
+      rate: canEditRate && rate ? Number(rate) : undefined,
       brigadeId: brigadeId || null,
     });
     toast.success(cleaner ? 'Сохранено' : 'Клинер добавлен');
@@ -720,19 +765,21 @@ function CleanerModal({
         <PhoneInput value={phone} onChange={setPhone} />
         {/* на телефоне два поля в ряд не влезают — подпись ломалась в три строки */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">Ставка, сомони/смена</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input"
-              value={rate}
-              onChange={(e) =>
-                setRate(e.target.value.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, ''))
-              }
-              placeholder="230"
-            />
-          </div>
+          {canEditRate && (
+            <div>
+              <label className="label">Ставка, сомони/смена</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="input"
+                value={rate}
+                onChange={(e) =>
+                  setRate(e.target.value.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, ''))
+                }
+                placeholder="230"
+              />
+            </div>
+          )}
           <div>
             <label className="label">Бригада</label>
             <select

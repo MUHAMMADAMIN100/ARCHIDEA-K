@@ -30,23 +30,25 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
-import { userManagesTasks, userSeesAll, userSeesTrash } from '../types';
+import { userSeesTrash } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
-  roles?: Role[]; // если не указано — доступно всем
-  finance?: boolean; // финансовый раздел — скрыт от ops-менеджеров
-  seesAll?: boolean; // только расширенный доступ (директор + ops-менеджер)
-  tasksAll?: boolean; // полный доступ к задачам (ТЗ 1.2 — включая Ироду)
-  trash?: boolean; // корзина — по личному праву сотрудника
+  roles?: Role[]; // если не указано — доступно всем сотрудникам
+  trash?: boolean; // корзина — руководитель с личным правом
 }
 
 /**
  * Разделов стало пятнадцать — плоским списком в них уже не сориентироваться,
  * поэтому меню сгруппировано по смыслу работы.
+ *
+ * Правило доступа простое: сотрудник работает во всех разделах, кроме денег
+ * компании и управления доступами. Закрыты ровно четыре пункта — «Доходы и
+ * расходы», «Сотрудники», «Безопасность» и «Корзина»; всё остальное открыто.
+ * Внутри общих разделов суммы (ставки, выплаты, выручка) прячет бэкенд.
  */
 interface NavGroup {
   title: string;
@@ -61,9 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/funnel', label: 'Воронка', icon: Filter },
       { to: '/clients', label: 'Клиенты', icon: Users },
       { to: '/tasks', label: 'Задачи', icon: CheckSquare },
-      // календарь задач — вместе с доступом к задачам, иначе доступ Ироды
-      // получается наполовину нерабочим
-      { to: '/calendar', label: 'Календарь', icon: CalendarRange, tasksAll: true },
+      { to: '/calendar', label: 'Календарь', icon: CalendarRange },
     ],
   },
   {
@@ -85,16 +85,16 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Финансы',
     items: [
       { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'] },
-      { to: '/reports', label: 'Ведомости', icon: FileText, finance: true },
+      { to: '/reports', label: 'Ведомости', icon: FileText },
       { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
     ],
   },
   {
     title: 'Управление',
     items: [
-      { to: '/tariffs', label: 'Услуги и цены', icon: Tags, roles: ['DIRECTOR'] },
+      { to: '/tariffs', label: 'Услуги и цены', icon: Tags },
       { to: '/users', label: 'Сотрудники', icon: UserCog, roles: ['DIRECTOR'] },
-      { to: '/history', label: 'История изменений', icon: History, seesAll: true },
+      { to: '/history', label: 'История изменений', icon: History },
       { to: '/trash', label: 'Корзина', icon: Trash2, trash: true },
       { to: '/security', label: 'Безопасность', icon: ShieldCheck, roles: ['DIRECTOR'] },
     ],
@@ -118,13 +118,8 @@ export function Layout() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  // ops-менеджер (canManageOps) видит всё как директор, но БЕЗ финансовых разделов
-  const isOps = !!user?.canManageOps && user.role !== 'DIRECTOR';
   const visible = (i: NavItem) => {
     if (i.roles && !(user && i.roles.includes(user.role))) return false;
-    if (i.finance && isOps) return false;
-    if (i.seesAll && !userSeesAll(user)) return false;
-    if (i.tasksAll && !userManagesTasks(user)) return false;
     if (i.trash && !userSeesTrash(user)) return false;
     return true;
   };
@@ -157,9 +152,12 @@ export function Layout() {
       '/reports',
       '/users/managers',
       '/reminders/counts',
-      '/trash/counts',
+      '/tariffs',
     ];
-    if (user.role === 'DIRECTOR') urls.push('/tariffs', '/users');
+    // разделы, закрытые от менеджеров: греть их всем — значит гарантированно
+    // получить 403 на каждом входе и зашумить журнал сервера
+    if (userSeesTrash(user)) urls.push('/trash/counts');
+    if (user.role === 'DIRECTOR') urls.push('/users');
 
     let i = 0;
     let timer: ReturnType<typeof setTimeout>;
