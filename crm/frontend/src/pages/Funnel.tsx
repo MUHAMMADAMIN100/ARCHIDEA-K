@@ -124,24 +124,36 @@ function OrderCardBody({
         {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
       </div>
       {/*
-        Главное число карточки — полная стоимость заказа: это то, что
-        компания на нём заработала. Долг и факт оплаты идут припиской, но
-        сумму заказа не подменяют (раньше оплаченный заказ показывал «0»).
+        Главное число карточки — сколько ещё предстоит получить: заказчик
+        просил видеть в воронке именно остаток, а не первоначальную сумму.
+        Полная стоимость идёт припиской, чтобы она не потерялась. Отдельный
+        случай — заказ оплачен целиком: остаток нулевой, и вместо «0 сомони»
+        показываем «Оплачен» и полную сумму, иначе заработанные деньги
+        выглядели бы как ноль.
       */}
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-navy-700">
-          {formatPrice(orderTotal(o))}
-          {(o.paidAmount ?? 0) > 0 &&
-            (orderDue(o) > 0 ? (
-              <span className="ml-1 text-xs font-bold text-red-700">
-                долг {orderDue(o).toLocaleString('ru-RU')}
+        {(o.paidAmount ?? 0) > 0 && orderDue(o) === 0 ? (
+          <span className="text-sm font-bold text-emerald-700">
+            Оплачен
+            <span className="ml-1 text-xs font-medium text-navy-600">
+              {formatPrice(orderTotal(o))}
+            </span>
+          </span>
+        ) : (
+          <span
+            className={`text-sm font-bold ${
+              (o.paidAmount ?? 0) > 0 ? 'text-red-700' : 'text-navy-700'
+            }`}
+          >
+            {(o.paidAmount ?? 0) > 0 && 'Долг '}
+            {formatPrice(orderDue(o))}
+            {(o.paidAmount ?? 0) > 0 && (
+              <span className="ml-1 text-xs font-medium text-navy-600">
+                из {orderTotal(o).toLocaleString('ru-RU')}
               </span>
-            ) : (
-              <span className="ml-1 text-xs font-medium text-emerald-700">
-                оплачен
-              </span>
-            ))}
-        </span>
+            )}
+          </span>
+        )}
         {o.cleaners && o.cleaners.length > 0 && (
           <span className="text-xs text-navy-600">👥 {o.cleaners.length}</span>
         )}
