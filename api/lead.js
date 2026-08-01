@@ -87,7 +87,17 @@ export default async function handler(req, res) {
   const apiUrl = process.env.CRM_API_URL;
   const apiKey = process.env.CRM_INTAKE_KEY;
   if (!apiUrl || !apiKey) {
-    // CRM не подключена — заявка всё равно уходит в Telegram на фронте
+    /*
+     * CRM не подключена — принять заявку НЕКУДА. Другого канала у сайта нет:
+     * отправка в Telegram из браузера убрана вместе с токеном бота.
+     *
+     * Поэтому 503 здесь — не «мелкая неполадка», а потерянный заказ. Сайт
+     * покажет человеку экран «позвоните нам», но переменные CRM_API_URL и
+     * CRM_INTAKE_KEY обязаны быть заданы в окружении Vercel.
+     */
+    console.error(
+      '[lead] ЗАЯВКА НЕ ПРИНЯТА: не заданы CRM_API_URL и/или CRM_INTAKE_KEY',
+    );
     return res.status(503).json({ error: 'CRM is not configured' });
   }
 

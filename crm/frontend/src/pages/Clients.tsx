@@ -496,7 +496,12 @@ export function AddClientModal({
           seats: isFurniture ? toInt(seats) : undefined,
           estimatedPrice: toInt(price),
           pricePerSqm: unitPrice || undefined,
-          finalPrice: toInt(price) || undefined,
+          /*
+           * Итог НЕ отправляем: его считает сервер, и только он знает про
+           * постоянную скидку клиента. Пока форма слала свою цифру, скидка
+           * не попадала в сумму, а заказ вдобавок помечался «задан вручную» —
+           * то есть переставал пересчитываться и дальше.
+           */
         }
       : null;
     onCreate(

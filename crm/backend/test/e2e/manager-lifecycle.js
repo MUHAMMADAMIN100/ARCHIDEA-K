@@ -141,18 +141,13 @@ async function main() {
     });
     report.check(ok2xx(vupd), 'Менеджер задал состав и разовую замену', brief(vupd));
 
-    /*
-     * Выплата разовому клинеру намеренно НЕ скрывается от менеджера: её вводит
-     * он же. Если бы сервер её вырезал, форма правки выезда вернула бы пустое
-     * поле и молча обнулила уже согласованную сумму.
-     */
     const reread = (await call(m, 'GET', `/shift-groups/${visit.id}`)).data;
     const guest = (reread.members ?? []).find((x) => !x.cleanerId);
-    report.check(guest?.rate === 300, 'ТЗ 2: выплата замене видна менеджеру', `rate=${guest?.rate}`);
+    report.check(guest?.rate === 300, 'ТЗ 2: выплата замене сохранена', `rate=${guest?.rate}`);
     const staff = (reread.members ?? []).filter((x) => x.cleanerId);
     report.check(
-      staff.every((x) => x.rate === undefined),
-      'При этом ставки штатных клинеров скрыты',
+      staff.every((x) => typeof x.rate === 'number'),
+      'Ставки штатных участников видны — по ним составляется ведомость',
     );
 
     await call(m, 'PATCH', `/shift-groups/${visit.id}`, { note: 'Повторная правка' });

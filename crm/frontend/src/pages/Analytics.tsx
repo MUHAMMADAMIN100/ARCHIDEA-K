@@ -130,6 +130,12 @@ export function Analytics() {
   const query = new URLSearchParams();
   if (period.from) query.set('from', period.from);
   if (period.to) query.set('to', period.to);
+  /*
+   * «Всё время» — это пустой диапазон, и без явного признака сервер понимал
+   * его как «параметры не переданы» и молча подставлял текущий месяц. Человек
+   * выбирал «Всё время», а видел цифры за месяц — и никак не мог этого понять.
+   */
+  if (!period.from && !period.to) query.set('period', 'all');
 
   const { data, loading, error, reload } = useFetch<AnalyticsFull>(
     `/analytics/full?${query.toString()}`,
@@ -957,6 +963,8 @@ function WorkDrillModal({
   if (drill.key) query.set('key', drill.key);
   if (from) query.set('from', from);
   if (to) query.set('to', to);
+  // пустой диапазон = «всё время»; без признака сервер взял бы текущий месяц
+  if (!from && !to) query.set('period', 'all');
 
   const { data, loading, error, reload } = useFetch<{
     kind: 'visits' | 'shifts';

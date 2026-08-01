@@ -127,16 +127,37 @@ export class ClientsService {
     const fullName = (data.fullName || '').trim().slice(0, 120); // ограничение длины
     const existing = await this.prisma.client.findUnique({ where: { phone } });
     if (existing) {
-      // Клиент из корзины возвращается вместе со своей историей: телефон
-      // уникален, и заводить дубль на тот же номер нельзя.
-      const restored = await this.prisma.client.update({
-        where: { id: existing.id },
-        data: {
-          lastContactAt: new Date(),
-          ...(existing.deletedAt
-            ? { deletedAt: null, deletedById: null, deleteReason: null }
-            : {}),
-        },
+      if (!existing.deletedAt) {
+        const touched = await this.prisma.client.update({
+          where: { id: existing.id },
+          data: { lastContactAt: new Date() },
+        });
+        return { client: touched, created: false };
+      }
+
+      /*
+       * Клиент лежал в корзине и снова обратился — возвращаем его ВМЕСТЕ
+       * с историей.
+       *
+       * Раньше снимался флаг удаления только с самого клиента, а его заказы,
+       * КП и напоминания оставались в корзине: карточка открывалась пустой,
+       * и вся история продаж по человеку выглядела стёртой. При этом завести
+       * его заново нельзя — телефон уникален.
+       *
+       * Возвращаем только то, что удалили ВМЕСТЕ с ним (тот же штамп времени):
+       * заказ, отправленный в корзину отдельно и раньше, должен там и остаться.
+       */
+      const deletedAt = existing.deletedAt;
+      const restore = { deletedAt: null, deletedById: null, deleteReason: null };
+      const restored = await this.prisma.$transaction(async (tx) => {
+        const client = await tx.client.update({
+          where: { id: existing.id },
+          data: { ...restore, lastContactAt: new Date() },
+        });
+        await tx.order.updateMany({ where: { clientId: existing.id, deletedAt }, data: restore });
+        await tx.proposal.updateMany({ where: { clientId: existing.id, deletedAt }, data: restore });
+        await tx.reminder.updateMany({ where: { clientId: existing.id, deletedAt }, data: restore });
+        return client;
       });
       return { client: restored, created: false };
     }

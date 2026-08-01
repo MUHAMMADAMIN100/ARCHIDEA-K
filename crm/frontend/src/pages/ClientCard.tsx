@@ -651,7 +651,12 @@ function AddOrderModal({
       seats: isFurniture ? toInt(seats) : undefined,
       estimatedPrice: toInt(estimatedPrice),
       pricePerSqm: unitPrice || undefined,
-      finalPrice: toInt(estimatedPrice) || undefined,
+      /*
+       * Итог НЕ отправляем: его считает сервер — только он знает про
+       * постоянную скидку клиента. Своя цифра из формы съедала скидку и
+       * помечала заказ «задан вручную», после чего он переставал
+       * пересчитываться вовсе.
+       */
       managerId: managerId || undefined,
       cleanerIds: cleanerIds.length > 0 ? cleanerIds : undefined,
     });

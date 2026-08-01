@@ -1,4 +1,5 @@
 import { CleaningType, Prisma } from '@prisma/client';
+import { dayKey, dayUTC } from '../common/time/dushanbe';
 
 /**
  * Черновик платёжной ведомости из заказа.
@@ -93,7 +94,22 @@ export function reportDataFromOrder(
     clientName: order.client?.fullName ?? 'Клиент',
     clientPhone: order.client?.phone ?? null,
     address: order.address ?? null,
-    workDate: order.scheduledDate ?? order.closedAt ?? order.createdAt,
+    /*
+     * Дата работ — КАЛЕНДАРНЫЙ ДЕНЬ, а не момент времени.
+     *
+     * У заказа scheduledDate и closedAt — точные отметки времени. Пока они
+     * попадали в ведомость как есть, приёмка создавала смену не полночью,
+     * а, скажем, в 05:00. Смена уникальна по паре «клинер + дата», поэтому
+     * такая запись НЕ считалась дублем к обычной смене того же дня — человеку
+     * начислялся день дважды. Вдобавок выборки за период идут по полуночи
+     * UTC, и смена из ведомости в них не попадала вовсе.
+     *
+     * День берём по Душанбе: заказ, закрытый в час ночи, относится к своим
+     * суткам, а не к предыдущим.
+     */
+    workDate: dayUTC(
+      dayKey(order.scheduledDate ?? order.closedAt ?? order.createdAt),
+    ),
     unitsLabel: volumeLabel(order),
     // скидка переносится из заказа — в ведомости её не вводят заново
     discount: order.discount ?? 0,

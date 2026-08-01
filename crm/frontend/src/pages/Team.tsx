@@ -36,11 +36,11 @@ export function Team() {
   const { user } = useAuth();
   const isDirector = user?.role === 'DIRECTOR';
   /*
-   * Ставки клинеров — зарплатный фонд компании. Состав бригад ведут все
-   * сотрудники, а суммы видит только руководитель: сервер их и не присылает,
-   * поэтому показывать поле остальным нечем — вышло бы «undefined с/смена».
+   * Ставки клинеров видит каждый сотрудник (решение владельца): по ним он
+   * составляет платёжную ведомость. МЕНЯТЬ ставку вправе только руководитель —
+   * это проверяет сервер, а форма ниже прячет само поле.
    */
-  const showRates = userSeesFinance(user);
+  const showRates = true;
 
   const { data: staff } = useFetch<Manager[]>(
     isDirector ? '/users' : '/users/managers',

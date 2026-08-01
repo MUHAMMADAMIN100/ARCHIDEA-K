@@ -105,26 +105,37 @@ async function main() {
     }
   }
 
-  report.section('СТАВКИ КЛИНЕРОВ — ЗАРПЛАТА, А НЕ ОПЕРАЦИОННЫЕ ДАННЫЕ');
-  const dirCleaners = (await call(dir, 'GET', '/cleaners')).data ?? [];
+  /*
+   * Решение владельца: ставку клинера сотрудник ВИДИТ — без неё нельзя
+   * составить платёжную ведомость. Закрыты не отдельные ставки, а сводные
+   * деньги компании: выплаты за период, штрафы, премии, доходы и расходы.
+   * МЕНЯТЬ ставку по-прежнему вправе только руководитель.
+   */
+  report.section('СТАВКИ КЛИНЕРОВ — ВИДНЫ, НО НЕ РЕДАКТИРУЕМЫ');
   const mgrCleaners = (await call(mgr, 'GET', '/cleaners')).data ?? [];
   report.check(
-    dirCleaners.some((c) => c.rate !== undefined),
-    'Руководитель ставки видит',
-  );
-  report.check(
-    mgrCleaners.every((c) => c.rate === undefined),
-    'Менеджеру ставки не приходят',
+    mgrCleaners.some((c) => typeof c.rate === 'number'),
+    'Менеджер ставки видит — иначе не составить ведомость',
   );
   const mgrBrigades = (await call(mgr, 'GET', '/brigades')).data ?? [];
   report.check(
-    mgrBrigades.every((b) => (b.cleaners ?? []).every((c) => c.rate === undefined)),
-    'В составе бригад ставок тоже нет',
+    mgrBrigades.every((b) => (b.cleaners ?? []).every((c) => typeof c.rate === 'number')),
+    'В составе бригад ставки тоже приходят',
   );
-  const mgrShifts = (await call(mgr, 'GET', '/payroll/shifts')).data ?? [];
+  const someCleaner = mgrCleaners[0];
+  const rateChange = await call(mgr, 'PATCH', `/cleaners/${someCleaner.id}`, {
+    rate: (someCleaner.rate ?? 230) + 100,
+  });
   report.check(
-    mgrShifts.every((s) => s.rate === undefined),
-    'В списке смен начислений тоже нет',
+    rateChange.status === 403,
+    'Но изменить ставку менеджер не может',
+    String(rateChange.status),
+  );
+  const payroll = await call(mgr, 'GET', '/payroll');
+  report.check(
+    payroll.status === 403,
+    'Сводка выплат за период (зарплатный фонд) закрыта',
+    String(payroll.status),
   );
 
   report.section('ВЫРУЧКА КОМПАНИИ');

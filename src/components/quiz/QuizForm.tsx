@@ -29,6 +29,8 @@ function todayISO(): string {
 export function QuizForm() {
   const [step, setStep] = useState(0); // 0,1,2
   const [done, setDone] = useState(false);
+  // null — ответа от сервера ещё нет; false — заявка не дошла
+  const [delivered, setDelivered] = useState<boolean | null>(null);
 
   // при загрузке — дослать заявки, которые не ушли в прошлый раз (сбой сети)
   useEffect(() => {
@@ -100,8 +102,12 @@ export function QuizForm() {
 
   const handleSubmit = () => {
     if (!validateContacts()) return;
-    // Оптимистично: показываем «Заявка отправлена» мгновенно,
-    // отправка уходит в фон (при сбое — переотправится при след. загрузке).
+    /*
+     * Оптимистично: экран «Заявка отправлена» показываем сразу, отправка идёт
+     * в фоне. Но результат обязательно дожидаемся: если заявка не дошла,
+     * экран сменится на «позвоните нам». Раньше человек в любом случае видел
+     * успех и ждал звонка, которого не будет, — обращения в CRM попросту нет.
+     */
     submitOrderOptimistic(
       {
         calculator: calc,
@@ -111,6 +117,7 @@ export function QuizForm() {
         breakdown, // расчёт по живым ценам — для консистентного текста заявки
       },
       honeypot,
+      (ok) => setDelivered(ok),
     );
     setDone(true);
   };
@@ -121,6 +128,7 @@ export function QuizForm() {
         total={breakdown.total}
         name={contact.name}
         phone={contact.phone}
+        delivered={delivered}
       />
     );
   }

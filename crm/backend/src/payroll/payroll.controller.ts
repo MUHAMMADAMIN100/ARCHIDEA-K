@@ -16,7 +16,7 @@ import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
-import { managesOps, seesFinance } from '../common/permissions';
+import { managesOps } from '../common/permissions';
 import { CreateFineDto, MarkDayDto } from './dto/payroll.dto';
 
 /**
@@ -65,24 +65,21 @@ export class PayrollController {
   }
 
   /**
-   * Отметки смен: кто в какой день работал. Это операционные данные, они нужны
-   * всем. Ставка в строке смены — уже деньги, поэтому её вырезаем тем, кому
-   * финансы закрыты: иначе список смен показывал бы зарплату всей бригады.
+   * Отметки смен: кто в какой день работал и по какой ставке.
+   *
+   * Это операционные данные — на них сотрудник опирается, когда составляет
+   * платёжную ведомость. Закрыта не отдельная смена, а СВОДКА выплат за
+   * период (метод summary выше) — то есть зарплатный фонд компании целиком.
    */
   @Get('shifts')
-  async listShifts(
+  listShifts(
     @CurrentUser() user: AuthUser,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('cleanerId') cleanerId?: string,
   ) {
     this.assertOps(user);
-    const shifts = await this.service.listShifts(from, to, cleanerId);
-    if (seesFinance(user)) return shifts;
-    return shifts.map(({ rate: _rate, cleaner, ...shift }) => ({
-      ...shift,
-      ...(cleaner ? { cleaner: { ...cleaner, rate: undefined } } : {}),
-    }));
+    return this.service.listShifts(from, to, cleanerId);
   }
 
   @Post('shifts/day')

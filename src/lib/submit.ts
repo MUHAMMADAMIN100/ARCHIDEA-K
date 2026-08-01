@@ -156,13 +156,27 @@ export async function flushPendingOrders(): Promise<void> {
 /**
  * Оптимистичная отправка: НЕ блокирует интерфейс.
  * Запускается в фоне; при сбое — заявка сохраняется и переотправляется позже.
+ *
+ * onResult обязателен по смыслу, даже если формально необязателен: без него
+ * человеку показывали «Заявка отправлена» независимо от того, дошла она или
+ * нет. Если на сервере не заданы переменные CRM, каждая заявка отвечала 503,
+ * ложилась в очередь и переотправлялась по тому же нерабочему адресу — то
+ * есть терялась молча, а клиент был уверен, что ему перезвонят.
  */
-export function submitOrderOptimistic(order: OrderPayload, honeypot = ''): void {
+export function submitOrderOptimistic(
+  order: OrderPayload,
+  honeypot = '',
+  onResult?: (ok: boolean) => void,
+): void {
   trySend(order, honeypot)
     .then((ok) => {
       if (!ok) saveToQueue({ order, honeypot });
+      onResult?.(ok);
     })
-    .catch(() => saveToQueue({ order, honeypot }));
+    .catch(() => {
+      saveToQueue({ order, honeypot });
+      onResult?.(false);
+    });
 }
 
 /**

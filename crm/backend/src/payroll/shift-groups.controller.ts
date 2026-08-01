@@ -30,9 +30,10 @@ import {
  * Состав выезда и адрес — операционные данные, они нужны и логисту, и отделу
  * продаж, поэтому вести выезды может любой сотрудник (право `ops:manage`).
  *
- * А вот ставки участников — деньги. Раньше они уезжали в браузер вместе с
- * составом группы, то есть зарплаты бригады видел кто угодно. Теперь суммы
- * вырезаются из ответа всем, у кого нет доступа к финансам.
+ * Ставки участников сотрудник видит: по этому же составу он потом составляет
+ * платёжную ведомость, а она вся и есть «кому сколько заплатить». Закрыты
+ * не отдельные ставки, а сводные деньги компании — выплаты за период,
+ * штрафы, премии и выручка (см. permissions.ts).
  */
 @UseGuards(JwtAuthGuard)
 @Controller('shift-groups')
@@ -45,69 +46,20 @@ export class ShiftGroupsController {
     }
   }
 
-  /**
-   * Убирает из выезда чужие зарплаты для тех, кому финансы закрыты.
-   *
-   * Скрывается ставка ШТАТНОГО клинера — это его зарплата из справочника.
-   * Выплата разовому клинеру (ТЗ 2) остаётся: её вводит руками тот же человек,
-   * который заводит выезд, и она относится только к этому выезду. Если её
-   * тоже вырезать, форма правки выезда вернёт пустое поле и молча обнулит
-   * уже согласованную выплату замене.
-   */
-  private hideMoney<T extends Record<string, any>>(group: T, user: AuthUser): T {
-    if (seesFinance(user)) return group;
-
-    type MemberLike = {
-      rate?: number;
-      cleanerId?: string | null;
-      isGuest?: boolean;
-    };
-    const stripStaffRate = <M extends MemberLike>(member: M): M => {
-      const isGuest = member.isGuest === true || !member.cleanerId;
-      if (isGuest) return member;
-      const { rate: _rate, ...rest } = member;
-      return rest as M;
-    };
-
-    const snapshot = group.closedSnapshot as
-      | { members?: { cleanerId?: string | null; rate?: number }[] }
-      | null
-      | undefined;
-
-    return {
-      ...group,
-      members: (group.members ?? []).map(stripStaffRate),
-      // сам факт начисленных смен оставляем — по нему видно, что выезд закрыт
-      shifts: (group.shifts ?? []).map(
-        ({ rate: _rate, ...shift }: { rate?: number }) => shift,
-      ),
-      ...(snapshot?.members
-        ? {
-            closedSnapshot: {
-              ...snapshot,
-              members: snapshot.members.map(stripStaffRate),
-            },
-          }
-        : {}),
-    };
-  }
-
   @Get()
-  async list(
-    @CurrentUser() user: AuthUser,
+  list(
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: ShiftGroupStatus,
     @Query('orderId') orderId?: string,
     @Query('search') search?: string,
   ) {
-    const groups = await this.service.list({ from, to, status, orderId, search });
-    return groups.map((g) => this.hideMoney(g, user));
+    return this.service.list({ from, to, status, orderId, search });
   }
 
   @Get(':id')
-  async getOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.hideMoney(await this.service.getOne(id), user);
+  getOne(@Param('id') id: string) {
+    return this.service.getOne(id);
   }
 
   @Get(':id/history')
@@ -115,36 +67,31 @@ export class ShiftGroupsController {
     return this.service.history(id);
   }
 
-  /*
-   * Ответы на запись фильтруются тем же hideMoney, что и чтение. Без этого
-   * ставки всей бригады возвращались в ответе на сохранение выезда — то есть
-   * запрет обходился одним нажатием «Сохранить».
-   */
   @Post()
-  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateShiftGroupDto) {
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateShiftGroupDto) {
     this.assertManages(user);
-    return this.hideMoney(await this.service.create(user, dto), user);
+    return this.service.create(user, dto);
   }
 
   @Patch(':id')
-  async update(
+  update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdateShiftGroupDto,
   ) {
     this.assertManages(user);
-    return this.hideMoney(await this.service.update(user, id, dto), user);
+    return this.service.update(user, id, dto);
   }
 
   /** Закрытие выезда: архивный слепок + начисление смен участникам */
   @Post(':id/close')
-  async close(
+  close(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: CloseShiftGroupDto,
   ) {
     this.assertManages(user);
-    return this.hideMoney(await this.service.close(user, id, dto), user);
+    return this.service.close(user, id, dto);
   }
 
   @Delete(':id')

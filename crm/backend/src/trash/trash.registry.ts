@@ -128,9 +128,15 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
     cascade: [
       { type: 'proposal', fk: 'orderId' },
       { type: 'reminder', fk: 'orderId' },
+      /*
+       * Доход по заказу уходит в корзину и возвращается ВМЕСТЕ с ним.
+       * Без этого удалённый оплаченный заказ пропадал из воронки и аналитики,
+       * но оставался в книге доходов — прибыль компании завышалась.
+       */
+      { type: 'financeEntry', fk: 'orderId' },
     ],
-    // Proposal/Reminder/FinanceEntry/ShiftGroup/OrderChecklist на заказ отвязываются
-    // или каскадируются самой БД (SetNull/Cascade в схеме) — доп. проверка не нужна.
+    // ShiftGroup и OrderChecklist на заказ отвязываются или каскадируются самой
+    // БД (SetNull/Cascade в схеме) — доп. проверка не нужна.
   },
 
   client: {

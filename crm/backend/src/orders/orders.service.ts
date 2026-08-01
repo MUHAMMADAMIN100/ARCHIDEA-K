@@ -609,6 +609,31 @@ export class OrdersService {
         include: orderDetailInclude,
       });
 
+      /*
+       * Заказ уже оплачен — доход в книге обязан следовать за его суммой.
+       *
+       * Раньше доход записывался только в момент перехода в «Оплачено».
+       * Стоило потом уточнить сумму — например, после осмотра, — и книга
+       * доходов расходилась с воронкой и аналитикой навсегда: три экрана
+       * показывали три разных числа, и сойтись они уже не могли.
+       *
+       * recordOrderIncome идемпотентен по autoKey и не трогает записи,
+       * которые руководитель правил вручную.
+       */
+      if (updated.stage === FunnelStage.PAID) {
+        await this.finance.recordOrderIncome(
+          tx,
+          {
+            id: updated.id,
+            clientId: updated.clientId,
+            finalPrice: updated.finalPrice,
+            estimatedPrice: updated.estimatedPrice,
+            closedAt: updated.closedAt,
+          },
+          user,
+        );
+      }
+
       await this.audit.log(tx, {
         user,
         entity: 'ORDER',
@@ -845,6 +870,21 @@ export class OrdersService {
         data: stamp,
       });
       await tx.reminder.updateMany({
+        where: { orderId: id, ...NOT_DELETED },
+        data: stamp,
+      });
+      /*
+       * Доход по заказу уходит в корзину вместе с ним.
+       *
+       * Иначе удалённый оплаченный заказ пропадал из воронки и аналитики
+       * (там всюду фильтр по корзине), но продолжал числиться в книге
+       * доходов — прибыль компании оказывалась завышенной на его сумму,
+       * и найти причину по экранам было невозможно.
+       *
+       * Штамп тот же, что у заказа: при восстановлении из корзины запись
+       * вернётся вместе с ним (см. cascade в trash.registry).
+       */
+      await tx.financeEntry.updateMany({
         where: { orderId: id, ...NOT_DELETED },
         data: stamp,
       });

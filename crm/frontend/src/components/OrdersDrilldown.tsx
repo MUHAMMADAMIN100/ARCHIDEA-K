@@ -37,6 +37,12 @@ export function OrdersDrilldownModal({
   if (drillKey) query.set('key', drillKey);
   if (from) query.set('from', from);
   if (to) query.set('to', to);
+  /*
+   * Пустой диапазон означает «всё время». Без явного признака сервер брал
+   * текущий месяц, и расшифровка не сходилась с цифрой, по которой её
+   * открыли, — а расхождение в аналитике убивает доверие ко всем числам.
+   */
+  if (!from && !to) query.set('period', 'all');
 
   const url = `/analytics/drilldown?${query.toString()}`;
   const { data, loading, error, reload } = useFetch<AnalyticsDrilldown>(url, {
