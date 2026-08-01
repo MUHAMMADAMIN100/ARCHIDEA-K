@@ -473,14 +473,19 @@ export function ClientCard() {
                       </div>
                     </div>
                     <div className="text-right">
+                      {/*
+                        История покупок клиента: сумма заказа целиком —
+                        столько он у нас купил. Остаток долга (если платил
+                        частями) идёт отдельной строкой.
+                      */}
                       <div className="font-bold text-navy-800">
-                        {formatPrice(orderDue(o))}
-                        {(o.paidAmount ?? 0) > 0 && (
-                          <span className="ml-1 text-xs font-normal text-navy-600">
-                            из {orderTotal(o).toLocaleString('ru-RU')}
-                          </span>
-                        )}
+                        {formatPrice(orderTotal(o))}
                       </div>
+                      {(o.paidAmount ?? 0) > 0 && orderDue(o) > 0 && (
+                        <div className="text-xs font-semibold text-red-700">
+                          долг {orderDue(o).toLocaleString('ru-RU')}
+                        </div>
+                      )}
                       {o.cleaners && o.cleaners.length > 0 && (
                         <div className="text-xs text-navy-600">
                           👥 {o.cleaners.map((c) => c.fullName).join(', ')}

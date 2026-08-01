@@ -123,21 +123,24 @@ function OrderCardBody({
       <div className="mt-1 text-xs text-navy-600">
         {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
       </div>
+      {/*
+        Главное число карточки — полная стоимость заказа: это то, что
+        компания на нём заработала. Долг и факт оплаты идут припиской, но
+        сумму заказа не подменяют (раньше оплаченный заказ показывал «0»).
+      */}
       <div className="mt-2 flex items-center justify-between">
-        <span
-          className={`text-sm font-bold ${
-            (o.paidAmount ?? 0) > 0 && orderDue(o) > 0
-              ? 'text-red-700'
-              : 'text-navy-700'
-          }`}
-        >
-          {(o.paidAmount ?? 0) > 0 && orderDue(o) > 0 && 'Долг '}
-          {formatPrice(orderDue(o))}
-          {(o.paidAmount ?? 0) > 0 && (
-            <span className="ml-1 text-xs font-medium text-navy-600">
-              из {orderTotal(o).toLocaleString('ru-RU')}
-            </span>
-          )}
+        <span className="text-sm font-bold text-navy-700">
+          {formatPrice(orderTotal(o))}
+          {(o.paidAmount ?? 0) > 0 &&
+            (orderDue(o) > 0 ? (
+              <span className="ml-1 text-xs font-bold text-red-700">
+                долг {orderDue(o).toLocaleString('ru-RU')}
+              </span>
+            ) : (
+              <span className="ml-1 text-xs font-medium text-emerald-700">
+                оплачен
+              </span>
+            ))}
         </span>
         {o.cleaners && o.cleaners.length > 0 && (
           <span className="text-xs text-navy-600">👥 {o.cleaners.length}</span>
@@ -446,6 +449,13 @@ export function Funnel() {
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div ref={boardRef} className="board-scroll flex gap-4">
           {board.map((col) => {
+            /*
+             * Сумма этапа — полная стоимость заказов, а не остаток к оплате:
+             * это деньги, которые компания на этапе заработала. Считаем по
+             * карточкам колонки, а не берём готовое число сервера, — иначе
+             * при фильтре по менеджеру шапка показывала бы итог всей доски.
+             */
+            const total = col.orders.reduce((sum, o) => sum + orderTotal(o), 0);
             // долг по этапу: сумма остатков заказов, где оплата ещё не полная
             const debt = col.orders.reduce(
               (sum, o) => sum + ((o.paidAmount ?? 0) > 0 ? orderDue(o) : 0),
@@ -466,7 +476,8 @@ export function Funnel() {
               {/*
                 Шапка этапа: название, сумма денег и количество карточек.
                 Сумма нужна руководителю не меньше количества — по ней видно,
-                сколько денег «висит» на каждом шаге воронки.
+                сколько денег стоит каждый шаг воронки. Отдельной строкой —
+                сколько из этих денег ещё не получено.
               */}
               <div
                 className={`mb-3 rounded-xl border bg-white px-3 py-2 ${
@@ -489,10 +500,7 @@ export function Funnel() {
                 <div className="mt-1 text-xs text-navy-600">
                   Сумма:{' '}
                   <span className="font-bold text-navy-800">
-                    {formatPrice(
-                      col.amount ??
-                        col.orders.reduce((sum, o) => sum + orderDue(o), 0),
-                    )}
+                    {formatPrice(total)}
                   </span>
                 </div>
                 {/* сколько из этой суммы — недоплата по уже начатым заказам */}
@@ -651,8 +659,13 @@ function StageOrdersModal({
   onPick: (order: Order) => void;
   onClose: () => void;
 }) {
-  const priceOf = (o: Order) => orderDue(o);
+  // как и в шапке колонки: сумма — полная стоимость, долг — отдельно
+  const priceOf = (o: Order) => orderTotal(o);
   const sum = column.orders.reduce((s, o) => s + priceOf(o), 0);
+  const debt = column.orders.reduce(
+    (s, o) => s + ((o.paidAmount ?? 0) > 0 ? orderDue(o) : 0),
+    0,
+  );
 
   return (
     <DetailModal
@@ -664,6 +677,15 @@ function StageOrdersModal({
         items={[
           { label: 'Заказов', value: column.orders.length },
           { label: 'На сумму', value: formatPrice(sum), tone: 'success' },
+          ...(debt > 0
+            ? [
+                {
+                  label: 'Из них долг',
+                  value: formatPrice(debt),
+                  tone: 'danger' as const,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -708,7 +730,14 @@ function StageOrdersModal({
             header: 'Сумма',
             align: 'right',
             cell: (o) => (
-              <span className="font-bold text-navy-900">{formatPrice(priceOf(o))}</span>
+              <div>
+                <div className="font-bold text-navy-900">{formatPrice(priceOf(o))}</div>
+                {(o.paidAmount ?? 0) > 0 && orderDue(o) > 0 && (
+                  <div className="text-xs font-semibold text-red-700">
+                    долг {orderDue(o).toLocaleString('ru-RU')}
+                  </div>
+                )}
+              </div>
             ),
           },
         ]}

@@ -11,6 +11,7 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import {
@@ -45,6 +46,20 @@ export class AdditionalServiceDto {
   pricePerUnit?: number;
 }
 
+/** Разовый сотрудник под заказ: кого позвали и сколько отдали */
+export class OrderGuestDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  fullName: string;
+
+  /** Сколько ему отдали, сомони */
+  @IsInt()
+  @Min(0)
+  @Max(MAX_INT)
+  rate: number;
+}
+
 export class CreateOrderDto {
   @IsString() clientId: string;
   @IsOptional() @IsEnum(CleaningType) cleaningType?: CleaningType;
@@ -77,6 +92,14 @@ export class CreateOrderDto {
   @Min(0)
   @Max(MAX_INT)
   paidAmount?: number;
+
+  /** Разовые сотрудники под этот заказ */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => OrderGuestDto)
+  guestCleaners?: OrderGuestDto[];
 
   /** Дополнительные основные услуги заявки (ТЗ 1.3) */
   @IsOptional()
@@ -141,6 +164,13 @@ export class UpdateOrderDto {
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) discount?: number;
   /** Сколько клиент уже заплатил, сомони */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) paidAmount?: number;
+  /** Разовые сотрудники под этот заказ */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => OrderGuestDto)
+  guestCleaners?: OrderGuestDto[];
   /** Дополнительные основные услуги заявки (ТЗ 1.3) */
   @IsOptional()
   @IsArray()

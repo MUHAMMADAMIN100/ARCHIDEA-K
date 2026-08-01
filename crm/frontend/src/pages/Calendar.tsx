@@ -21,6 +21,7 @@ import {
   STAGE_ORDER,
   formatPrice,
   orderDue,
+  orderTotal,
 } from '../lib/labels';
 import { tempId, nowISO } from '../lib/util';
 import { useAuth } from '../auth/AuthContext';
@@ -158,8 +159,14 @@ function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
           {order.client?.fullName ?? 'Клиент'}
         </span>
       </div>
+      {/* сумма заказа целиком; если часть уже внесена — долг припиской */}
       <div className="mt-0.5 truncate pl-3 text-[11px] font-medium tabular-nums">
-        {formatPrice(orderDue(order))}
+        {formatPrice(orderTotal(order))}
+        {(order.paidAmount ?? 0) > 0 && orderDue(order) > 0 && (
+          <span className="ml-1 font-bold text-red-700">
+            долг {orderDue(order).toLocaleString('ru-RU')}
+          </span>
+        )}
       </div>
       {!compact && order.address && (
         <div className="truncate pl-3 text-[10px] opacity-80">

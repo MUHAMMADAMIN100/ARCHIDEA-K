@@ -283,6 +283,8 @@ export interface Order {
   discount?: number;
   /** Сколько клиент уже заплатил, сомони. Остаток = итог − эта сумма */
   paidAmount?: number;
+  /** Разовые сотрудники под заказ: кого позвали и сколько отдали */
+  guestCleaners?: { fullName: string; rate: number }[] | null;
   /** Дополнительные основные услуги заявки (мульти-выбор) — снапшот строк */
   additionalServices?:
     | {
@@ -322,8 +324,10 @@ export interface Order {
 export interface BoardColumn {
   stage: FunnelStage;
   label: string;
-  /** Сумма денег на этапе — считает сервер по итоговой или расчётной цене */
+  /** Полная стоимость заказов этапа — сколько на нём заработано */
   amount?: number;
+  /** Сколько из этой суммы ещё не получено (недоплата по начатым заказам) */
+  debt?: number;
   orders: Order[];
 }
 

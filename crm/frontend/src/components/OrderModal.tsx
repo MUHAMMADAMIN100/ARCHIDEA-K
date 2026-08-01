@@ -168,6 +168,8 @@ export function OrderModal({
     { key: string; qty: string; pricePerUnit: string }[]
   >([]);
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
+  // разовые сотрудники под этот заказ: кого позвали и сколько отдали
+  const [guests, setGuests] = useState<{ fullName: string; rate: string }[]>([]);
   const [error, setError] = useState('');
 
   // какой заказ открыт сейчас — чтобы поздний ответ уже закрытой/сменённой
@@ -251,6 +253,11 @@ export function OrderModal({
     Math.round(Number(pricePerSqm) || 0) * unitsNow + addSum;
   // оплата клиента: больше итога не считаем, остаток не уходит в минус
   const paidRaw = Math.max(0, Math.round(Number(paidAmount) || 0));
+  // сколько всего отдали разовым сотрудникам по этому заказу
+  const guestsTotal = guests.reduce(
+    (sum, g) => sum + Math.max(0, Math.round(Number(g.rate) || 0)),
+    0,
+  );
   const subtotalSum = workSum + extrasSum;
   // скидка не может быть больше стоимости — так же считает сервер
   const discountSum = Math.min(
@@ -296,6 +303,14 @@ export function OrderModal({
     if (!skip('preferences')) setPreferences(o.preferences ?? '');
     if (!skip('extras')) setSelectedExtras(o.extras ?? {});
     if (!skip('discount')) setDiscount(o.discount ? String(o.discount) : '');
+    if (!skip('guests')) {
+      setGuests(
+        (o.guestCleaners ?? []).map((g) => ({
+          fullName: g.fullName,
+          rate: String(g.rate ?? ''),
+        })),
+      );
+    }
     if (!skip('paidAmount')) {
       setPaidAmount(o.paidAmount ? String(o.paidAmount) : '');
     }
@@ -559,6 +574,12 @@ export function OrderModal({
         source: editSource,
         sourceDetail: editSourceDetail.trim(),
         paidAmount: paidSum,
+        guestCleaners: guests
+          .map((g) => ({
+            fullName: g.fullName.trim(),
+            rate: Math.max(0, Math.round(Number(g.rate) || 0)),
+          }))
+          .filter((g) => g.fullName.length > 1),
         additionalServices: addRows
           .filter((r) => r.qtyN > 0)
           .map((r) => ({
@@ -1426,6 +1447,81 @@ export function OrderModal({
               </div>
 
               {/* Команда */}
+              {/*
+                Разовые сотрудники под заказ (ТЗ): кого позвали на один раз и
+                сколько отдали на руки. В штат и в выплаты не попадают —
+                это запись о наличных, чтобы сумма не терялась.
+              */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <label className="label !mb-0">
+                    Разовые сотрудники (на один раз)
+                  </label>
+                  {guestsTotal > 0 && (
+                    <span className="text-xs font-semibold text-navy-700">
+                      Отдано: {formatPrice(guestsTotal)}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {guests.map((g, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      <input
+                        className="input input-sm min-w-[9rem] flex-1"
+                        value={g.fullName}
+                        maxLength={120}
+                        placeholder="Имя разового сотрудника"
+                        onChange={(e) => {
+                          markTouched('guests');
+                          setGuests((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, fullName: e.target.value } : x,
+                            ),
+                          );
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        className="input input-sm w-32"
+                        value={g.rate}
+                        placeholder="Сколько дали"
+                        aria-label="Сколько отдали, сомони"
+                        onChange={(e) => {
+                          markTouched('guests');
+                          setGuests((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, rate: e.target.value } : x,
+                            ),
+                          );
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          markTouched('guests');
+                          setGuests((prev) => prev.filter((_, j) => j !== i));
+                        }}
+                        className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Убрать разового сотрудника"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markTouched('guests');
+                      setGuests((prev) => [...prev, { fullName: '', rate: '' }]);
+                    }}
+                    className="text-sm font-medium text-brand-600 hover:underline"
+                  >
+                    + разовый сотрудник
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <label className="label !mb-0">Назначить команду (клинеры)</label>

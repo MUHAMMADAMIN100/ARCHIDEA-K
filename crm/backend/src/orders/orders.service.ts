@@ -280,18 +280,26 @@ export class OrdersService {
         stage,
         label: STAGE_LABEL[stage],
         /*
-         * Сумма денег на этапе — то, что ещё предстоит получить: полная
-         * стоимость минус уже внесённая оплата. Руководителю нужно видеть,
-         * сколько реально «висит» на каждом шаге воронки. Выручка в
-         * аналитике и книге доходов считается отдельно, по полной сумме.
+         * Сумма денег на этапе — ПОЛНАЯ стоимость заказов, то есть сколько
+         * компания на этом шаге заработала. Раньше здесь был остаток к
+         * получению, и после частичной оплаты этап «худел», а полностью
+         * оплаченный заказ показывал ноль — заработанные деньги пропадали
+         * с доски. Недоплату показываем отдельной строкой «Из них долг».
          */
         amount: inStage.reduce(
+          (sum, o) => sum + (o.finalPrice ?? o.estimatedPrice ?? 0),
+          0,
+        ),
+        /** Из этой суммы ещё не получено — остаток по частично оплаченным */
+        debt: inStage.reduce(
           (sum, o) =>
             sum +
-            Math.max(
-              0,
-              (o.finalPrice ?? o.estimatedPrice ?? 0) - (o.paidAmount ?? 0),
-            ),
+            ((o.paidAmount ?? 0) > 0
+              ? Math.max(
+                  0,
+                  (o.finalPrice ?? o.estimatedPrice ?? 0) - (o.paidAmount ?? 0),
+                )
+              : 0),
           0,
         ),
         orders: inStage,
@@ -394,6 +402,12 @@ export class OrdersService {
           sourceDetail: dto.sourceDetail?.trim() || null,
           discount,
           paidAmount: dto.paidAmount ?? 0,
+          ...(dto.guestCleaners
+            ? {
+                guestCleaners:
+                  dto.guestCleaners as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
           ...(additional !== null
             ? { additionalServices: additional as unknown as Prisma.InputJsonValue }
             : {}),
@@ -560,6 +574,10 @@ export class OrdersService {
     if (dto.discount !== undefined) data.discount = dto.discount;
     // Оплата клиента — учёт долга по заказу, на расчёт цены не влияет
     if (dto.paidAmount !== undefined) data.paidAmount = dto.paidAmount;
+    if (dto.guestCleaners !== undefined) {
+      data.guestCleaners =
+        dto.guestCleaners as unknown as Prisma.InputJsonValue;
+    }
     if (dto.additionalServices !== undefined) {
       data.additionalServices = (additional ??
         []) as unknown as Prisma.InputJsonValue;
