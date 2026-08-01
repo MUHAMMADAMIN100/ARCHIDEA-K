@@ -503,7 +503,13 @@ export function OrderModal({
       area: newArea,
       seats: newSeats,
       pricePerSqm: newPricePerSqm ?? order.pricePerSqm,
-      finalPrice: newFinalPrice ?? order.finalPrice,
+      /*
+       * В карточке показываем ровно ту сумму, которую посчитает сервер:
+       * работы + доп. услуги − скидка. Поле finalPrice хранит только стоимость
+       * работ, и подставлять его сюда нельзя — карточка показывала бы сумму
+       * без доп. услуг до первого обновления страницы.
+       */
+      finalPrice: isManualPrice ? (newFinalPrice ?? order.finalPrice) : toPaySum,
       isManualPrice,
       preferences: trimmedPrefs || null,
       address: editAddress || order.address,
@@ -530,7 +536,21 @@ export function OrderModal({
         ...(isSeatsUnit ? { seats: newSeats ?? 0 } : {}),
         address: editAddress || undefined,
         ...(newPricePerSqm != null ? { pricePerSqm: newPricePerSqm } : {}),
-        ...(newFinalPrice != null ? { finalPrice: newFinalPrice } : {}),
+        /*
+         * Итог отправляем ТОЛЬКО когда менеджер вписал сумму руками.
+         *
+         * Поле finalPrice в форме хранит стоимость работ: при смене площади
+         * оно пересчитывается как «цена за единицу × объём». Пока оно уходило
+         * на сервер безусловно, любая правка площади затирала итог этой
+         * цифрой — доп. услуги и скидка из суммы исчезали. Заказ на 150 м²
+         * с шестью окнами дешевел на 300 сомони от одного изменения площади.
+         *
+         * В остальных случаях сумму считает сервер: у него и справочник цен,
+         * и доп. услуги, и скидка.
+         */
+        ...(isManualPrice && newFinalPrice != null
+          ? { finalPrice: newFinalPrice }
+          : {}),
         isManualPrice,
         preferences: trimmedPrefs,
         extras: selectedExtras,

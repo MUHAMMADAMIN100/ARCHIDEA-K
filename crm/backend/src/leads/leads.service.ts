@@ -19,6 +19,7 @@ import { escapeHtml } from '../telegram/telegram.util';
 import { NOT_DELETED } from '../common/soft-delete';
 import { parseDate } from '../common/time/dushanbe';
 import { normalizePhone } from '../common/validation/contact';
+import { unitPrice } from '../orders/order-pricing';
 import { LeadIntakeDto } from './dto/intake.dto';
 
 const TYPE_MAP: Record<string, CleaningType> = {
@@ -108,6 +109,35 @@ export class LeadsService {
     const clamp = (v: unknown) =>
       Math.min(Math.max(0, Math.round(Number(v) || 0)), 2_000_000_000);
     const cleaningType = TYPE_MAP[dto.calculator?.cleaningTypeId ?? ''] ?? CleaningType.GENERAL;
+    const dirtLevel =
+      cleaningType === CleaningType.FURNITURE
+        ? null
+        : DIRT_MAP[dto.calculator?.dirtLevel ?? ''] ?? null;
+
+    /*
+     * Цена за единицу берётся из справочника услуг — из того же места, по
+     * которому потом пересчитывается заказ.
+     *
+     * Раньше здесь стояло total/площадь. Но total с сайта УЖЕ включает
+     * доп. услуги, поэтому в «цену за м²» попадали окна и духовка: заказ на
+     * 120 м² с допами на 330 сомони получал цену 38 с/м² вместо 35. При первой
+     * же правке заказа — даже правке одного адреса — сервер брал эти 38 как
+     * заданную вручную цену и добавлял доп. услуги ВТОРОЙ раз. Сумма клиента
+     * вырастала ровно на стоимость допов, и никто не понимал почему.
+     */
+    const tariff = await this.prisma.tariff.findFirst({
+      where: { key: cleaningType },
+      select: {
+        key: true,
+        unit: true,
+        hasLevels: true,
+        priceLight: true,
+        priceMedium: true,
+        priceHeavy: true,
+        pricePerSqm: true,
+      },
+    });
+    const perUnit = unitPrice(tariff, dirtLevel) || null;
     /*
      * Дата и время из квиза приходят строками от постороннего сайта. Раньше они
      * шли в new Date() без проверки: «31.02» или мусор превращались в Invalid Date,
@@ -127,10 +157,7 @@ export class LeadsService {
         source: LeadSource.SITE,
         cleaningType,
         serviceKey: cleaningType,
-        dirtLevel:
-          cleaningType === CleaningType.FURNITURE
-            ? null
-            : DIRT_MAP[dto.calculator?.dirtLevel ?? ''] ?? null,
+        dirtLevel,
         area:
           cleaningType === CleaningType.FURNITURE
             ? 0
@@ -141,14 +168,7 @@ export class LeadsService {
             : null,
         estimatedPrice: clamp(dto.total),
         // цена за единицу (м² или место) — чтобы было видно, из чего сложилась цена
-        pricePerSqm: (() => {
-          const total = clamp(dto.total);
-          const units =
-            cleaningType === CleaningType.FURNITURE
-              ? clamp(dto.calculator?.seats)
-              : clamp(dto.calculator?.area);
-          return units > 0 ? Math.round(total / units) : null;
-        })(),
+        pricePerSqm: perUnit,
         address: contact.address,
         preferredDate: preferred,
         preferredTime: dto.quiz?.time,

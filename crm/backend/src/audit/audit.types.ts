@@ -30,6 +30,29 @@ export interface AuditChange {
 export const FINANCIAL_ENTITIES: AuditEntity[] = ['FINANCE', 'BONUS', 'REPORT'];
 
 /**
+ * Денежные поля в журнале.
+ *
+ * Скрыть ставку в разделе «Команда» и оставить её в истории изменений —
+ * значит не скрыть вовсе: запись «Ставка: 230 → 250» показывает ровно ту
+ * сумму, которую вырезает API. Для тех, у кого нет доступа к финансам,
+ * значения таких полей заменяются на «—», а сам факт правки остаётся видимым.
+ */
+export const MONEY_FIELDS = new Set([
+  'rate',
+  'amount',
+  'price',
+  'priceLight',
+  'priceMedium',
+  'priceHeavy',
+  'pricePerSqm',
+  'finalPrice',
+  'estimatedPrice',
+  'totalPrice',
+  'discount',
+  'paidAmount',
+]);
+
+/**
  * Поля, значения которых нельзя писать в журнал ни при каких условиях.
  * Журнал доступен директору и живёт год — секретам там не место.
  */

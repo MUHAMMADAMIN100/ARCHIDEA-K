@@ -115,31 +115,36 @@ export class ShiftGroupsController {
     return this.service.history(id);
   }
 
+  /*
+   * Ответы на запись фильтруются тем же hideMoney, что и чтение. Без этого
+   * ставки всей бригады возвращались в ответе на сохранение выезда — то есть
+   * запрет обходился одним нажатием «Сохранить».
+   */
   @Post()
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateShiftGroupDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateShiftGroupDto) {
     this.assertManages(user);
-    return this.service.create(user, dto);
+    return this.hideMoney(await this.service.create(user, dto), user);
   }
 
   @Patch(':id')
-  update(
+  async update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdateShiftGroupDto,
   ) {
     this.assertManages(user);
-    return this.service.update(user, id, dto);
+    return this.hideMoney(await this.service.update(user, id, dto), user);
   }
 
   /** Закрытие выезда: архивный слепок + начисление смен участникам */
   @Post(':id/close')
-  close(
+  async close(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: CloseShiftGroupDto,
   ) {
     this.assertManages(user);
-    return this.service.close(user, id, dto);
+    return this.hideMoney(await this.service.close(user, id, dto), user);
   }
 
   @Delete(':id')

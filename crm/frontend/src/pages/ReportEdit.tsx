@@ -15,6 +15,23 @@ import type { Brigade, Cleaner, Order, Report } from '../types';
 const digits = (v: string) => v.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
 const num = (v: string) => Number(v) || 0;
 
+/**
+ * Ставка клинера для поля ввода.
+ *
+ * Сервер отдаёт её только тем, кому открыты финансы, — остальным поля `rate`
+ * в ответе просто нет. Раньше здесь стояло String(c.rate): для менеджера это
+ * давало в денежном поле буквальное слово «undefined», а при сохранении
+ * Number('undefined') || 0 превращало его в НОЛЬ. Ведомость уходила
+ * основателю с нулевыми выплатами, и после её принятия у клинеров
+ * начислялись смены по нулевой ставке.
+ *
+ * Пустая строка вместо этого честно показывает: значение неизвестно, впишите
+ * его руками. Сохранение с незаполненной ставкой перехватывается проверкой
+ * перед отправкой.
+ */
+const rateOf = (c?: { rate?: number } | null): string =>
+  c && typeof c.rate === 'number' ? String(c.rate) : '';
+
 let rowCounter = 0;
 const rowKey = () => `row_${++rowCounter}`;
 
@@ -145,6 +162,11 @@ export function ReportEdit() {
    * Если заказ выбрали раньше, чем догрузился справочник клинеров, ставки
    * в строках работников остаются пустыми. Доставляем их, как только справочник
    * появится — уже введённые вручную значения не трогаем.
+   *
+   * rateOf: ставка приходит только тем, кому открыты финансы; остальным сервер
+   * её вырезает. Без проверки String(undefined) давал буквальный текст
+   * «undefined» в денежном поле, а при сохранении он превращался в 0 — и
+   * ведомость уходила с нулевыми выплатами.
    */
   useEffect(() => {
     if (!cleaners?.length) return;
@@ -156,7 +178,7 @@ export function ReportEdit() {
         return full
           ? {
               ...w,
-              rate: String(full.rate),
+              rate: rateOf(full),
               fullName: w.fullName || full.fullName,
             }
           : w;
@@ -199,7 +221,7 @@ export function ReportEdit() {
           fullName: a.fullName ?? full?.fullName ?? '',
           role: isLeader ? 'Бригадир' : 'Клинер',
           days: '1',
-          rate: String(full?.rate ?? ''),
+          rate: rateOf(full),
           fine: '',
           extra: '',
         };
@@ -223,7 +245,7 @@ export function ReportEdit() {
         fullName: c.fullName,
         role: isLeader ? 'Бригадир' : 'Клинер',
         days: '1',
-        rate: String(c.rate),
+        rate: rateOf(c),
         fine: '',
         extra: '',
       };
@@ -257,10 +279,16 @@ export function ReportEdit() {
       patchWorker(key, { cleanerId: '' });
       return;
     }
+    /*
+     * Ставку подставляем, только если она известна. Иначе сохраняем уже
+     * введённую руками: смена работника в строке не должна стирать сумму,
+     * которую человек только что вписал.
+     */
+    const known = rateOf(c);
     patchWorker(key, {
       cleanerId: c.id,
       fullName: c.fullName,
-      rate: String(c.rate),
+      ...(known ? { rate: known } : {}),
       role: leaderIds.has(c.id) ? 'Бригадир' : 'Клинер',
     });
   };
@@ -309,6 +337,19 @@ export function ReportEdit() {
   const save = async (andSend: boolean) => {
     if (!clientName.trim()) {
       toast.error('Укажите клиента / объект');
+      return;
+    }
+    /*
+     * Ведомость — документ, по которому людям платят. Строка с работником и
+     * пустой ставкой уходила бы на сервер нулём: он молча принимает 0, а при
+     * приёмке начисляет смену без денег. Поэтому останавливаемся здесь и
+     * называем конкретного человека, у которого сумма не заполнена.
+     */
+    const unpaid = workers.filter((w) => w.fullName.trim() && !num(w.rate));
+    if (unpaid.length > 0) {
+      toast.error(
+        `Укажите ставку: ${unpaid.map((w) => w.fullName.trim()).join(', ')}`,
+      );
       return;
     }
     setSaving(true);

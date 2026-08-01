@@ -77,22 +77,24 @@ export class CleanersController {
     return this.service.teamTasksForDay(user, date);
   }
 
+  // ответ на запись фильтруем так же, как список: иначе ставку было бы видно
+  // в ответе на создание клинера, хотя в списке она вырезана
   @Post()
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateCleanerDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateCleanerDto) {
     this.assertManages(user);
     this.assertRateAllowed(user, dto.rate);
-    return this.service.create(user, dto);
+    return withoutRate(await this.service.create(user, dto), user);
   }
 
   @Patch(':id')
-  update(
+  async update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdateCleanerDto,
   ) {
     this.assertManages(user);
     this.assertRateAllowed(user, dto.rate);
-    return this.service.update(user, id, dto);
+    return withoutRate(await this.service.update(user, id, dto), user);
   }
 
   @Delete(':id')

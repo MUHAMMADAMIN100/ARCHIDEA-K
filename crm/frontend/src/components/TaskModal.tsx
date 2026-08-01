@@ -2,6 +2,8 @@ import { useEffect, useState, type MutableRefObject } from 'react';
 import { Trash2, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
+import { useAuth } from '../auth/AuthContext';
+import { userManagesTasks } from '../types';
 import { Modal } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
@@ -72,7 +74,24 @@ export function TaskModal({
 }) {
   const toast = useToast();
   const dialog = useDialog();
+  const { user } = useAuth();
   const { data: people } = useFetch<Person[]>('/users/assignable');
+
+  /*
+   * Кто вправе править и удалять эту задачу.
+   *
+   * Сотрудник без доступа к задачам компании ведёт только те, что поставил
+   * себе сам. Раньше кнопки «Удалить» и «Сохранить» показывались всем: человек
+   * нажимал, задача исчезала из списка, затем сервер отвечал отказом, и она
+   * возвращалась — на вид «то работает, то нет». В списке задач эта проверка
+   * уже была, а в карточке терялась.
+   */
+  const canEdit =
+    mode === 'create' ||
+    userManagesTasks(user) ||
+    (!!task &&
+      task.creatorId === user?.id &&
+      task.assignments.every((a) => a.userId === user?.id));
 
   const [title, setTitle] = useState(task?.title ?? '');
   const [description, setDescription] = useState(task?.description ?? '');
@@ -363,7 +382,7 @@ export function TaskModal({
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-2">
-          {mode === 'edit' ? (
+          {mode === 'edit' && canEdit ? (
             <button
               onClick={removeTask}
               className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
@@ -376,15 +395,17 @@ export function TaskModal({
           )}
           <div className="flex gap-2">
             <button onClick={onClose} className="btn-ghost">
-              Отмена
+              {canEdit ? 'Отмена' : 'Закрыть'}
             </button>
-            <button
-              onClick={mode === 'create' ? submitCreate : submitEdit}
-              disabled={!canSubmit}
-              className="btn-primary"
-            >
-              {mode === 'create' ? 'Поставить задачу' : 'Сохранить'}
-            </button>
+            {canEdit && (
+              <button
+                onClick={mode === 'create' ? submitCreate : submitEdit}
+                disabled={!canSubmit}
+                className="btn-primary"
+              >
+                {mode === 'create' ? 'Поставить задачу' : 'Сохранить'}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -498,9 +498,40 @@ export class OrdersService {
      * поправить руками), нетронутые берём из заказа как есть — их снапшоты
      * не пересчитываются от правок справочника.
      */
-    const nextDirt = ((data.dirtLevel as any) ?? before.dirtLevel) as
-      | DirtLevel
-      | null;
+    /*
+     * Степень загрязнения после правки.
+     *
+     * Через `??` её брать нельзя: у мойки мягкой мебели data.dirtLevel
+     * намеренно выставлен в null, а `null ?? before.dirtLevel` вернул бы
+     * СТАРУЮ степень — и дополнительные услуги посчитались бы по цене,
+     * которой в этом заказе уже нет.
+     */
+    const nextDirt = ('dirtLevel' in data
+      ? (data.dirtLevel as DirtLevel | null)
+      : before.dirtLevel) as DirtLevel | null;
+
+    /*
+     * Цена за единицу.
+     *
+     * Сохранённое в заказе значение — это ВЫВОД прошлого расчёта, а не решение
+     * человека: его пишет сама автоматика после каждого пересчёта. Подставлять
+     * его обратно как «заданную вручную» цену допустимо, только пока основание
+     * расчёта не менялось. Если поменяли услугу или степень загрязнения, цена
+     * обязана последовать за справочником — иначе переключение с «лёгкой» на
+     * «тяжёлую» не меняло сумму вообще.
+     *
+     * Явно присланная цена (менеджер вписал её в поле) по-прежнему главнее всего.
+     */
+    const pricingBasisChanged =
+      dto.serviceKey !== undefined ||
+      dto.cleaningType !== undefined ||
+      dto.dirtLevel !== undefined;
+    const unitOverride =
+      dto.pricePerSqm !== undefined
+        ? dto.pricePerSqm
+        : pricingBasisChanged
+          ? null
+          : before.pricePerSqm;
     const additional =
       dto.additionalServices !== undefined
         ? await this.enrichAdditional(dto.additionalServices, nextDirt)
@@ -516,8 +547,8 @@ export class OrdersService {
         serviceKey,
         area: (data.area as number) ?? before.area,
         seats: (data.seats as number) ?? before.seats,
-        dirtLevel: (data.dirtLevel as any) ?? before.dirtLevel,
-        pricePerSqm: dto.pricePerSqm ?? before.pricePerSqm,
+        dirtLevel: nextDirt,
+        pricePerSqm: unitOverride,
         extras: nextExtras,
         discount: nextDiscount,
         additionalWork,

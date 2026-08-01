@@ -12,6 +12,7 @@ import {
   AuditEntity,
   FINANCIAL_ENTITIES,
   MASKED_FIELDS,
+  MONEY_FIELDS,
   fieldLabel,
 } from './audit.types';
 import { AuditQueryDto } from './dto/audit-query.dto';
@@ -203,8 +204,28 @@ export class AuditService {
     const hasMore = items.length > take;
     const page = hasMore ? items.slice(0, take) : items;
     return {
-      items: page,
+      items: page.map((row) => this.hideMoney(row, user)),
       nextCursor: hasMore ? page[page.length - 1].id : null,
+    };
+  }
+
+  /**
+   * Прячет суммы в записи журнала от тех, кому финансы закрыты.
+   *
+   * Иначе запрет обходится через историю: ставка вырезана из раздела
+   * «Команда», но запись «Ставка: 230 → 250» показывает её же. Сам факт
+   * изменения остаётся видимым — скрываются только цифры.
+   */
+  private hideMoney<T extends { changes?: unknown }>(row: T, user: AuthUser): T {
+    if (can(user, 'finance:view')) return row;
+    const changes = row.changes as AuditChange[] | null | undefined;
+    if (!Array.isArray(changes) || changes.length === 0) return row;
+    if (!changes.some((c) => MONEY_FIELDS.has(c.field))) return row;
+    return {
+      ...row,
+      changes: changes.map((c) =>
+        MONEY_FIELDS.has(c.field) ? { ...c, before: '—', after: '—' } : c,
+      ),
     };
   }
 

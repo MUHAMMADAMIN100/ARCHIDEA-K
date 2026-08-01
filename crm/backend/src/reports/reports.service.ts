@@ -126,7 +126,7 @@ export class ReportsService {
   }
 
   private sanitizeWorkers(input?: WorkerInput[]) {
-    return (Array.isArray(input) ? input : [])
+    const rows = (Array.isArray(input) ? input : [])
       .filter((w) => str(w?.fullName))
       .map((w) => ({
         cleanerId: idOrNull(w.cleanerId),
@@ -138,6 +138,24 @@ export class ReportsService {
         fine: int(w.fine),
         extra: int(w.extra),
       }));
+
+    /*
+     * Ведомость — документ, по которому людям платят. Строка с отработанными
+     * днями и нулевой ставкой означает «работал бесплатно»: при приёмке такая
+     * строка создаёт смену без денег, и человек недосчитается зарплаты.
+     *
+     * Ноль приходил не от злого умысла: интерфейс подставлял в поле ставки
+     * значение, которого не получил с сервера, и Number('undefined') || 0
+     * молча давал ноль. Проверка здесь — последний рубеж: пропускаем только
+     * строки без отработанных дней (работник внесён ради одного штрафа).
+     */
+    const unpaid = rows.filter((w) => w.days > 0 && w.rate <= 0);
+    if (unpaid.length > 0) {
+      throw new BadRequestException(
+        `Укажите ставку для работников: ${unpaid.map((w) => w.fullName).join(', ')}`,
+      );
+    }
+    return rows;
   }
 
   private sanitizeExpenses(input?: ExpenseInput[]) {
