@@ -536,6 +536,7 @@ export type FinanceCategory =
   | 'TRANSPORT'
   | 'RENT'
   | 'MARKETING'
+  | 'BARTER'
   | 'TAX'
   | 'OTHER_EXPENSE';
 

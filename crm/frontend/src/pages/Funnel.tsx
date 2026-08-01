@@ -124,7 +124,14 @@ function OrderCardBody({
         {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-navy-700">
+        <span
+          className={`text-sm font-bold ${
+            (o.paidAmount ?? 0) > 0 && orderDue(o) > 0
+              ? 'text-red-700'
+              : 'text-navy-700'
+          }`}
+        >
+          {(o.paidAmount ?? 0) > 0 && orderDue(o) > 0 && 'Долг '}
           {formatPrice(orderDue(o))}
           {(o.paidAmount ?? 0) > 0 && (
             <span className="ml-1 text-xs font-medium text-navy-600">
@@ -345,7 +352,7 @@ export function Funnel() {
   })();
 
   // доска с учётом фильтра по менеджеру
-  const board =
+  const filtered =
     !canFilter || managerFilter === 'ALL'
       ? data
       : data.map((col) => ({
@@ -356,6 +363,16 @@ export function Funnel() {
               : o.manager?.id === managerFilter,
           ),
         }));
+
+  /*
+   * «К оплате» — колонка должников, и она идёт первой: это деньги, которые
+   * компания уже заработала, но ещё не получила. Порядок остальных этапов
+   * не меняется.
+   */
+  const board = [
+    ...filtered.filter((c) => c.stage === 'DONE'),
+    ...filtered.filter((c) => c.stage !== 'DONE'),
+  ];
 
   return (
     <div>
@@ -428,14 +445,34 @@ export function Funnel() {
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div ref={boardRef} className="board-scroll flex gap-4">
-          {board.map((col) => (
-            <div key={col.stage} className="flex w-72 shrink-0 flex-col">
+          {board.map((col) => {
+            // долг по этапу: сумма остатков заказов, где оплата ещё не полная
+            const debt = col.orders.reduce(
+              (sum, o) => sum + ((o.paidAmount ?? 0) > 0 ? orderDue(o) : 0),
+              0,
+            );
+            const isDue = col.stage === 'DONE';
+            return (
+            <div
+              key={col.stage}
+              className={`flex w-72 shrink-0 flex-col ${
+                isDue
+                  ? // прилипает к левому краю: список должников должен быть
+                    // виден, до каких бы этапов ни докрутили доску
+                    'sticky left-0 z-20 -ml-1 rounded-2xl bg-navy-50/95 px-1 pt-1 backdrop-blur'
+                  : ''
+              }`}
+            >
               {/*
                 Шапка этапа: название, сумма денег и количество карточек.
                 Сумма нужна руководителю не меньше количества — по ней видно,
                 сколько денег «висит» на каждом шаге воронки.
               */}
-              <div className="mb-3 rounded-xl border border-navy-100 bg-white px-3 py-2">
+              <div
+                className={`mb-3 rounded-xl border bg-white px-3 py-2 ${
+                  isDue ? 'border-red-300 ring-1 ring-red-200' : 'border-navy-100'
+                }`}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>
                   <span className="shrink-0 text-sm font-bold text-navy-600">
@@ -458,6 +495,12 @@ export function Funnel() {
                     )}
                   </span>
                 </div>
+                {/* сколько из этой суммы — недоплата по уже начатым заказам */}
+                {debt > 0 && (
+                  <div className="mt-0.5 text-xs font-semibold text-red-700">
+                    Из них долг: {formatPrice(debt)}
+                  </div>
+                )}
               </div>
 
               <Droppable droppableId={col.stage} isDropDisabled={isTouch}>
@@ -490,8 +533,15 @@ export function Funnel() {
                               Цветная рамка по этапу — как на образце: этап
                               карточки виден, не читая шапку колонки.
                             */
+                            /*
+                              Частично оплаченный заказ — это долг клиента.
+                              Красная полоса и фон видны в общем списке, не
+                              открывая карточку.
+                            */
                             className={`card cursor-pointer border-l-4 p-3.5 text-left transition-shadow hover:shadow-lg ${
-                              STAGE_BORDER[o.stage]
+                              (o.paidAmount ?? 0) > 0 && orderDue(o) > 0
+                                ? 'border-l-red-500 bg-red-50/70'
+                                : STAGE_BORDER[o.stage]
                             } ${
                               snap.isDragging ? 'shadow-xl ring-2 ring-navy-300' : ''
                             }`}
@@ -515,7 +565,8 @@ export function Funnel() {
                 )}
               </Droppable>
             </div>
-          ))}
+            );
+          })}
         </div>
       </DragDropContext>
 

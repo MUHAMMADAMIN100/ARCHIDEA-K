@@ -290,6 +290,7 @@ export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
   TRANSPORT: 'Транспорт',
   RENT: 'Аренда',
   MARKETING: 'Реклама и продвижение',
+  BARTER: 'Бартер',
   TAX: 'Налоги и сборы',
   OTHER_EXPENSE: 'Прочий расход',
 };
@@ -304,6 +305,7 @@ export const CATEGORIES_BY_KIND: Record<FinanceKind, FinanceCategory[]> = {
     'TRANSPORT',
     'RENT',
     'MARKETING',
+    'BARTER',
     'TAX',
     'OTHER_EXPENSE',
   ],

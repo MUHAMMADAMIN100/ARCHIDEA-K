@@ -147,6 +147,7 @@ enum FinanceCategory {
   TRANSPORT // транспорт
   RENT // аренда
   MARKETING // реклама и продвижение
+  BARTER // бартер — расчёт услугами вместо денег
   TAX // налоги и сборы
   OTHER_EXPENSE // прочий расход
 }
