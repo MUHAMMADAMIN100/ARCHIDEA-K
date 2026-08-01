@@ -464,7 +464,10 @@ export function Funnel() {
           ровно в край экрана и обрезалась на середине слова («Нов…», «Сумм…»).
           С sm: и выше — прежние отступы и промежуток, десктоп не меняется.
         */}
-        <div ref={boardRef} className="board-scroll flex gap-3 pr-4 sm:gap-4 sm:pr-0">
+        <div
+          ref={boardRef}
+          className="board-scroll flex snap-x snap-mandatory gap-3 pr-4 sm:snap-none sm:gap-4 sm:pr-0"
+        >
           {board.map((col) => {
             /*
              * Сумма этапа — полная стоимость заказов, а не остаток к оплате:
@@ -482,7 +485,7 @@ export function Funnel() {
             return (
             <div
               key={col.stage}
-              className={`flex w-[17rem] shrink-0 flex-col sm:w-72 ${
+              className={`flex w-[85vw] shrink-0 snap-start flex-col sm:w-72 ${
                 isDue
                   ? /*
                      * Прилипает к левому краю: список должников виден, до
