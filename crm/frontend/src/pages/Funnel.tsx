@@ -401,7 +401,7 @@ export function Funnel() {
         }
         subtitle={
           isTouch
-            ? 'Меняйте этап стрелками или нажмите карточку для деталей'
+            ? 'Изменяйте этап стрелками или нажмите на карточку для деталей'
             : 'Перетаскивайте карточки между этапами или нажмите для деталей'
         }
       />
@@ -459,7 +459,12 @@ export function Funnel() {
       )}
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <div ref={boardRef} className="board-scroll flex gap-4">
+        {/*
+          Отступ справа на телефоне: без него последняя колонка упиралась
+          ровно в край экрана и обрезалась на середине слова («Нов…», «Сумм…»).
+          С sm: и выше — прежние отступы и промежуток, десктоп не меняется.
+        */}
+        <div ref={boardRef} className="board-scroll flex gap-3 pr-4 sm:gap-4 sm:pr-0">
           {board.map((col) => {
             /*
              * Сумма этапа — полная стоимость заказов, а не остаток к оплате:
@@ -477,11 +482,15 @@ export function Funnel() {
             return (
             <div
               key={col.stage}
-              className={`flex w-72 shrink-0 flex-col ${
+              className={`flex w-[17rem] shrink-0 flex-col sm:w-72 ${
                 isDue
-                  ? // прилипает к левому краю: список должников должен быть
-                    // виден, до каких бы этапов ни докрутили доску
-                    'sticky left-0 z-20 -ml-1 rounded-2xl bg-navy-50/95 px-1 pt-1 backdrop-blur'
+                  ? /*
+                     * Прилипает к левому краю: список должников виден, до
+                     * каких бы этапов ни докрутили доску. Только с sm: и
+                     * выше — на телефоне закреплённая колонка накрыла бы
+                     * почти весь экран и читать остальные было бы нечем.
+                     */
+                    'sm:sticky sm:left-0 sm:z-20 sm:-ml-1 sm:rounded-2xl sm:bg-navy-50/95 sm:px-1 sm:pt-1 sm:backdrop-blur'
                   : ''
               }`}
             >
@@ -497,7 +506,16 @@ export function Funnel() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <Badge className={STAGE_COLOR[col.stage]}>{col.label}</Badge>
+                  {/*
+                    Название этапа занимает всё свободное место и при нехватке
+                    ширины сокращается многоточием, а не переносится посреди
+                    слова. Счётчик не сжимается и остаётся на своей строке.
+                  */}
+                  <span className="min-w-0 flex-1">
+                    <Badge className={`${STAGE_COLOR[col.stage]} max-w-full`}>
+                      <span className="min-w-0 truncate">{col.label}</span>
+                    </Badge>
+                  </span>
                   <span className="shrink-0 text-sm font-bold text-navy-600">
                     <DrillValue
                       tone="muted"
@@ -509,7 +527,7 @@ export function Funnel() {
                     </DrillValue>
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-navy-600">
+                <div className="mt-1 whitespace-nowrap text-xs text-navy-600">
                   Сумма:{' '}
                   <span className="font-bold text-navy-800">
                     {formatPrice(total)}
@@ -517,7 +535,7 @@ export function Funnel() {
                 </div>
                 {/* сколько из этой суммы — недоплата по уже начатым заказам */}
                 {debt > 0 && (
-                  <div className="mt-0.5 text-xs font-semibold text-red-700">
+                  <div className="mt-0.5 whitespace-nowrap text-xs font-semibold text-red-700">
                     Из них долг: {formatPrice(debt)}
                   </div>
                 )}
