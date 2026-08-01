@@ -275,20 +275,49 @@ export class AnalyticsService {
           )
         : undefined;
       const rows = await this.breakdowns(periodScope, paidInRange, dayRange);
-      result.breakdowns =
-        user.role === Role.DIRECTOR
-          ? rows
-          : {
-              ...rows,
-              managers: rows.managers.map((m) => ({ ...m, amount: 0, average: 0 })),
-              services: rows.services.map((r) => ({ ...r, amount: 0 })),
-              extras: rows.extras.map((r) => ({ ...r, amount: 0 })),
-              brigades: rows.brigades.map((r) => ({ ...r, accrued: 0 })),
-              cleaners: rows.cleaners.map((r) => ({ ...r, accrued: 0 })),
-              clients: rows.clients.map((r) => ({ ...r, amount: 0 })),
-              sourceRows: rows.sourceRows.map((r) => ({ ...r, amount: 0 })),
-              totals: { ...rows.totals, revenue: 0, average: 0, discountTotal: 0, extrasRevenue: 0 },
-            };
+      /*
+       * Два разных уровня доступа к цифрам, и путать их нельзя.
+       *
+       *  - КАССА (finance:view, только руководитель): выручка компании,
+       *    начисления клинерам, скидки и доход от доп. услуг одной строкой.
+       *  - ПРОДАЖИ (seesAll): кто сколько продал — суммы по менеджерам,
+       *    услугам, клиентам и источникам. Без этого нельзя управлять
+       *    менеджерами, поэтому они открыты тому, кто ведёт всю компанию.
+       *
+       * Менеджеру со своей областью данных по-прежнему не видно ни того,
+       * ни другого: он и так смотрит только на собственные заказы.
+       */
+      const seesMoney = user.role === Role.DIRECTOR;
+      const seesSales = seesAll(user);
+      result.breakdowns = seesMoney
+        ? rows
+        : {
+            ...rows,
+            // начисления клинерам — зарплата, её видит только руководитель
+            brigades: rows.brigades.map((r) => ({ ...r, accrued: 0 })),
+            cleaners: rows.cleaners.map((r) => ({ ...r, accrued: 0 })),
+            ...(seesSales
+              ? {}
+              : {
+                  managers: rows.managers.map((m) => ({
+                    ...m,
+                    amount: 0,
+                    average: 0,
+                  })),
+                  services: rows.services.map((r) => ({ ...r, amount: 0 })),
+                  extras: rows.extras.map((r) => ({ ...r, amount: 0 })),
+                  clients: rows.clients.map((r) => ({ ...r, amount: 0 })),
+                  sourceRows: rows.sourceRows.map((r) => ({ ...r, amount: 0 })),
+                }),
+            totals: {
+              ...rows.totals,
+              // сводная выручка компании и её производные — только касса
+              revenue: 0,
+              average: 0,
+              discountTotal: 0,
+              extrasRevenue: 0,
+            },
+          };
     }
 
     return result;
