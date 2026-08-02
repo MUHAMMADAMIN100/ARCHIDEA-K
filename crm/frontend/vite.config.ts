@@ -24,11 +24,23 @@ function buildCommit(): string {
   }
 }
 
+/**
+ * Дата сборки по Душанбе (UTC+5), а не по Гринвичу.
+ *
+ * Серверы сборки живут в UTC: собранная днём 3 августа сборка получала бы
+ * отметку «2026-08-02» и выглядела вчерашней у того, кто на неё смотрит.
+ * Отметка нужна, чтобы снимать вопрос «свежее или нет», а не добавлять его.
+ */
+function buildDate(): string {
+  const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
+  return new Date(Date.now() + DUSHANBE_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 export default defineConfig({
   plugins: [react()],
   server: { port: 5174 },
   define: {
     __BUILD_COMMIT__: JSON.stringify(buildCommit()),
-    __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    __BUILD_DATE__: JSON.stringify(buildDate()),
   },
 });
