@@ -171,11 +171,20 @@ export function ClientCard() {
    * переставал что-либо значить. Выбор заменяет прежний, повторный клик
    * снимает статус совсем.
    */
-  const toggleTag = (t: ClientTag) =>
-    setTags((prev) => {
-      const base = prev ?? data.tags;
-      return base.includes(t) ? [] : [t];
-    });
+  const toggleTag = (t: ClientTag) => {
+    /*
+     * Статус сохраняется сразу по нажатию.
+     *
+     * Раньше он ждал кнопку «Сохранить предпочтения, статус и заметки»,
+     * которая стояла через блок ниже: статус выбирали, до кнопки не
+     * доходили — и в воронке карточка оставалась без метки. Соседние поля
+     * разговора уже так и работают.
+     */
+    const base = tags ?? data.tags;
+    const next: ClientTag[] = base.includes(t) ? [] : [t];
+    setTags(null);
+    patchClient({ tags: next });
+  };
 
   // оптимистично: правки заказа отражаются в истории сразу
   const patchOrder = (orderId: string, patch: Partial<Order>) => {
@@ -250,7 +259,6 @@ export function ClientCard() {
    */
   const saveMeta = async () => {
     const nextNotes = curNotes;
-    const nextTags = curTags;
     const nextPrefs = curPreferences.trim() || null;
     // оптимистично применяем изменения сразу
     setData((c) =>
@@ -258,19 +266,16 @@ export function ClientCard() {
         ? {
             ...c,
             notes: nextNotes,
-            tags: nextTags,
             preferences: nextPrefs,
           }
         : c,
     );
     setNotes(null);
-    setTags(null);
     setPreferences(null);
     setSavingMeta(true);
     try {
       await api.patch(`/clients/${id}`, {
         notes: nextNotes,
-        tags: nextTags,
         preferences: nextPrefs,
       });
       toast.success('Сохранено');
@@ -346,22 +351,29 @@ export function ClientCard() {
 
       <PageHeader
         title={data.fullName}
-        /* Позвонить и напомнить — рядом: обе про один и тот же звонок */
+        /*
+         * Позвонить и напомнить — рядом: обе про один и тот же звонок.
+         *
+         * Кнопки не распирают ряд. Раньше на них стоял запрет переноса: на
+         * узком экране содержимое становилось шире самой кнопки, ряд
+         * растягивался и страница уезжала вбок — за правым краем оставалась
+         * полоса. Теперь текст укорачивается, а кнопки могут сжиматься.
+         */
         action={
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
             <a
               href={`tel:${formatPhone(data.phone)}`}
-              className="btn-primary justify-center whitespace-nowrap"
+              className="btn-primary min-w-0 flex-1 justify-center text-xs font-medium sm:flex-none sm:text-sm"
             >
               <Phone className="h-4 w-4 shrink-0" />
-              {formatPhone(data.phone)}
+              <span className="truncate">{formatPhone(data.phone)}</span>
             </a>
             <button
               onClick={() => setShowReminder(true)}
-              className="btn-ghost justify-center whitespace-nowrap"
+              className="btn-ghost min-w-0 flex-1 justify-center text-xs font-medium sm:flex-none sm:text-sm"
             >
               <PhoneCall className="h-4 w-4 shrink-0" />
-              Напомнить позвонить
+              <span className="truncate">Напомнить позвонить</span>
             </button>
           </div>
         }
@@ -493,9 +505,6 @@ export function ClientCard() {
               ))}
             </div>
 
-            <p className="mt-2 text-xs text-navy-600">
-              Сохраняются кнопкой «Сохранить…» ниже.
-            </p>
           </div>
 
           {/*
@@ -578,7 +587,7 @@ export function ClientCard() {
               <Save className="h-4 w-4" />
               {savingMeta
                 ? 'Сохранение…'
-                : 'Сохранить предпочтения, статус и заметки'}
+                : 'Сохранить предпочтения и заметки'}
             </button>
           </div>
         </div>

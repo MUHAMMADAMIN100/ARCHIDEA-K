@@ -99,7 +99,8 @@ export default {
       },
       backgroundImage: {
         // ровная заливка вместо градиента
-        'navy-gradient': 'linear-gradient(180deg, #171b21 0%, #171b21 100%)',
+        // фирменная заливка: экран входа и другие брендовые поверхности
+        'navy-gradient': 'linear-gradient(180deg, #0078c9 0%, #0064a9 100%)',
       },
     },
   },

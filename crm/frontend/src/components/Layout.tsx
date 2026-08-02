@@ -188,6 +188,22 @@ export function Layout() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  /*
+   * Пока открыто боковое меню, страница под ним не прокручивается.
+   *
+   * Раньше палец по списку разделов двигал не список, а страницу за ним:
+   * меню оставалось на месте, а содержимое под ним уезжало. Запираем
+   * прокрутку страницы на время, пока меню открыто.
+   */
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
+
   const visible = (i: NavItem) => {
     if (i.roles && !(user && i.roles.includes(user.role))) return false;
     if (i.trash && !userSeesTrash(user)) return false;
@@ -285,7 +301,7 @@ export function Layout() {
     <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col border-r border-ink-800 bg-ink-900 text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col bg-brand-500 text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -300,7 +316,8 @@ export function Layout() {
           </span>
         </div>
 
-        <nav className="mt-2 flex-1 overflow-y-auto px-3 py-2">
+        {/* overscroll-contain: список докрутили до края — страница за ним не едет */}
+        <nav className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
           {isDirector ? (
             <>
               <div className="space-y-1">

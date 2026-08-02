@@ -74,7 +74,8 @@ export default {
       },
       backgroundImage: {
         // ровная тёмная заливка вместо голубого градиента
-        'navy-gradient': 'linear-gradient(180deg, #171b21 0%, #171b21 100%)',
+        // фирменная заливка первого экрана
+        'navy-gradient': 'linear-gradient(180deg, #0078c9 0%, #0064a9 100%)',
         'hero-radial': 'none',
       },
       keyframes: {
