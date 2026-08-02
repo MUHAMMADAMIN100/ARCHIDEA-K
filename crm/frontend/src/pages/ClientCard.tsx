@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, PhoneCall, Plus, Repeat2, Save, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Pencil,
+  Phone,
+  PhoneCall,
+  Plus,
+  Repeat2,
+  Save,
+  Trash2,
+} from 'lucide-react';
 import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
@@ -17,6 +26,7 @@ import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { OrderModal } from '../components/OrderModal';
 import { LabelPicker } from '../components/LabelPicker';
+import { NameInput, PhoneInput } from '../components/ContactFields';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { ReminderModal } from '../components/ReminderModal';
 import { CleanerPicker, Tabs } from '../components/common';
@@ -24,6 +34,7 @@ import {
   TAG_LABEL,
   TAG_COLOR,
   SOURCE_LABEL,
+  SOURCE_ORDER,
   STAGE_LABEL,
   STAGE_COLOR,
   cleaningTypeForKey,
@@ -37,7 +48,12 @@ import {
   formatDate,
   formatVolume,
 } from '../lib/labels';
-import { formatPhone } from '../lib/contact';
+import {
+  formatPhone,
+  isValidPersonName,
+  isValidPhone,
+  normalizePhone,
+} from '../lib/contact';
 import { isTempId, nowISO, tempId, withRetry } from '../lib/util';
 import type {
   Cleaner,
@@ -45,6 +61,7 @@ import type {
   Client,
   ClientTag,
   DirtLevel,
+  LeadSource,
   Manager,
   Order,
   Tariffs,
@@ -72,6 +89,7 @@ export function ClientCard() {
   );
   const { data: cleaners } = useFetch<Cleaner[]>('/cleaners?activeOnly=true');
 
+  const [editInfo, setEditInfo] = useState(false);
   const [notes, setNotes] = useState<string | null>(null);
   const [tags, setTags] = useState<ClientTag[] | null>(null);
   // свободные теги (ТЗ 1.2) — редактируются вместе со статусом
@@ -260,32 +278,46 @@ export function ClientCard() {
 
   return (
     <div>
-      <button
-        onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
-      >
-        <ArrowLeft className="h-4 w-4" /> Назад
-      </button>
+      {/*
+        Верхняя строка: возврат слева, удаление — в правом углу. Удаление
+        стояло между рабочими кнопками, и по нему легко было промахнуться.
+      */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+        >
+          <ArrowLeft className="h-4 w-4" /> Назад
+        </button>
+        <button
+          onClick={removeClient}
+          title="Удалить клиента"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+        >
+          <Trash2 className="h-4 w-4" />
+          Удалить
+        </button>
+      </div>
 
       <PageHeader
         title={data.fullName}
         subtitle={SOURCE_LABEL[data.source] + ' · клиент'}
+        /* Позвонить и напомнить — рядом: обе про один и тот же звонок */
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <a href={`tel:${formatPhone(data.phone)}`} className="btn-primary">
-              <Phone className="h-4 w-4" />
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <a
+              href={`tel:${formatPhone(data.phone)}`}
+              className="btn-primary justify-center whitespace-nowrap"
+            >
+              <Phone className="h-4 w-4 shrink-0" />
               {formatPhone(data.phone)}
             </a>
-            <button onClick={() => setShowReminder(true)} className="btn-ghost">
-              <PhoneCall className="h-4 w-4" />
-              Напомнить позвонить
-            </button>
             <button
-              onClick={removeClient}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+              onClick={() => setShowReminder(true)}
+              className="btn-ghost justify-center whitespace-nowrap"
             >
-              <Trash2 className="h-4 w-4" />
-              Удалить
+              <PhoneCall className="h-4 w-4 shrink-0" />
+              Напомнить позвонить
             </button>
           </div>
         }
@@ -317,7 +349,18 @@ export function ClientCard() {
         {/* Левая колонка — инфо + предпочтения + теги + заметки */}
         <div className="space-y-4">
           <div className="card p-5">
-            <h3 className="mb-3 font-bold text-navy-900">Информация</h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="font-bold text-navy-900">Информация</h3>
+              {/* правка ФИО, телефонов, источника и скидки — без ухода в заявку */}
+              <button
+                onClick={() => setEditInfo(true)}
+                title="Изменить данные клиента"
+                className="inline-flex items-center gap-1 rounded-lg border border-navy-200 px-2 py-1 text-xs font-medium text-navy-700 transition hover:bg-navy-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Изменить
+              </button>
+            </div>
             <dl className="space-y-2 text-sm">
               <Row label="Телефон" value={formatPhone(data.phone)} />
               {(data.extraPhones ?? []).length > 0 && (
@@ -862,6 +905,153 @@ function AddOrderModal({
           <button onClick={onClose} className="btn-ghost">Отмена</button>
           <button onClick={submit} className="btn-primary">
             Создать заказ
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
+/**
+ * Правка данных клиента: ФИО, телефоны, источник, «От кого» и постоянная
+ * скидка. Статус, теги, предпочтения и заметки правятся прямо в карточке —
+ * сюда вынесено только то, что раньше было доступно лишь через заявку.
+ */
+function EditClientModal({
+  client,
+  onClose,
+  onSaved,
+}: {
+  client: Client;
+  onClose: () => void;
+  onSaved: (patch: Partial<Client>) => void;
+}) {
+  const toast = useToast();
+  const [fullName, setFullName] = useState(client.fullName);
+  const [phone, setPhone] = useState(client.phone);
+  const [extraPhones, setExtraPhones] = useState<string[]>(
+    client.extraPhones ?? [],
+  );
+  const [source, setSource] = useState<LeadSource>(client.source);
+  const [sourceDetail, setSourceDetail] = useState(client.sourceDetail ?? '');
+  const [discount, setDiscount] = useState(String(client.discount ?? 0));
+  const [saving, setSaving] = useState(false);
+
+  const canSave = isValidPersonName(fullName) && isValidPhone(phone);
+
+  const submit = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    const patch = {
+      fullName: fullName.trim(),
+      phone: normalizePhone(phone) ?? phone,
+      extraPhones: extraPhones
+        .map((p) => normalizePhone(p))
+        .filter((p): p is string => !!p),
+      source,
+      sourceDetail: sourceDetail.trim() || null,
+      discount: Math.max(0, Math.round(Number(discount) || 0)),
+    };
+    try {
+      await api.patch(`/clients/${client.id}`, patch);
+      toast.success('Данные клиента обновлены');
+      onSaved(patch as Partial<Client>);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось сохранить');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Данные клиента">
+      <div className="space-y-3">
+        <div>
+          <label className="label">ФИО</label>
+          <NameInput value={fullName} onChange={setFullName} autoFocus />
+        </div>
+
+        <div>
+          <label className="label">Телефон</label>
+          <PhoneInput value={phone} onChange={setPhone} required />
+          {extraPhones.map((p, i) => (
+            <div key={i} className="mt-2 flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <PhoneInput
+                  value={p}
+                  onChange={(v: string) =>
+                    setExtraPhones((prev) =>
+                      prev.map((x, j) => (j === i ? v : x)),
+                    )
+                  }
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setExtraPhones((prev) => prev.filter((_, j) => j !== i))
+                }
+                className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                aria-label="Убрать номер"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setExtraPhones((prev) => [...prev, ''])}
+            className="mt-1.5 text-sm font-medium text-brand-600 hover:underline"
+          >
+            + ещё номер телефона
+          </button>
+        </div>
+
+        <div>
+          <label className="label">Источник</label>
+          <select
+            className="input"
+            value={source}
+            onChange={(e) => setSource(e.target.value as LeadSource)}
+          >
+            {SOURCE_ORDER.map((x) => (
+              <option key={x} value={x}>
+                {SOURCE_LABEL[x]}
+              </option>
+            ))}
+          </select>
+          <input
+            className="input mt-2"
+            value={sourceDetail}
+            maxLength={120}
+            placeholder="От кого — например: От Анисы"
+            onChange={(e) => setSourceDetail(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label">Постоянная скидка, сомони</label>
+          <input
+            type="number"
+            min={0}
+            className="input"
+            value={discount}
+            placeholder="0 — без скидки"
+            onChange={(e) => setDiscount(e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <button onClick={onClose} className="btn-ghost justify-center">
+            Отмена
+          </button>
+          <button
+            onClick={submit}
+            disabled={!canSave || saving}
+            className="btn-primary justify-center disabled:opacity-50"
+            title={canSave ? undefined : 'Заполните ФИО и телефон правильно'}
+          >
+            Сохранить
           </button>
         </div>
       </div>

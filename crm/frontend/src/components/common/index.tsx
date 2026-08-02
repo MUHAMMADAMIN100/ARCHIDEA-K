@@ -283,7 +283,27 @@ export function PeriodFilter({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1">
+      {/*
+        Период. На телефоне — один селект во всю ширину: восемь кнопок
+        занимали там три ряда и мешали добраться до содержимого. С sm: и
+        выше остаётся привычный ряд кнопок — на широком экране так быстрее,
+        всё видно сразу и без лишнего клика.
+      */}
+      <select
+        className="input w-full sm:hidden"
+        value=""
+        onChange={(e) => e.target.value && onChange(rangeOf(e.target.value as PeriodPreset))}
+        aria-label="Период"
+      >
+        <option value="">Выберите период</option>
+        {presets.map((p) => (
+          <option key={p} value={p}>
+            {PERIOD_LABEL[p]}
+          </option>
+        ))}
+      </select>
+
+      <div className="hidden flex-wrap gap-1 sm:flex">
         {presets.map((p) => (
           <button
             key={p}

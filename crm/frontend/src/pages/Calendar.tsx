@@ -9,7 +9,7 @@ import { ChevronLeft, ChevronRight, Plus, Inbox } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
-import { Spinner, PageHeader, ErrorState } from '../components/ui';
+import { Spinner, PageHeader, ErrorState, Modal } from '../components/ui';
 import { TaskModal } from '../components/TaskModal';
 import { OrderModal } from '../components/OrderModal';
 import {
@@ -200,6 +200,8 @@ export function Calendar() {
   // единственный фильтр календаря — этапы воронки (те же, что в «Воронке»)
   const [stageFilter, setStageFilter] = useState<FunnelStage | 'ALL'>('ALL');
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
+  // какой день раскрыт списком: клик по клетке показывает все дела этого дня
+  const [dayOpen, setDayOpen] = useState<string | null>(null);
 
   /*
    * Заказы берём из той же доски, что и воронка: один запрос, общий кэш —
@@ -453,12 +455,32 @@ export function Calendar() {
 
       {/* Фильтр по этапам воронки — те же названия и цвета, что в «Воронке» */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        {/*
+          Этапы. На телефоне — один селект: семь кнопок занимали там три
+          ряда и отодвигали сам календарь за нижний край экрана. С sm: и
+          выше остаются кнопки, десктоп не меняется.
+        */}
         <span className="text-xs font-medium text-navy-600">Этап:</span>
+        <select
+          className="input w-full sm:hidden"
+          value={stageFilter}
+          onChange={(e) =>
+            setStageFilter(e.target.value as FunnelStage | 'ALL')
+          }
+          aria-label="Этап воронки"
+        >
+          <option value="ALL">Все этапы</option>
+          {STAGE_ORDER.map((st) => (
+            <option key={st} value={st}>
+              {STAGE_LABEL[st]}
+            </option>
+          ))}
+        </select>
         {(['ALL', ...STAGE_ORDER] as (FunnelStage | 'ALL')[]).map((st) => (
           <button
             key={st}
             onClick={() => setStageFilter(st)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:inline-flex ${
               stageFilter === st
                 ? 'bg-navy-500 text-white'
                 : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
@@ -504,7 +526,15 @@ export function Calendar() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`group flex min-w-0 flex-col rounded-xl border p-1.5 transition-colors sm:p-2 ${cellMin} ${
+                    onClick={(e) => {
+                      /*
+                       * Клик по пустому месту клетки раскрывает день целиком.
+                       * По самим карточкам клик обрабатывается отдельно и
+                       * сюда не всплывает — иначе открывались бы оба окна.
+                       */
+                      if (e.target === e.currentTarget) setDayOpen(key);
+                    }}
+                    className={`group flex min-w-0 cursor-pointer flex-col rounded-xl border p-1.5 transition-colors sm:p-2 ${cellMin} ${
                       isToday
                         ? 'border-navy-400 bg-navy-50/60 ring-1 ring-navy-200'
                         : 'border-navy-100 bg-white'
@@ -513,13 +543,19 @@ export function Calendar() {
                     }`}
                   >
                     <div className="mb-1.5 flex items-center justify-between">
-                      <span
-                        className={`text-xs font-semibold sm:text-sm ${
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDayOpen(key);
+                        }}
+                        className={`rounded px-1 text-xs font-semibold hover:bg-navy-100 sm:text-sm ${
                           isToday ? 'text-navy-700' : 'text-navy-600'
                         }`}
+                        title="Показать все дела этого дня"
                       >
                         {d.getDate()}
-                      </span>
+                      </button>
                       <div className="flex shrink-0 items-center gap-1">
                         {(ordersByDay.get(key)?.length ?? 0) > 0 && (
                           <span className="rounded-md bg-navy-100 px-1.5 text-[11px] font-semibold text-navy-700">
@@ -672,6 +708,105 @@ export function Calendar() {
             : '💡 Нажмите на заказ, чтобы открыть его; задачи перетаскиваются'}
         </span>
       </div>
+
+      {/*
+        Раскрытый день: всё, что на него назначено. В клетке помещаются
+        две-три карточки, а дел на день бывает больше — здесь видно всё
+        сразу, и отсюда же открывается карточка заказа или задачи.
+      */}
+      {dayOpen && (
+        <Modal
+          open
+          onClose={() => setDayOpen(null)}
+          title={new Date(dayOpen).toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}
+        >
+          <div className="space-y-4">
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
+                Заказы ({(ordersByDay.get(dayOpen) ?? []).length})
+              </h4>
+              {(ordersByDay.get(dayOpen) ?? []).length === 0 ? (
+                <p className="text-sm text-navy-600">На этот день уборок нет</p>
+              ) : (
+                <div className="space-y-2">
+                  {(ordersByDay.get(dayOpen) ?? []).map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => {
+                        setDayOpen(null);
+                        setOpenOrder(o);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-navy-100 p-3 text-left transition hover:bg-navy-50"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-navy-900">
+                          {o.client?.fullName ?? 'Клиент'}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-navy-600">
+                          {STAGE_LABEL[o.stage]}
+                          {o.address ? ` · ${o.address}` : ''}
+                        </span>
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-sm font-bold text-navy-800">
+                        {formatPrice(orderTotal(o))}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
+                Задачи ({(byDay.get(dayOpen) ?? []).length})
+              </h4>
+              {(byDay.get(dayOpen) ?? []).length === 0 ? (
+                <p className="text-sm text-navy-600">Задач на этот день нет</p>
+              ) : (
+                <div className="space-y-2">
+                  {(byDay.get(dayOpen) ?? []).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        if (isTemp(t.id)) return;
+                        setDayOpen(null);
+                        setModal({ mode: 'edit', id: t.id });
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-navy-100 p-3 text-left transition hover:bg-navy-50"
+                    >
+                      <span className="min-w-0 flex-1 truncate font-medium text-navy-900">
+                        {t.title}
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-xs text-navy-600">
+                        {TASK_STATUS_LABEL[t.status]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const date = dayOpen;
+                setDayOpen(null);
+                setModal({ mode: 'create', date });
+              }}
+              className="btn-ghost w-full"
+            >
+              <Plus className="h-4 w-4" />
+              Новая задача на этот день
+            </button>
+          </div>
+        </Modal>
+      )}
 
       <OrderModal
         orderId={openOrder?.id ?? null}
