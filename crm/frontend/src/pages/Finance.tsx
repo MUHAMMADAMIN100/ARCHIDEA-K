@@ -20,6 +20,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { Badge, EmptyState, ErrorState, Modal, PageHeader } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   Column,
@@ -76,7 +77,7 @@ export function Finance() {
   }
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Финансы"
       />
@@ -400,14 +401,14 @@ function EntriesTab() {
               setEditingEntry(row);
               setModalOpen(true);
             }}
-            className="rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
+            className="press rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
             title="Изменить"
           >
             <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={() => removeEntry(row)}
-            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-700"
+            className="press rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-700"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -418,7 +419,9 @@ function EntriesTab() {
   ];
 
   return (
-    <div>
+    // проявление и при переключении вкладки: содержимое подменяется целиком,
+    // и без него смена «Операции → Премии» происходит рывком
+    <div className="animate-page-in">
       {/* Карточки сверху: доход / расход / прибыль за период */}
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <StatCard
@@ -916,7 +919,7 @@ function EntryModal({
                 key={k}
                 type="button"
                 onClick={() => changeKind(k)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                className={`press flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
                   kind === k
                     ? k === 'INCOME'
                       ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
@@ -1029,7 +1032,7 @@ function OrderPicker({
         <span className="min-w-0 flex-1 truncate text-navy-700">{value.label}</span>
         <button
           type="button"
-          className="shrink-0 text-navy-600 hover:text-rose-700"
+          className="press shrink-0 text-navy-600 hover:text-rose-700"
           onClick={() => onChange(null)}
           aria-label="Отвязать заказ"
         >
@@ -1051,33 +1054,39 @@ function OrderPicker({
         />
       </div>
       {query.trim() && (
-        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-navy-100 bg-white shadow-card">
-          {searching && <div className="px-3 py-2 text-xs text-navy-600">Ищем…</div>}
-          {!searching && results.length === 0 && (
-            <div className="px-3 py-2 text-xs text-navy-600">Ничего не найдено</div>
-          )}
-          {results.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              className="block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
-              onClick={() => {
-                onChange({
-                  id: o.id,
-                  clientId: o.clientId,
-                  label: `${o.client?.fullName ?? 'Заказ'}${o.address ? ` · ${o.address}` : ''}`,
-                });
-                setQuery('');
-                setResults([]);
-              }}
-            >
-              <div className="font-medium text-navy-900">{o.client?.fullName ?? '—'}</div>
-              <div className="text-xs text-navy-600">
-                {o.client?.phone ?? ''}
-                {o.address ? ` · ${o.address}` : ''}
-              </div>
-            </button>
-          ))}
+        // выпадашка оторвана от страницы: тень четвёртого уровня и приход
+        // из-под поля поиска
+        <div className="absolute z-10 mt-1 w-full animate-drop-in overflow-hidden rounded-xl border border-navy-100 bg-white shadow-pop">
+          {/* найденных заказов до восьми — растворяющийся нижний край показывает,
+              что список продолжается, без подписи «прокрутите» */}
+          <ScrollArea axis="y" innerClassName="max-h-56" label="Найденные заказы">
+            {searching && <div className="px-3 py-2 text-xs text-navy-600">Ищем…</div>}
+            {!searching && results.length === 0 && (
+              <div className="px-3 py-2 text-xs text-navy-600">Ничего не найдено</div>
+            )}
+            {results.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                className="press block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
+                onClick={() => {
+                  onChange({
+                    id: o.id,
+                    clientId: o.clientId,
+                    label: `${o.client?.fullName ?? 'Заказ'}${o.address ? ` · ${o.address}` : ''}`,
+                  });
+                  setQuery('');
+                  setResults([]);
+                }}
+              >
+                <div className="font-medium text-navy-900">{o.client?.fullName ?? '—'}</div>
+                <div className="text-xs text-navy-600">
+                  {o.client?.phone ?? ''}
+                  {o.address ? ` · ${o.address}` : ''}
+                </div>
+              </button>
+            ))}
+          </ScrollArea>
         </div>
       )}
     </div>
@@ -1236,7 +1245,7 @@ function BonusesTab() {
         ) : (
           <button
             onClick={() => payBonus(b)}
-            className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+            className="press rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
           >
             Отметить выплату
           </button>
@@ -1249,7 +1258,7 @@ function BonusesTab() {
         <div className="flex justify-end">
           <button
             onClick={() => removeBonus(b)}
-            className="rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-700"
+            className="press rounded-lg p-1.5 text-navy-600 hover:bg-rose-50 hover:text-rose-700"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -1260,7 +1269,7 @@ function BonusesTab() {
   ];
 
   return (
-    <div className="card p-5">
+    <div className="card animate-page-in p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
@@ -1354,7 +1363,7 @@ function BonusModal({
             <button
               type="button"
               onClick={() => setRecipientType('cleaner')}
-              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+              className={`press flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
                 recipientType === 'cleaner'
                   ? 'border-navy-500 bg-navy-50 text-navy-800'
                   : 'border-navy-100 text-navy-600 hover:border-navy-300'
@@ -1365,7 +1374,7 @@ function BonusModal({
             <button
               type="button"
               onClick={() => setRecipientType('user')}
-              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+              className={`press flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
                 recipientType === 'user'
                   ? 'border-navy-500 bg-navy-50 text-navy-800'
                   : 'border-navy-100 text-navy-600 hover:border-navy-300'

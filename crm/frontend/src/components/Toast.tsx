@@ -69,11 +69,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto flex items-start gap-2 rounded-xl border px-4 py-3 text-sm shadow-card ${STYLE[t.type]}`}
+              /*
+                Уведомление всплывает над страницей, поэтому уровень высоты
+                тот же, что у выпадашек, — pop, а не card.
+              */
+              className={`pointer-events-auto flex animate-fade-in items-start gap-2 rounded-xl border px-4 py-3 text-sm shadow-pop ${STYLE[t.type]}`}
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" />
               <span className="flex-1">{t.message}</span>
-              <button onClick={() => remove(t.id)} className="opacity-60 hover:opacity-100">
+              <button
+                onClick={() => remove(t.id)}
+                className="press opacity-60 transition-[opacity,transform] duration-120 ease-out hover:opacity-100"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>

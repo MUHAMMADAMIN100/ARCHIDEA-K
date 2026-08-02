@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
+import { StuckSentinel, useStuck } from './ScrollArea';
 import { userSeesTrash } from '../types';
 import type { Role } from '../types';
 
@@ -159,7 +160,7 @@ function NavItemLink({
       end={item.to === '/'}
       onClick={onClick}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+        `press flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[background-color,color,transform] duration-120 ease-out ${
           isActive ? 'bg-white text-navy-900' : 'text-white hover:bg-white/15'
         }`
       }
@@ -177,6 +178,9 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  // шапка отбрасывает тень только когда под ней уже проехало содержимое —
+  // так видно, что страница длиннее экрана и вы не в её начале
+  const { ref: headerRef, sentinelRef } = useStuck<HTMLElement>();
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -301,7 +305,9 @@ export function Layout() {
     <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col bg-brand-500 text-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        // на телефоне меню выезжает поверх страницы — тень показывает, что оно
+        // висит над содержимым; на десктопе оно стоит в потоке, там тени нет
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col bg-brand-500 text-white shadow-pop transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:shadow-none ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -333,7 +339,7 @@ export function Layout() {
                 <button
                   type="button"
                   onClick={() => setMoreOpen((o) => !o)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                  className={`press flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[background-color,color,transform] duration-120 ease-out ${
                     insideMore
                       ? 'bg-white text-navy-900'
                       : 'text-white hover:bg-white/15'
@@ -391,7 +397,7 @@ export function Layout() {
         <div className="shrink-0 p-3">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white hover:bg-white/15"
+            className="press flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white hover:bg-white/15"
           >
             <LogOut className="h-[18px] w-[18px]" />
             Выйти
@@ -401,16 +407,20 @@ export function Layout() {
 
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-navy-950/40 lg:hidden"
+          className="fixed inset-0 z-30 animate-fade-in bg-navy-950/40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-navy-100 bg-white/90 px-4 backdrop-blur sm:px-6">
+        <StuckSentinel sentinelRef={sentinelRef} />
+        <header
+          ref={headerRef}
+          className="sticky-head flex h-16 items-center justify-between gap-3 border-b border-navy-100 bg-white/90 px-4 backdrop-blur sm:px-6"
+        >
           <button
-            className="rounded-lg p-2 text-navy-600 hover:bg-navy-50 lg:hidden"
+            className="press rounded-lg p-2 text-navy-600 hover:bg-navy-50 lg:hidden"
             onClick={() => setMobileOpen((o) => !o)}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -423,7 +433,7 @@ export function Layout() {
             <div className="relative" ref={profileRef}>
               <button
                 onClick={() => setProfileOpen((o) => !o)}
-                className="flex items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-navy-50"
+                className="press flex items-center gap-2.5 rounded-xl p-1 transition-[background-color,transform] duration-120 ease-out hover:bg-navy-50"
               >
                 <div className="hidden text-right sm:block">
                   <div className="text-sm font-semibold text-navy-900">
@@ -442,7 +452,7 @@ export function Layout() {
               </button>
 
               {profileOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-navy-100 bg-white py-1.5 shadow-card">
+                <div className="absolute right-0 z-50 mt-2 w-52 animate-drop-in overflow-hidden rounded-2xl border border-navy-100 bg-white py-1.5 shadow-pop">
                   <div className="border-b border-navy-50 px-4 py-2.5">
                     <div className="truncate text-sm font-semibold text-navy-900">
                       {user?.fullName}
@@ -454,21 +464,21 @@ export function Layout() {
                       setProfileOpen(false);
                       navigate(`/profile/${user?.id}`);
                     }}
-                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-navy-700 hover:bg-navy-50"
+                    className="press flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-navy-700 hover:bg-navy-50"
                   >
                     <UserCircle className="h-[18px] w-[18px] text-navy-600" />
                     Профиль
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                    className="press flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                   >
                     <LogOut className="h-[18px] w-[18px]" />
                     Выйти
                   </button>
                   <button
                     onClick={handleLogoutAll}
-                    className="flex w-full items-start gap-2.5 border-t border-navy-50 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+                    className="press flex w-full items-start gap-2.5 border-t border-navy-50 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
                     title="Погасит сессии на всех устройствах, включая украденные"
                   >
                     <ShieldOff className="mt-0.5 h-[18px] w-[18px] shrink-0" />

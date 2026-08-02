@@ -336,7 +336,7 @@ export function Trash() {
         : `В разделе «${activeTab !== 'all' ? TRASH_TYPE_LABEL[activeTab] : ''}» пока ничего нет.`;
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Корзина"
         action={

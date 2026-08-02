@@ -11,6 +11,7 @@ import { api } from '../api/client';
 import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, Badge } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import {
@@ -40,14 +41,14 @@ export function ReportView() {
   if (loading) return <Spinner />;
   if (error || !r) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-4xl animate-page-in">
         <button
           onClick={() => navigate('/reports')}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+          className="press mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 shadow-card">
           {error || 'Отчёт не найден'}
         </div>
       </div>
@@ -117,7 +118,7 @@ export function ReportView() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl animate-page-in">
       {/* ── Панель действий (не печатается) ── */}
       {/*
         Панель действий. На телефоне: возврат и удаление по краям верхней
@@ -127,7 +128,7 @@ export function ReportView() {
       <div className="no-print mb-4 space-y-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
         <button
           onClick={() => navigate('/reports')}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+          className="press inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
@@ -161,7 +162,7 @@ export function ReportView() {
           {(isDirector || r.status !== 'ACCEPTED') && (
             <button
               onClick={removeReport}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+              className="press inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -222,7 +223,9 @@ export function ReportView() {
         <h3 className="mb-2 mt-6 text-sm font-bold uppercase tracking-wide text-navy-700">
           Работники
         </h3>
-        <div className="overflow-x-auto">
+        {/* ведомость шире телефона: край растворяется там, куда ещё можно
+            тянуть, и гаснет на упоре — колонку «Сумма» видно, что она есть */}
+        <ScrollArea axis="x" label="Ведомость работников">
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
               <tr className="bg-navy-500 text-left text-xs text-white print:bg-white print:text-navy-900">
@@ -268,7 +271,7 @@ export function ReportView() {
               </tr>
             </tbody>
           </table>
-        </div>
+        </ScrollArea>
 
         {/* Доп. расходы */}
         <h3 className="mb-2 mt-6 text-sm font-bold uppercase tracking-wide text-navy-700">
@@ -277,7 +280,7 @@ export function ReportView() {
         {r.expenses.length === 0 ? (
           <p className="text-sm text-navy-600">Дополнительных расходов нет</p>
         ) : (
-          <div className="overflow-x-auto">
+          <ScrollArea axis="x" label="Таблица дополнительных расходов">
             <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
                 <tr className="bg-navy-500 text-left text-xs text-white print:bg-white print:text-navy-900">
@@ -314,7 +317,7 @@ export function ReportView() {
                 </tr>
               </tbody>
             </table>
-          </div>
+          </ScrollArea>
         )}
 
         {/* Сводка */}

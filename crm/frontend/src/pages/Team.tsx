@@ -19,7 +19,7 @@ import { sanitizePersonName } from '../lib/contact';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
-import { Spinner, PageHeader, Modal, EmptyState, Badge } from '../components/ui';
+import { Skeleton, PageHeader, Modal, EmptyState, Badge } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   STAGE_COLOR,
@@ -179,13 +179,29 @@ export function Team() {
     }
   };
 
-  if (brigadesLoading && !brigades) return <Spinner />;
+  /*
+   * Заглушка повторяет сетку бригад — те же две колонки и та же высота.
+   * Крутящийся кружок оставлял экран пустым, и при приходе данных вёрстка
+   * прыгала с нуля на полный рост.
+   */
+  if (brigadesLoading && !brigades)
+    return (
+      <div
+        className="grid min-w-0 animate-page-in gap-4 lg:grid-cols-2"
+        role="status"
+        aria-label="Загрузка"
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-60 rounded-md" />
+        ))}
+      </div>
+    );
 
   // отключённые клинеры скрыты (история их смен сохраняется в выплатах)
   const unassigned = (cleaners ?? []).filter((c) => !c.brigadeId && c.isActive);
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Команда"
         action={
@@ -256,7 +272,7 @@ export function Team() {
                 </div>
                 <button
                   onClick={() => setAddToBrigade(b.id)}
-                  className="rounded-lg p-2 text-navy-600 transition hover:bg-navy-50 hover:text-navy-700"
+                  className="press rounded-lg p-2 text-navy-600 transition hover:bg-navy-50 hover:text-navy-700"
                   title="Добавить в бригаду"
                 >
                   <Plus className="h-4 w-4" />
@@ -329,7 +345,7 @@ export function Team() {
                                 duties: c.duties,
                               })
                             }
-                            className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
+                            className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                             title="Обязанности"
                           >
                             <BadgeCheck className="h-4 w-4" />
@@ -337,14 +353,14 @@ export function Team() {
                         )}
                         <button
                           onClick={() => setEditCleaner(c as Cleaner)}
-                          className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
+                          className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                           title="Редактировать"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => removeCleaner(c as Cleaner)}
-                          className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                          className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                           title="Удалить"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -390,13 +406,13 @@ export function Team() {
                 )}
                 <button
                   onClick={() => setEditCleaner(c)}
-                  className="rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
+                  className="press rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => removeCleaner(c)}
-                  className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                  className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -615,8 +631,13 @@ function StaffCard({
         </span>
         <div className="min-w-0 flex-1">
           <div
+            /*
+              Нажимается только имя, а не вся карточка: рядом лежит кнопка
+              «Обязанности», и подъём всего бокса обещал бы переход по клику
+              в любом его месте. Отклик на нажатие вешаем на сам click-target.
+            */
             className={`truncate font-bold text-navy-900 ${
-              canOpenProfile ? 'cursor-pointer hover:text-navy-600' : ''
+              canOpenProfile ? 'press cursor-pointer hover:text-navy-600' : ''
             }`}
             onClick={
               canOpenProfile ? () => navigate(`/profile/${person.id}`) : undefined
@@ -632,7 +653,7 @@ function StaffCard({
       {(person.duties || person.mainTask) && (
         <button
           onClick={onDuties}
-          className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
+          className="press mt-3 inline-flex items-center justify-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
         >
           <BadgeCheck className="h-3.5 w-3.5" />
           Обязанности

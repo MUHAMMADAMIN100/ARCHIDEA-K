@@ -64,8 +64,15 @@
    * которого экран открыли. Остальные — рамка на белом, они не спорят с ней
    * за внимание.
    */
+  /*
+   * active:scale — подтверждение нажатия. На телефоне наведения нет, и без
+   * отклика непонятно, попал ли палец по кнопке: человек жмёт второй раз,
+   * и действие уходит дважды.
+   */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold;
+    @apply transition-[background-color,border-color,color,transform,box-shadow] duration-120 ease-out;
+    @apply active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
   }
   .btn-primary {
     @apply btn bg-brand-500 text-white hover:bg-brand-600;
@@ -76,9 +83,50 @@
   .btn-danger {
     @apply btn bg-red-600 text-white hover:bg-red-700;
   }
-  /* Границу карточки держит рамка, а не тень */
+  /*
+   * Карточка — первый уровень высоты: лежит на странице.
+   * Рамка осталась: на слабых экранах и при ярком свете тень одна границу
+   * не держит. Тень добавляет глубину, рамка — чёткость.
+   */
   .card {
-    @apply rounded-md border border-navy-200 bg-white;
+    @apply rounded-md border border-navy-200 bg-white shadow-card;
+  }
+
+  /*
+   * Карточка, которую можно нажать: под курсором приподнимается.
+   *
+   * Подъём ровно на один пиксель. Больше — и плотная сетка карточек начинает
+   * «дышать» при каждом движении мыши. На телефоне курсора нет, поэтому
+   * там же работает отклик на нажатие (.press).
+   */
+  .card-interactive {
+    @apply card cursor-pointer transition-[box-shadow,transform,border-color] duration-120 ease-out;
+    @apply hover:-translate-y-px hover:border-navy-300 hover:shadow-lift;
+  }
+
+  /*
+   * Отклик на нажатие. Палец не видит наведения, поэтому подтверждение
+   * нажатия — единственный способ понять, что попал по кнопке.
+   */
+  .press {
+    @apply transition-transform duration-120 ease-out active:scale-[0.97];
+  }
+
+  /*
+   * Заглушка загрузки вместо крутящегося кружка. Показывает разметку
+   * будущего содержимого, поэтому при появлении данных экран не прыгает,
+   * а ожидание кажется короче.
+   */
+  .skeleton {
+    @apply rounded bg-navy-100;
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.navy.100') 0%,
+      theme('colors.navy.50') 50%,
+      theme('colors.navy.100') 100%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer;
   }
   .input {
     @apply w-full rounded-md border border-navy-300 bg-white px-3 py-2 text-sm text-navy-900 outline-none transition-colors placeholder:text-navy-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500;
@@ -96,6 +144,123 @@
   }
   .label {
     @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-navy-500;
+  }
+
+  /*
+   * ── Край прокрутки ──────────────────────────────────────────────────
+   *
+   * Показывает, что содержимое продолжается за краем, БЕЗ единой подписи.
+   * Содержимое растворяется у той стороны, куда ещё можно крутить, и край
+   * пропадает, когда прокрутили до конца, — так видно и что «там есть
+   * ещё», и что «дальше некуда».
+   *
+   * Признаки data-start / data-end проставляет компонент ScrollArea: чистым
+   * CSS положение прокрутки не узнать, а показывать край всегда — значит
+   * врать в конце списка.
+   *
+   * --fade-bg переопределяется, если полоса лежит не на белом.
+   */
+  .scroll-edge {
+    position: relative;
+    --fade-bg: #ffffff;
+  }
+  .scroll-edge::before,
+  .scroll-edge::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+  }
+  /* горизонтальная прокрутка: края слева и справа */
+  .scroll-edge-x::before,
+  .scroll-edge-x::after {
+    top: 0;
+    bottom: 0;
+    width: 2.5rem;
+  }
+  .scroll-edge-x::before {
+    left: 0;
+    background: linear-gradient(to right, var(--fade-bg), transparent);
+  }
+  .scroll-edge-x::after {
+    right: 0;
+    background: linear-gradient(to left, var(--fade-bg), transparent);
+  }
+  /* вертикальная прокрутка: края сверху и снизу */
+  .scroll-edge-y::before,
+  .scroll-edge-y::after {
+    left: 0;
+    right: 0;
+    height: 2rem;
+  }
+  .scroll-edge-y::before {
+    top: 0;
+    background: linear-gradient(to bottom, var(--fade-bg), transparent);
+  }
+  .scroll-edge-y::after {
+    bottom: 0;
+    background: linear-gradient(to top, var(--fade-bg), transparent);
+  }
+  /* край виден, только пока в эту сторону есть куда крутить */
+  .scroll-edge[data-at-start='false']::before {
+    opacity: 1;
+  }
+  .scroll-edge[data-at-end='false']::after {
+    opacity: 1;
+  }
+
+  /*
+   * ── Прилипшая шапка ─────────────────────────────────────────────────
+   *
+   * Тень появляется, только когда под шапкой что-то проехало. Пока список
+   * в начале, шапка лежит заподлицо; стоит прокрутить — она отрывается и
+   * отбрасывает тень. Это и есть сигнал «список длиннее экрана, и вы уже
+   * не в начале» — без единого слова.
+   */
+  .sticky-head {
+    @apply sticky top-0 z-20 bg-white transition-shadow duration-160 ease-out;
+  }
+  .sticky-head[data-stuck='true'] {
+    @apply shadow-stuck;
+  }
+
+  /*
+   * ── Точки-индикаторы свайпа ─────────────────────────────────────────
+   *
+   * Сколько всего экранов и на каком вы сейчас. Ставятся только там, где
+   * элементов немного и они листаются по одному (воронка, календарь):
+   * на длинном списке клиентов сорок точек читаются как мусор.
+   */
+  .swipe-dot {
+    @apply h-1.5 rounded-full bg-navy-200 transition-all duration-160 ease-out;
+    width: 0.375rem;
+  }
+  .swipe-dot[data-active='true'] {
+    @apply bg-brand-500;
+    width: 1.125rem;
+  }
+}
+
+/*
+ * Уважаем системную настройку «меньше движения».
+ *
+ * Её включают не ради вкуса: анимация вызывает тошноту и головокружение у
+ * людей с вестибулярными нарушениями. Содержимое обязано остаться на месте
+ * и полностью видимым — гасим движение, а не показ.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card-interactive:hover {
+    transform: none !important;
   }
 }
 

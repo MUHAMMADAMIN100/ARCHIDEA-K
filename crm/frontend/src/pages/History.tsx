@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { PageHeader, ErrorState, Spinner, EmptyState } from '../components/ui';
+import { PageHeader, ErrorState, SkeletonList, EmptyState } from '../components/ui';
 import {
   FilterReset,
   PeriodFilter,
@@ -107,7 +107,7 @@ export function History() {
 
   if (forbidden) {
     return (
-      <div>
+      <div className="animate-page-in">
         <PageHeader title="Журнал изменений" />
         <ErrorState text={forbidden} />
       </div>
@@ -115,7 +115,7 @@ export function History() {
   }
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Журнал изменений"
         subtitle="Журнал хранится 45 дней, старые записи удаляются автоматически. Кто и что менял в CRM: заказы, клиенты, сотрудники, тарифы, финансы"
@@ -186,7 +186,9 @@ export function History() {
       {error && items.length === 0 ? (
         <ErrorState text={error} onRetry={() => setReloadTick((t) => t + 1)} />
       ) : loading && items.length === 0 ? (
-        <Spinner />
+        // заглушка повторяет ленту записей: тот же вертикальный ритм,
+        // поэтому при появлении данных экран не прыгает
+        <SkeletonList rows={6} />
       ) : items.length === 0 ? (
         <EmptyState text="По заданным фильтрам изменений не найдено. Проверьте период и фильтры выше." />
       ) : (

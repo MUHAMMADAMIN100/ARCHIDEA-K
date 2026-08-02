@@ -18,7 +18,9 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { TelegramLink } from '../components/TelegramLink';
 import {
-  Spinner,
+  Skeleton,
+  SkeletonCards,
+  SkeletonList,
   PageHeader,
   Badge,
   Modal,
@@ -26,6 +28,7 @@ import {
   PasswordInput,
   ErrorState,
 } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { useToast } from '../components/Toast';
 import { NameInput, PhoneInput } from '../components/ContactFields';
 import { formatDate, formatPrice, STAGE_LABEL, STAGE_COLOR } from '../lib/labels';
@@ -124,17 +127,28 @@ export function UserDetail() {
     { deps: [list?.type] },
   );
 
-  if (loading) return <Spinner />;
+  if (loading)
+    return (
+      // заглушка повторяет раскладку профиля: шапка-карточка и лента
+      // показателей — при появлении данных страница не перестраивается
+      <div className="animate-page-in">
+        <Skeleton className="mb-5 h-48 w-full rounded-md" />
+        <SkeletonCards
+          count={5}
+          className="!gap-4 sm:!grid-cols-3 lg:!grid-cols-5"
+        />
+      </div>
+    );
   if (error || !data) {
     return (
-      <div>
+      <div className="animate-page-in">
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+          className="press mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> Назад
         </button>
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 shadow-card">
           {error || 'Профиль не найден'}
         </div>
       </div>
@@ -151,10 +165,10 @@ export function UserDetail() {
   ];
 
   return (
-    <div>
+    <div className="animate-page-in">
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+        className="press mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
       >
         <ArrowLeft className="h-4 w-4" /> Назад
       </button>
@@ -211,7 +225,7 @@ export function UserDetail() {
           {viewer?.role === 'DIRECTOR' && (
             <button
               onClick={() => setShowEdit(true)}
-              className="inline-flex items-center gap-1.5 self-start rounded-xl border border-navy-200 px-3 py-2 text-sm font-medium text-navy-700 transition hover:bg-navy-50"
+              className="press inline-flex items-center gap-1.5 self-start rounded-xl border border-navy-200 px-3 py-2 text-sm font-medium text-navy-700 transition hover:bg-navy-50"
             >
               <Pencil className="h-4 w-4" />
               Редактировать
@@ -278,7 +292,7 @@ export function UserDetail() {
           <button
             key={s.type}
             onClick={() => setList({ type: s.type, title: s.label })}
-            className="card p-5 text-left transition-shadow hover:shadow-lg"
+            className="card-interactive press p-5 text-left"
           >
             <div className="flex items-center justify-between">
               <span
@@ -304,11 +318,17 @@ export function UserDetail() {
         title={list ? `${list.title} — ${data.fullName}` : ''}
       >
         {itemsLoading ? (
-          <Spinner />
+          <SkeletonList rows={4} />
         ) : !items || items.length === 0 ? (
           <EmptyState text="Пусто" />
         ) : (
-          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+          // список длиннее окна: край растворяется с той стороны, куда ещё
+          // есть куда крутить, — видно, что записи продолжаются, без подписи
+          <ScrollArea
+            axis="y"
+            innerClassName="max-h-[60vh] space-y-2"
+            label={list?.title}
+          >
             {items.map((it) => {
               const clickable = list?.type === 'clients';
               return (
@@ -323,7 +343,7 @@ export function UserDetail() {
                       : undefined
                   }
                   className={`flex items-center justify-between rounded-xl border border-navy-100 px-4 py-3 ${
-                    clickable ? 'cursor-pointer hover:bg-navy-50' : ''
+                    clickable ? 'press cursor-pointer hover:bg-navy-50' : ''
                   }`}
                 >
                   <span className="font-medium text-navy-900">{it.primary}</span>
@@ -331,7 +351,7 @@ export function UserDetail() {
                 </div>
               );
             })}
-          </div>
+          </ScrollArea>
         )}
       </Modal>
 
@@ -620,7 +640,7 @@ function PeriodAnalytics({
       {error ? (
         <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !data ? (
-        <Spinner />
+        <SkeletonCards count={4} className="!gap-4" />
       ) : data ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

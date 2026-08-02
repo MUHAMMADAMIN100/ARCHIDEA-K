@@ -1,5 +1,11 @@
 import { useFetch } from '../api/hooks';
-import { Spinner, PageHeader, Badge, EmptyState } from '../components/ui';
+import {
+  SkeletonCards,
+  SkeletonList,
+  PageHeader,
+  Badge,
+  EmptyState,
+} from '../components/ui';
 import { ShieldCheck, ShieldAlert, Lock, Monitor } from 'lucide-react';
 import { Column, DataTable } from '../components/common';
 
@@ -96,12 +102,24 @@ export function Security() {
     pollMs: 30000,
   });
 
-  if (loading || !data) return <Spinner />;
+  if (loading || !data)
+    return (
+      // заглушка держит ту же раскладку: три бокса сводки и журнал под ними,
+      // поэтому при загрузке страница не перестраивается
+      <div className="animate-page-in">
+        <PageHeader title="Безопасность" />
+        <SkeletonCards
+          count={3}
+          className="mb-6 !gap-4 sm:!grid-cols-3 lg:!grid-cols-3"
+        />
+        <SkeletonList rows={6} />
+      </div>
+    );
 
   const failed = data.items.filter((a) => !a.success);
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Безопасность"
       />

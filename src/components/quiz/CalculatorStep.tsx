@@ -96,7 +96,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                 key={v}
                 type="button"
                 onClick={() => onChange({ ...state, seats: v })}
-                className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
+                className={`press rounded-full px-3.5 py-1.5 text-sm transition-[background-color,color,transform] duration-120 ease-out ${
                   state.seats === v
                     ? 'bg-brand-500 text-white'
                     : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
@@ -135,7 +135,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                   key={v}
                   type="button"
                   onClick={() => onChange({ ...state, area: v })}
-                  className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
+                  className={`press rounded-full px-3.5 py-1.5 text-sm transition-[background-color,color,transform] duration-120 ease-out ${
                     state.area === v
                       ? 'bg-brand-500 text-white'
                       : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
@@ -188,15 +188,20 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                       }
                     }}
                     /* min-w-0: без него ячейка сетки держит ширину по самому
-                       длинному названию услуги и распирает всю форму */
-                    className={`flex h-[70px] min-w-0 cursor-pointer items-center gap-2.5 rounded-2xl border px-3 transition-all duration-200 ${
+                       длинному названию услуги и распирает всю форму.
+
+                       Отклика на нажатие (press) у плитки нет намеренно: внутри
+                       живут кнопки «+»/«−», и сжималась бы вся плитка — человек
+                       решил бы, что снял услугу, а не изменил количество.
+                       Выбор и без того виден сразу: заливка, рамка и галочка. */
+                    className={`flex h-[70px] min-w-0 cursor-pointer items-center gap-2.5 rounded-2xl border px-3 transition-[background-color,border-color,box-shadow] duration-120 ease-out ${
                       active
                         ? 'border-navy-500 bg-navy-50 ring-1 ring-navy-300'
                         : 'border-navy-200 bg-white hover:border-navy-400 hover:bg-navy-50'
                     }`}
                   >
                     <span
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors duration-120 ease-out ${
                         active
                           ? 'border-navy-500 bg-brand-500 text-white'
                           : 'border-navy-300 text-transparent'
@@ -226,7 +231,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                         <button
                           type="button"
                           onClick={() => setQty(s.id, qty - 1)}
-                          className="flex h-6 w-6 items-center justify-center rounded-lg bg-navy-100 text-base leading-none text-navy-700 transition hover:bg-navy-200 disabled:opacity-40"
+                          className="press flex h-6 w-6 items-center justify-center rounded-lg bg-navy-100 text-base leading-none text-navy-700 transition-[background-color,opacity,transform] duration-120 ease-out hover:bg-navy-200 disabled:opacity-40"
                           disabled={qty <= 0}
                           aria-label="Меньше"
                         >
@@ -238,7 +243,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                         <button
                           type="button"
                           onClick={() => setQty(s.id, qty + 1)}
-                          className="flex h-6 w-6 items-center justify-center rounded-lg bg-navy-100 text-base leading-none text-navy-700 transition hover:bg-navy-200"
+                          className="press flex h-6 w-6 items-center justify-center rounded-lg bg-navy-100 text-base leading-none text-navy-700 transition-[background-color,transform] duration-120 ease-out hover:bg-navy-200"
                           aria-label="Больше"
                         >
                           +

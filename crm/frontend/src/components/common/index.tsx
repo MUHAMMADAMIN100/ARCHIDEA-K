@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
-import { EmptyState, ErrorState, Spinner } from '../ui';
+import { EmptyState, ErrorState, Skeleton, SkeletonList } from '../ui';
+import { ScrollArea } from '../ScrollArea';
 import { DatePicker } from '../DatePicker';
 import { useFetch } from '../../api/hooks';
 import {
@@ -73,7 +74,7 @@ export function DataTable<T>({
   );
 
   if (error) return <ErrorState onRetry={onRetry} />;
-  if (loading && list.length === 0) return <Spinner />;
+  if (loading && list.length === 0) return <SkeletonList rows={6} />;
   if (list.length === 0) return <EmptyState text={emptyText} />;
 
   return (
@@ -93,8 +94,8 @@ export function DataTable<T>({
           <div
             key={rowKey(row)}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={`rounded-2xl border border-navy-100 bg-white p-3 ${
-              onRowClick ? 'cursor-pointer active:bg-navy-50' : ''
+            className={`rounded-2xl border border-navy-100 bg-white p-3 shadow-card ${
+              onRowClick ? 'press cursor-pointer active:bg-navy-50' : ''
             }`}
           >
             {columns
@@ -121,7 +122,7 @@ export function DataTable<T>({
           </div>
         ))}
         {totals && (
-          <div className="rounded-2xl border border-navy-100 bg-navy-50/60 p-3 font-semibold">
+          <div className="rounded-2xl border border-navy-100 bg-navy-50/60 p-3 font-semibold shadow-card">
             {columns
               .filter((c) => !c.hideOnMobile && totals[c.key])
               .map((c) => (
@@ -139,7 +140,8 @@ export function DataTable<T>({
         )}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-2xl border border-navy-100 bg-white md:block">
+      <div className="hidden rounded-2xl border border-navy-100 bg-white shadow-card md:block">
+        <ScrollArea axis="x" label="Таблица">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
@@ -194,6 +196,7 @@ export function DataTable<T>({
             </tfoot>
           )}
         </table>
+        </ScrollArea>
       </div>
 
       {pages > 1 && (
@@ -390,7 +393,24 @@ export function CleanerPicker({
       />
     );
   }
-  if (cleaners.loading && !cleaners.data) return <Spinner />;
+  /*
+   * Заглушка повторяет ряд чипов, а не строки списка: клинеров выбирают
+   * прямо в форме, и блок из полос во всю ширину сдвигал бы поля под собой,
+   * а потом схлопывался обратно, когда список приходит.
+   */
+  if (cleaners.loading && !cleaners.data) {
+    return (
+      <div
+        className="flex flex-wrap gap-1.5"
+        role="status"
+        aria-label="Загрузка"
+      >
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-28 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
 
   const list = cleaners.data ?? [];
   if (list.length === 0) {
@@ -438,7 +458,7 @@ export function CleanerPicker({
                   type="button"
                   aria-pressed={active}
                   onClick={() => toggle(c.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition ${
+                  className={`press inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition ${
                     active
                       ? 'border-brand-500 bg-brand-100 font-medium text-brand-900 ring-2 ring-brand-200'
                       : 'border-navy-100 text-navy-600 hover:border-brand-300 hover:bg-brand-50/40'
@@ -513,7 +533,7 @@ export function Tabs<T extends string>({
         <button
           key={i.value}
           onClick={() => onChange(i.value)}
-          className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition ${
+          className={`press -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition ${
             i.value === value
               ? 'border-brand-500 font-medium text-brand-700'
               : 'border-transparent text-navy-600 hover:text-navy-700'
@@ -570,15 +590,23 @@ export function StatCard({
   );
 
   if (!onClick) {
-    return <div className="rounded-2xl border border-navy-100 bg-white p-4">{body}</div>;
+    return (
+      <div className="rounded-2xl border border-navy-100 bg-white p-4 shadow-card">
+        {body}
+      </div>
+    );
   }
 
+  /*
+   * Нажимаемая карточка приподнимается под курсором — так видно, что цифра
+   * не тупик, а вход в расшифровку. Ненажимаемая остаётся лежать на странице.
+   */
   return (
     <button
       type="button"
       onClick={onClick}
       title={title ?? 'Показать подробности'}
-      className="rounded-2xl border border-navy-100 bg-white p-4 text-left transition hover:border-navy-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
+      className="press rounded-2xl border border-navy-100 bg-white p-4 text-left shadow-card transition-[box-shadow,transform,border-color] duration-120 ease-out hover:-translate-y-px hover:border-navy-300 hover:shadow-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
     >
       {body}
     </button>
@@ -656,7 +684,7 @@ export function PrintSheet({
   children: ReactNode;
 }) {
   return (
-    <div className="print-sheet rounded-2xl border border-navy-100 bg-white p-6 sm:p-8">
+    <div className="print-sheet rounded-2xl border border-navy-100 bg-white p-6 shadow-card sm:p-8">
       <div className="mb-5 border-b border-navy-100 pb-4">
         <div className="text-lg font-semibold text-navy-900">{title}</div>
         {subtitle && <div className="mt-1 text-sm text-navy-600">{subtitle}</div>}
@@ -687,7 +715,7 @@ export function FilterReset({
     <button
       type="button"
       onClick={onReset}
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-navy-200 px-2.5 py-1.5 text-xs font-medium text-navy-600 transition hover:border-navy-400 hover:bg-navy-50 ${className}`}
+      className={`press inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-navy-200 px-2.5 py-1.5 text-xs font-medium text-navy-600 transition hover:border-navy-400 hover:bg-navy-50 ${className}`}
     >
       <X className="h-3.5 w-3.5" />
       Сбросить

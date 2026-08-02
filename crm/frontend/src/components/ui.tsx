@@ -49,6 +49,60 @@ export function Spinner() {
   );
 }
 
+/**
+ * Заглушка загрузки: серая разметка будущего содержимого.
+ *
+ * Крутящийся кружок ничего не сообщает и оставляет экран пустым, а когда
+ * данные приходят — вёрстка прыгает с нуля до полной высоты. Заглушка
+ * занимает то же место, что и настоящие данные, поэтому появление проходит
+ * незаметно, а ожидание subjective кажется короче.
+ */
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`skeleton ${className}`} aria-hidden="true" />;
+}
+
+/** Заглушка списка: несколько строк-карточек одинаковой высоты */
+export function SkeletonList({
+  rows = 5,
+  className = '',
+}: {
+  rows?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`space-y-2 ${className}`}
+      role="status"
+      aria-label="Загрузка"
+    >
+      {Array.from({ length: rows }).map((_, i) => (
+        <Skeleton key={i} className="h-16 w-full rounded-md" />
+      ))}
+    </div>
+  );
+}
+
+/** Заглушка сетки карточек — для дашборда и разделов с боксами */
+export function SkeletonCards({
+  count = 4,
+  className = '',
+}: {
+  count?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${className}`}
+      role="status"
+      aria-label="Загрузка"
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} className="h-24 rounded-md" />
+      ))}
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -172,7 +226,7 @@ export function Modal({
   return createPortal(
     <div
       // items-center: окно всегда в центре экрана, как бы страница ни была прокручена
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/10 p-3 backdrop-blur-md sm:p-8"
+      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-navy-950/10 p-3 backdrop-blur-md sm:p-8"
       onClick={onClose}
     >
       {/*
@@ -185,14 +239,21 @@ export function Modal({
          * поля оверлея содержимому оставалось меньше 300px, и подписи
          * («Услуга», «Площадь, м²») срезались краем карточки.
          */
-        className={`card flex max-h-[92vh] w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} p-4 sm:max-h-[90vh] sm:p-6`}
+        /*
+         * shadow-modal — верхний уровень высоты: окно перекрывает всё.
+         * animate-pop-in — приходит на место снизу и чуть увеличиваясь,
+         * за 200 мс. Без этого окно возникало рывком, и глаз не успевал
+         * понять, что изменилось на экране.
+         */
+        className={`card flex max-h-[92vh] w-full animate-pop-in flex-col shadow-modal ${wide ? 'max-w-2xl' : 'max-w-md'} p-4 sm:max-h-[90vh] sm:p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between">
           <h2 className="text-lg font-bold text-navy-900">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
+            className="press rounded-lg p-1 text-navy-600 transition-colors hover:bg-navy-50 hover:text-navy-700"
+            aria-label="Закрыть"
           >
             <X className="h-5 w-5" />
           </button>

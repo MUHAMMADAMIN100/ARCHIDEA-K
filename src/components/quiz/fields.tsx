@@ -59,7 +59,7 @@ export function OptionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all duration-200 ${
+      className={`press flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-[background-color,border-color,box-shadow,transform] duration-120 ease-out ${
         active
           ? 'border-navy-700 bg-navy-50 ring-1 ring-navy-300'
           : 'border-navy-200 bg-white hover:border-navy-400 hover:bg-navy-50'
@@ -83,7 +83,7 @@ export function OptionCard({
         )}
       </span>
       <span
-        className={`ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+        className={`ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-120 ease-out ${
           active ? 'border-navy-500 bg-navy-500' : 'border-navy-300'
         }`}
       >

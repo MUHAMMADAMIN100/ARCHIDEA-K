@@ -76,7 +76,9 @@ export function DatePickerField({ value, onChange, minDate }: Props) {
 
       {open && (
         <div
-          className="absolute left-0 z-40 mt-2 rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
+          /* Календарь оторван от формы и перекрывает её — отсюда тень четвёртого
+             уровня и короткий выезд из-под поля: видно, откуда он взялся. */
+          className="animate-pop-in absolute left-0 z-40 mt-2 origin-top rounded-2xl border border-navy-100 bg-white p-2 shadow-pop"
           style={rdpVars}
         >
           <DayPicker

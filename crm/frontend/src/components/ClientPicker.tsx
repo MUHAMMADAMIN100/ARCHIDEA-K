@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useFetch } from '../api/hooks';
+import { ScrollArea } from './ScrollArea';
 import { formatPhone } from '../lib/contact';
 import type { Client } from '../types';
 
@@ -85,7 +86,12 @@ export function ClientPicker({
         onFocus={() => setOpen(true)}
       />
       {open && (
-        <div className="mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-navy-100 bg-white py-1 shadow-card">
+        <div className="mt-1 animate-drop-in rounded-xl border border-navy-100 bg-white py-1 shadow-pop">
+          <ScrollArea
+            axis="y"
+            innerClassName="max-h-52 overscroll-contain"
+            label="Клиенты"
+          >
           {found.length === 0 ? (
             <div className="px-3 py-3 text-sm text-navy-600">
               Клиенты не найдены
@@ -100,7 +106,7 @@ export function ClientPicker({
                   setOpen(false);
                   setQuery('');
                 }}
-                className="block w-full px-3 py-2 text-left hover:bg-navy-50"
+                className="press block w-full px-3 py-2 text-left hover:bg-navy-50"
               >
                 <span className="block truncate text-sm font-medium text-navy-900">
                   {c.fullName}
@@ -111,6 +117,7 @@ export function ClientPicker({
               </button>
             ))
           )}
+          </ScrollArea>
         </div>
       )}
     </div>

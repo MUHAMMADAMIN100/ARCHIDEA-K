@@ -27,7 +27,7 @@ export function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-navy-gradient p-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm animate-page-in">
         <div className="mb-8 text-center text-white">
           <img
             src="/logo-white.png"
@@ -75,7 +75,9 @@ export function Login() {
           </label>
 
           {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            // сообщение об ошибке проявляется, а не возникает рывком:
+            // иначе непонятно, ответил сервер или страница дёрнулась сама
+            <div className="mb-4 animate-fade-in rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </div>
           )}

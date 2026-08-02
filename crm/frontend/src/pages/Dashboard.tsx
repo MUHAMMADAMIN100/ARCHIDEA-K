@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Spinner, PageHeader, ErrorState } from '../components/ui';
+import { Skeleton, PageHeader, ErrorState } from '../components/ui';
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
 import { formatPrice, formatVolume } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
@@ -42,10 +42,31 @@ export function Dashboard() {
   } | null>(null);
 
   // нет данных: показываем ошибку с повтором (а не вечный спиннер),
-  // если запрос завершился ошибкой; иначе — спиннер загрузки
+  // если запрос завершился ошибкой; иначе — заглушку загрузки
   if (!data) {
     if (error && !loading) return <ErrorState text={error ?? undefined} onRetry={reload} />;
-    return <Spinner />;
+    /*
+     * Заглушка повторяет раскладку дашборда: заголовок, четыре плитки с
+     * цифрами и два списка под ними. Место под данные занято заранее,
+     * поэтому в момент их появления экран не прыгает.
+     */
+    return (
+      <div className="animate-page-in" role="status" aria-label="Загрузка">
+        <div className="mb-5">
+          <Skeleton className="h-8 w-64 max-w-full rounded-md" />
+          <Skeleton className="mt-1 h-5 w-44 max-w-full rounded-md" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-md" />
+          ))}
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-96 rounded-md" />
+          <Skeleton className="h-96 rounded-md" />
+        </div>
+      </div>
+    );
   }
 
   /*
@@ -91,7 +112,7 @@ export function Dashboard() {
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'DONE').slice(0, 5);
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title={`Здравствуйте, ${user?.fullName?.split(' ')[0]}!`}
         subtitle="Сводка по работе на сегодня"
@@ -115,7 +136,7 @@ export function Dashboard() {
           );
 
           return c.to ? (
-            <Link key={c.label} to={c.to} className="card p-5 transition-shadow hover:shadow-lg">
+            <Link key={c.label} to={c.to} className="card-interactive press p-5">
               {body}
             </Link>
           ) : (
@@ -124,7 +145,7 @@ export function Dashboard() {
               type="button"
               onClick={() => setDrill(c.drill!)}
               title="Показать эти заказы"
-              className="card p-5 text-left transition-shadow hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
+              className="card-interactive press p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
             >
               {body}
             </button>
@@ -154,7 +175,7 @@ export function Dashboard() {
                   })
                 }
                 title="Из каких заказов сложился доход"
-                className="text-2xl font-extrabold underline decoration-dotted underline-offset-4 decoration-white/50 transition hover:decoration-white sm:text-3xl"
+                className="press text-2xl font-extrabold underline decoration-dotted underline-offset-4 decoration-white/50 transition hover:decoration-white sm:text-3xl"
               >
                 {formatPrice(data.revenueMonth)}
               </button>
@@ -184,7 +205,7 @@ export function Dashboard() {
               <Link
                 key={o.id}
                 to={`/clients/${o.clientId}`}
-                className="flex items-center justify-between rounded-xl border border-navy-100 px-3 py-2.5 hover:bg-navy-50"
+                className="press flex items-center justify-between rounded-xl border border-navy-100 px-3 py-2.5 hover:bg-navy-50"
               >
                 <div>
                   <div className="text-sm font-semibold text-navy-800">

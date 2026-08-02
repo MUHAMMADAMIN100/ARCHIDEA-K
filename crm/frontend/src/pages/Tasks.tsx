@@ -3,7 +3,7 @@ import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Spinner, PageHeader, Badge, EmptyState } from '../components/ui';
+import { SkeletonList, PageHeader, Badge, EmptyState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { TaskModal } from '../components/TaskModal';
 import {
@@ -157,7 +157,7 @@ export function Tasks() {
   };
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Задачи"
         action={
@@ -169,7 +169,12 @@ export function Tasks() {
       />
 
       {loading || !data ? (
-        <Spinner />
+        /*
+         * Высоту строки задаём здесь, а не берём стандартную: карточка задачи
+         * с исполнителями вдвое выше обычной строки списка, и на стандартной
+         * заглушке список подпрыгивал бы, когда данные пришли.
+         */
+        <SkeletonList rows={5} className="space-y-3 [&>*]:h-32" />
       ) : data.length === 0 ? (
         <EmptyState text="Задач нет" />
       ) : (
@@ -186,7 +191,7 @@ export function Tasks() {
                 key={t.id}
                 onClick={() => setEditTask(t)}
                 title="Открыть задачу"
-                className="card cursor-pointer p-4 transition-shadow hover:shadow-lg"
+                className="card-interactive p-4"
               >
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="min-w-0 flex-1">
@@ -247,7 +252,7 @@ export function Tasks() {
                         e.stopPropagation();
                         remove(t.id);
                       }}
-                      className="rounded-lg p-2 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                      className="press rounded-lg p-2 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       title="Удалить задачу"
                     >
                       <Trash2 className="h-4 w-4" />

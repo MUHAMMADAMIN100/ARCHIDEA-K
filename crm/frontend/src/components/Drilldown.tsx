@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
-import { Modal, Spinner, EmptyState } from './ui';
+import { Modal, SkeletonList, EmptyState } from './ui';
+import { ScrollArea } from './ScrollArea';
 
 /*
  * Общий механизм детализации («drill-down»).
@@ -59,7 +60,7 @@ export function DrillValue({
       type="button"
       onClick={onClick}
       title={title}
-      className={`cursor-pointer rounded underline decoration-dotted underline-offset-4 transition hover:decoration-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300 ${toneClass} ${
+      className={`press cursor-pointer rounded underline decoration-dotted underline-offset-4 transition hover:decoration-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300 ${toneClass} ${
         align === 'right' ? 'block w-full text-right' : 'text-left'
       } ${className}`}
     >
@@ -77,7 +78,10 @@ export function DetailStats({
   return (
     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
       {items.map((s) => (
-        <div key={s.label} className="rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2">
+        <div
+          key={s.label}
+          className="rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2 shadow-card"
+        >
           <div className="text-[11px] uppercase tracking-wide text-navy-600">{s.label}</div>
           <div
             className={`mt-0.5 text-base font-bold tabular-nums ${
@@ -113,9 +117,9 @@ export function DetailTabs<T extends string>({
           key={t.value}
           type="button"
           onClick={() => onChange(t.value)}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+          className={`press flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
             value === t.value
-              ? 'bg-white text-navy-900 shadow-sm'
+              ? 'bg-white text-navy-900 shadow-card'
               : 'text-navy-600 hover:text-navy-800'
           }`}
         >
@@ -154,7 +158,7 @@ export function DetailTable<T>({
   onRowClick?: (row: T) => void;
   footer?: ReactNode;
 }) {
-  if (loading && !rows) return <Spinner />;
+  if (loading && !rows) return <SkeletonList rows={5} />;
   if (!rows || rows.length === 0) return <EmptyState text={emptyText} />;
 
   return (
@@ -168,13 +172,18 @@ export function DetailTable<T>({
         становится заголовком, остальные — парами «подпись → значение», и
         всё читается целиком.
       */}
-      <div className="max-h-[60vh] space-y-2 overflow-y-auto overscroll-contain sm:hidden">
+      <div className="sm:hidden">
+        <ScrollArea
+          axis="y"
+          innerClassName="max-h-[60vh] space-y-2 overscroll-contain"
+          label="Расшифровка"
+        >
         {rows.map((r, i) => (
           <div
             key={rowKey(r, i)}
             onClick={onRowClick ? () => onRowClick(r) : undefined}
             className={`rounded-xl border border-navy-100 p-3 ${
-              onRowClick ? 'cursor-pointer active:bg-navy-50' : ''
+              onRowClick ? 'press cursor-pointer active:bg-navy-50' : ''
             }`}
           >
             <div className="mb-1.5 font-semibold text-navy-900">
@@ -198,10 +207,17 @@ export function DetailTable<T>({
             <tfoot>{footer}</tfoot>
           </table>
         )}
+        </ScrollArea>
       </div>
 
       {/* Планшет и компьютер: обычная таблица */}
-      <div className="hidden max-h-[52vh] overflow-auto rounded-xl border border-navy-100 sm:block">
+      <div className="hidden sm:block">
+      <ScrollArea
+        axis="y"
+        className="rounded-xl border border-navy-100"
+        innerClassName="max-h-[52vh]"
+        label="Расшифровка"
+      >
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-600">
@@ -235,8 +251,14 @@ export function DetailTable<T>({
             </tr>
           ))}
         </tbody>
-        {footer && <tfoot className="sticky bottom-0 bg-white">{footer}</tfoot>}
+        {/*
+          z-10 у подвала — из-за растворяющегося нижнего края области
+          прокрутки: он рисуется над содержимым, и без слоя строка «Итого»
+          выцветала до тех пор, пока таблицу не прокрутят до конца.
+        */}
+        {footer && <tfoot className="sticky bottom-0 z-10 bg-white">{footer}</tfoot>}
       </table>
+      </ScrollArea>
       </div>
     </>
   );

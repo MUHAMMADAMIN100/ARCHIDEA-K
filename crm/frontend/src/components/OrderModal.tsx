@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Bell, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
-import { Modal, Badge, Spinner, ErrorState, EmptyState } from './ui';
+import { Modal, Badge, Spinner, ErrorState, EmptyState, Skeleton } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
@@ -695,7 +695,7 @@ export function OrderModal({
           <Tabs items={TAB_ITEMS} value={tab} onChange={setTab} />
 
           {detailError && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex animate-fade-in flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <span>Не удалось обновить данные заказа с сервера — показаны последние известные.</span>
               <button
                 type="button"
@@ -707,8 +707,10 @@ export function OrderModal({
             </div>
           )}
 
+          {/* вкладки переключают содержимое на месте — короткое проявление
+              показывает, что сменилась именно панель, а не всё окно */}
           {tab === 'order' && (
-            <div className="space-y-5">
+            <div className="animate-page-in space-y-5">
               {/*
                 Данные заявки. Раньше блок был только для чтения, и опечатку
                 в имени или телефоне приходилось править в базе клиентов, а
@@ -758,7 +760,7 @@ export function OrderModal({
                               prev.filter((_, j) => j !== i),
                             );
                           }}
-                          className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                          className="press mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                           aria-label="Убрать номер"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -819,7 +821,7 @@ export function OrderModal({
                                   [t],
                             );
                           }}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                          className={`press rounded-lg px-2.5 py-1 text-xs font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-120 ease-out ${
                             clientTags.includes(t)
                               ? TAG_COLOR[t] + ' ring-1 ring-brand-300'
                               : 'border border-navy-200 bg-white text-navy-600'
@@ -955,7 +957,7 @@ export function OrderModal({
                       <button
                         key={d}
                         onClick={() => onDirtChange(d)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        className={`press rounded-lg px-3 py-1.5 text-xs font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-120 ease-out ${
                           editDirt === d
                             ? 'bg-brand-500 text-white ring-1 ring-brand-300'
                             : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
@@ -994,7 +996,7 @@ export function OrderModal({
                           markTouched('stage');
                           setStage(s);
                         }}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        className={`press rounded-lg px-3 py-1.5 text-xs font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-120 ease-out ${
                           stage === s
                             ? STAGE_COLOR[s] + ' ring-1 ring-brand-300'
                             : 'bg-white text-navy-600 border border-navy-200 hover:bg-navy-50'
@@ -1197,7 +1199,7 @@ export function OrderModal({
                           prev.filter((_, j) => j !== i),
                         );
                       }}
-                      className="shrink-0 rounded-lg p-1 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                      className="press shrink-0 rounded-lg p-1 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       aria-label="Убрать услугу"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -1491,7 +1493,7 @@ export function OrderModal({
                           markTouched('guests');
                           setGuests((prev) => prev.filter((_, j) => j !== i));
                         }}
-                        className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                        className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                         aria-label="Убрать разового сотрудника"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1505,7 +1507,7 @@ export function OrderModal({
                       markTouched('guests');
                       setGuests((prev) => [...prev, { fullName: '', rate: '' }]);
                     }}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
+                    className="press flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition-[background-color,border-color,transform] duration-120 ease-out hover:border-brand-500 hover:bg-navy-50"
                   >
                     <span className="text-lg leading-none">+</span>
                     разовый сотрудник
@@ -1529,7 +1531,7 @@ export function OrderModal({
               </div>
 
               {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                <div className="animate-fade-in rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
                   {error}
                 </div>
               )}
@@ -1537,7 +1539,7 @@ export function OrderModal({
           )}
 
           {tab === 'work' && (
-            <div className="space-y-4">
+            <div className="animate-page-in space-y-4">
               <Info label="Ответственный менеджер" value={order.manager?.fullName ?? 'не назначен'} />
               <ShiftGroupsSection groups={order.shiftGroups} loadFailed={detailError} />
             </div>
@@ -1548,9 +1550,17 @@ export function OrderModal({
             заказу (OrderChecklistController использует ту же проверку, что
             и getOne) — раз карточка открылась, значит и правка разрешена.
           */}
-          {tab === 'checklist' && <OrderChecklistCard orderId={order.id} canEdit />}
+          {tab === 'checklist' && (
+            <div className="animate-page-in">
+              <OrderChecklistCard orderId={order.id} canEdit />
+            </div>
+          )}
 
-          {tab === 'history' && <HistoryPanel entity="ORDER" entityId={order.id} />}
+          {tab === 'history' && (
+            <div className="animate-page-in">
+              <HistoryPanel entity="ORDER" entityId={order.id} />
+            </div>
+          )}
 
           {/*
             Низ карточки. На телефоне «Отмена» и «Сохранить» — двумя равными
@@ -1568,7 +1578,7 @@ export function OrderModal({
             </div>
             <button
               onClick={remove}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 sm:w-auto"
+              className="press inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-[background-color,border-color,transform] duration-120 ease-out hover:bg-red-50 sm:w-auto"
             >
               <Trash2 className="h-4 w-4" />
               Удалить заказ
@@ -1603,7 +1613,13 @@ function ShiftGroupsSection({
     return loadFailed ? (
       <EmptyState text="Не удалось загрузить данные о выездах. Нажмите «Повторить» вверху карточки." />
     ) : (
-      <Spinner />
+      // высота заглушки повторяет карточку выезда — когда данные придут,
+      // содержимое встанет на то же место, а не прыгнет сверху вниз
+      <div className="space-y-3" role="status" aria-label="Загрузка">
+        {[0, 1].map((i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-md" />
+        ))}
+      </div>
     );
   }
   if (groups.length === 0) {
@@ -1614,7 +1630,7 @@ function ShiftGroupsSection({
   return (
     <div className="space-y-3">
       {groups.map((g) => (
-        <div key={g.id} className="rounded-xl border border-navy-100 p-4">
+        <div key={g.id} className="rounded-xl border border-navy-100 bg-white p-4 shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="font-medium text-navy-900">
               {formatDateTz(g.date)}

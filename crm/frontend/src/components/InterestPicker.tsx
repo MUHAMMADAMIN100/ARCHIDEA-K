@@ -41,7 +41,7 @@ export function InterestPicker({
           key={o}
           type="button"
           onClick={() => onChange(value === o ? null : o)}
-          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+          className={`press rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
             value === o
               ? 'border border-brand-400 bg-brand-50 text-brand-800 ring-2 ring-brand-100'
               : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
@@ -75,7 +75,7 @@ export function InterestPicker({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="rounded-lg border border-dashed border-navy-300 px-2.5 py-1 text-xs font-semibold text-navy-600 transition hover:bg-navy-50"
+          className="press rounded-lg border border-dashed border-navy-300 px-2.5 py-1 text-xs font-semibold text-navy-600 transition hover:bg-navy-50"
         >
           + свой
         </button>

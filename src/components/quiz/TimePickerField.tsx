@@ -139,7 +139,7 @@ export function TimePickerField({ value, onChange, invalid }: Props) {
         tabIndex={-1}
         onClick={() => setOpen((o) => !o)}
         aria-label="Выбрать время из списка"
-        className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-navy-400"
+        className="press absolute right-0 top-0 flex h-full w-11 items-center justify-center text-navy-400"
       >
         <svg
           className="h-5 w-5"
@@ -158,7 +158,7 @@ export function TimePickerField({ value, onChange, invalid }: Props) {
       {open && (
         <div
           ref={listRef}
-          className="absolute left-0 right-0 z-40 mt-2 max-h-60 overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white py-1 shadow-card"
+          className="animate-pop-in absolute left-0 right-0 z-40 mt-2 max-h-60 origin-top overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white py-1 shadow-pop"
         >
           {OPTIONS.map((t) => (
             <button

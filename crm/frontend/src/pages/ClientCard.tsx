@@ -15,7 +15,7 @@ import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesAll } from '../types';
 import {
-  Spinner,
+  Skeleton,
   PageHeader,
   Badge,
   Modal,
@@ -127,7 +127,27 @@ export function ClientCard() {
       />
     );
   }
-  if (loading || !data) return <Spinner />;
+  /*
+   * Заглушка повторяет раскладку карточки: слева столбец боксов, справа
+   * широкий блок заказов. Кружок держал экран пустым, и в момент прихода
+   * данных вёрстка прыгала с нуля на полную высоту.
+   */
+  if (loading || !data)
+    return (
+      <div className="animate-page-in" role="status" aria-label="Загрузка">
+        <Skeleton className="mb-5 h-8 w-64 rounded-md" />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="space-y-4">
+            <Skeleton className="h-52 w-full rounded-md" />
+            <Skeleton className="h-36 w-full rounded-md" />
+            <Skeleton className="h-28 w-full rounded-md" />
+          </div>
+          <div className="lg:col-span-2">
+            <Skeleton className="h-96 w-full rounded-md" />
+          </div>
+        </div>
+      </div>
+    );
 
   const curNotes = notes ?? data.notes ?? '';
   const curTags = tags ?? data.tags;
@@ -327,7 +347,7 @@ export function ClientCard() {
   };
 
   return (
-    <div>
+    <div className="animate-page-in">
       {/*
         Верхняя строка: возврат слева, удаление — в правом углу. Удаление
         стояло между рабочими кнопками, и по нему легко было промахнуться.
@@ -335,14 +355,14 @@ export function ClientCard() {
       <div className="mb-4 flex items-center justify-between gap-2">
         <button
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+          className="press inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> Назад
         </button>
         <button
           onClick={removeClient}
           title="Удалить клиента"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          className="press inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
         >
           <Trash2 className="h-4 w-4" />
           Удалить
@@ -411,7 +431,7 @@ export function ClientCard() {
               <button
                 onClick={() => setEditInfo(true)}
                 title="Изменить данные клиента"
-                className="inline-flex items-center gap-1 rounded-lg border border-navy-200 px-2 py-1 text-xs font-medium text-navy-700 transition hover:bg-navy-50"
+                className="press inline-flex items-center gap-1 rounded-lg border border-navy-200 px-2 py-1 text-xs font-medium text-navy-700 transition hover:bg-navy-50"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Изменить
@@ -494,7 +514,7 @@ export function ClientCard() {
                 <button
                   key={t}
                   onClick={() => toggleTag(t)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  className={`press rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                     curTags.includes(t)
                       ? TAG_COLOR[t] + ' ring-2 ring-navy-200'
                       : 'border border-navy-200 bg-white text-navy-600'
@@ -527,7 +547,7 @@ export function ClientCard() {
                   onClick={() =>
                     patchClient({ callType: data.callType === t ? null : t })
                   }
-                  className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                  className={`press rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
                     data.callType === t
                       ? `${CALL_TYPE_COLOR[t]} ring-2 ring-navy-200`
                       : 'border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
@@ -622,7 +642,12 @@ export function ClientCard() {
                     onClick={() => {
                       if (!o.id.startsWith('temp_')) setOpenOrder(o);
                     }}
-                    className="flex w-full items-center justify-between rounded-xl border border-navy-100 p-4 text-left hover:bg-navy-50 disabled:cursor-wait disabled:opacity-60"
+                    /*
+                     * Строка заказа — пункт списка внутри карточки, поэтому
+                     * без тени: тень означает высоту, а поднят здесь сам
+                     * бокс. Нажатие подтверждает .press.
+                     */
+                    className="press flex w-full items-center justify-between rounded-xl border border-navy-100 p-4 text-left transition-[background-color,transform] duration-120 ease-out hover:bg-navy-50 disabled:cursor-wait disabled:opacity-60"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -918,7 +943,7 @@ function AddOrderModal({
                 onClick={() =>
                   setMoreServices((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="shrink-0 rounded-lg p-1 text-navy-600 hover:text-red-600"
+                className="press shrink-0 rounded-lg p-1 text-navy-600 hover:text-red-600"
                 aria-label="Убрать услугу"
               >
                 ×
@@ -941,7 +966,7 @@ function AddOrderModal({
                 },
               ])
             }
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
+            className="press mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
           >
             <span className="text-lg leading-none">+</span>
             ещё услуга
@@ -956,7 +981,7 @@ function AddOrderModal({
                   key={d}
                   type="button"
                   onClick={() => setDirtLevel(d)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`press rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     dirtLevel === d
                       ? 'bg-brand-500 text-white ring-1 ring-brand-300'
                       : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
@@ -1166,7 +1191,7 @@ function EditClientModal({
                 onClick={() =>
                   setExtraPhones((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                className="press mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                 aria-label="Убрать номер"
               >
                 <Trash2 className="h-4 w-4" />

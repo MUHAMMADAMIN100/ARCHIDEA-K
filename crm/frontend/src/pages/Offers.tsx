@@ -15,7 +15,8 @@ import { useFetch, invalidate } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
-import { PageHeader, Modal, Badge, EmptyState, Spinner, ErrorState } from '../components/ui';
+import { PageHeader, Modal, Badge, EmptyState, Skeleton, ErrorState } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   DataTable,
@@ -102,7 +103,7 @@ export function Offers() {
   const [tab, setTab] = useState<TabKey>('proposals');
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Коммерческие предложения"
       />
@@ -316,7 +317,7 @@ function ProposalsTab() {
                 e.stopPropagation();
                 markSent(p);
               }}
-              className="rounded-lg p-1.5 text-navy-600 transition hover:bg-sky-50 hover:text-sky-600"
+              className="press rounded-lg p-1.5 text-navy-600 transition hover:bg-sky-50 hover:text-sky-600"
               title="Отметить отправленным"
             >
               <Send className="h-4 w-4" />
@@ -329,7 +330,7 @@ function ProposalsTab() {
                   e.stopPropagation();
                   changeStatus(p, 'ACCEPTED');
                 }}
-                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-emerald-50 hover:text-emerald-700"
+                className="press rounded-lg p-1.5 text-navy-600 transition hover:bg-emerald-50 hover:text-emerald-700"
                 title="Принято клиентом"
               >
                 <CheckCircle2 className="h-4 w-4" />
@@ -339,7 +340,7 @@ function ProposalsTab() {
                   e.stopPropagation();
                   changeStatus(p, 'REJECTED');
                 }}
-                className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-700"
+                className="press rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-700"
                 title="Отклонено клиентом"
               >
                 <XCircle className="h-4 w-4" />
@@ -351,7 +352,7 @@ function ProposalsTab() {
               e.stopPropagation();
               removeProposal(p);
             }}
-            className="rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-700"
+            className="press rounded-lg p-1.5 text-navy-600 transition hover:bg-rose-50 hover:text-rose-700"
             title="Удалить в корзину"
           >
             <Trash2 className="h-4 w-4" />
@@ -665,7 +666,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                 <div className="font-medium text-navy-900">{client.fullName}</div>
                 <div className="text-xs text-navy-600">{formatPhone(client.phone)}</div>
               </div>
-              <button onClick={clearClient} className="text-navy-600 hover:text-navy-700">
+              <button onClick={clearClient} className="press text-navy-600 hover:text-navy-700">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -678,26 +679,34 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setClientQuery(e.target.value)}
               />
               {(searching || clientResults.length > 0) && clientQuery.trim() && (
-                <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-navy-100 bg-white shadow-card">
-                  {searching && (
-                    <div className="px-3 py-2 text-sm text-navy-600">Поиск…</div>
-                  )}
-                  {!searching && clientResults.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-navy-600">
-                      Клиент не найден — проверьте имя в базе клиентов
-                    </div>
-                  )}
-                  {clientResults.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => pickClient(c)}
-                      className="block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
-                    >
-                      <div className="font-medium text-navy-900">{c.fullName}</div>
-                      <div className="text-xs text-navy-600">{formatPhone(c.phone)}</div>
-                    </button>
-                  ))}
+                <div className="absolute z-10 mt-1 w-full animate-drop-in rounded-xl border border-navy-100 bg-white shadow-pop">
+                  {/* найденных может быть до восьми — растворяющийся нижний край
+                      показывает, что список продолжается ниже видимой части */}
+                  <ScrollArea
+                    axis="y"
+                    innerClassName="max-h-56 rounded-xl"
+                    label="Найденные клиенты"
+                  >
+                    {searching && (
+                      <div className="px-3 py-2 text-sm text-navy-600">Поиск…</div>
+                    )}
+                    {!searching && clientResults.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-navy-600">
+                        Клиент не найден — проверьте имя в базе клиентов
+                      </div>
+                    )}
+                    {clientResults.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => pickClient(c)}
+                        className="press block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
+                      >
+                        <div className="font-medium text-navy-900">{c.fullName}</div>
+                        <div className="text-xs text-navy-600">{formatPhone(c.phone)}</div>
+                      </button>
+                    ))}
+                  </ScrollArea>
                 </div>
               )}
             </div>
@@ -783,7 +792,12 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
               детальная смета.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-navy-100">
+            <ScrollArea
+              axis="x"
+              className="rounded-xl border border-navy-100"
+              innerClassName="rounded-xl"
+              label="Позиции сметы"
+            >
               <table className="w-full min-w-[520px] text-sm">
                 <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-600">
                   <tr>
@@ -831,7 +845,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                         <button
                           type="button"
                           onClick={() => removeItem(idx)}
-                          className="text-navy-600 hover:text-rose-700"
+                          className="press text-navy-600 hover:text-rose-700"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -840,7 +854,7 @@ function CreateOfferModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollArea>
           )}
         </div>
 
@@ -921,7 +935,21 @@ function TemplatesTab() {
   };
 
   if (error && !data) return <ErrorState text={error ?? undefined} onRetry={reload} />;
-  if (loading && !data) return <Spinner />;
+  // заглушка повторяет сетку шаблонов один в один — когда данные придут,
+  // карточки встанут на те же места, и экран не прыгнет
+  if (loading && !data) {
+    return (
+      <div
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        role="status"
+        aria-label="Загрузка"
+      >
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-40 rounded-md" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -967,7 +995,7 @@ function TemplatesTab() {
                 </button>
                 <button
                   onClick={() => removeTemplate(t)}
-                  className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                  className="press inline-flex items-center gap-1 rounded-xl border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

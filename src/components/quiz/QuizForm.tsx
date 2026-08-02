@@ -191,10 +191,10 @@ export function QuizForm() {
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
-              initial={{ opacity: 0, x: 24 }}
+              initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -24 }}
-              transition={{ duration: 0.3 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.18 }}
             >
               {step === 0 && (
                 <CalculatorStep state={calc} onChange={setCalc} pricing={pricing} />
@@ -288,9 +288,9 @@ export function QuizForm() {
               <span className="text-white/60">Итого</span>
               <motion.span
                 key={breakdown.total}
-                initial={{ scale: 0.9, opacity: 0.6 }}
+                initial={{ scale: 0.94, opacity: 0.6 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.25 }}
+                transition={{ duration: 0.18 }}
                 className="ml-auto whitespace-nowrap text-2xl font-extrabold text-white sm:text-3xl"
               >
                 {formatPrice(breakdown.total)}

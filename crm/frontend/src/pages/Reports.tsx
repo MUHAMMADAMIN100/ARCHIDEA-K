@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FileText, ChevronRight, Send, CheckCircle2 } from 'lucide-react';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Spinner, PageHeader, Badge, EmptyState } from '../components/ui';
+import { SkeletonList, PageHeader, Badge, EmptyState } from '../components/ui';
 import {
   DrillValue,
   DetailModal,
@@ -39,12 +39,14 @@ export function Reports() {
   const { data, loading } = useFetch<Report[]>('/reports', { pollMs: 20000 });
   const [drill, setDrill] = useState<{ report: Report; tab: ReportDetailTab } | null>(null);
 
-  if (loading || !data) return <Spinner />;
+  // заглушка повторяет ленту отчётов: те же строки-карточки той же высоты,
+  // поэтому при появлении данных экран не прыгает
+  if (loading || !data) return <SkeletonList rows={4} />;
 
   const waiting = isDirector ? data.filter((r) => r.status === 'SENT').length : 0;
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Отчёты"
         action={
@@ -73,7 +75,7 @@ export function Reports() {
                * наезжала на соседей. Сетка даёт имени всю ширину, а суммам —
                * отдельную строку.
                */
-              className="card grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 p-4 transition-shadow hover:shadow-lg sm:flex sm:flex-nowrap sm:gap-4"
+              className="card-interactive press grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 p-4 sm:flex sm:flex-nowrap sm:gap-4"
             >
               <span
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${

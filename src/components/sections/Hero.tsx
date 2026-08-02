@@ -96,7 +96,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           className="relative mx-auto w-full max-w-md"
         >
-          <div className="rounded-md border border-navy-200 bg-white p-8 text-navy-900">
+          <div className="card-light p-8 text-navy-900">
             <div className="flex items-center justify-between">
               <span className="text-sm text-navy-500">Стоимость от</span>
               <span className="rounded-md bg-navy-100 px-2.5 py-1 text-xs font-semibold text-navy-700">

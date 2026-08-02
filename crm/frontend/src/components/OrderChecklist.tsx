@@ -3,7 +3,7 @@ import { Check, CheckCircle2, ClipboardList, Plus, X } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Badge, EmptyState, ErrorState, Spinner } from './ui';
+import { Badge, EmptyState, ErrorState, Skeleton } from './ui';
 import { useDialog } from './Dialog';
 import { useToast } from './Toast';
 import { formatDateTimeTz } from '../lib/date';
@@ -309,7 +309,21 @@ export function OrderChecklistCard({
         <ErrorState text="Не удалось загрузить чек-лист заказа" onRetry={reload} />
       )}
 
-      {!error && loading && !checklist && <Spinner />}
+      {/*
+        Заглушка повторяет будущую разметку: полоса прогресса сверху и
+        несколько пунктов. Кружок оставлял пустое место, и при появлении
+        данных блок прыгал с нуля на полную высоту.
+      */}
+      {!error && loading && !checklist && (
+        <div className="space-y-4" role="status" aria-label="Загрузка">
+          <Skeleton className="h-16 w-full rounded-md" />
+          <div className="space-y-1.5">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-11 w-full rounded-md" />
+            ))}
+          </div>
+        </div>
+      )}
 
       {!error && noChecklistYet && (
         <div className="space-y-3">
@@ -367,7 +381,7 @@ export function OrderChecklistCard({
             {totalCount > 0 && (
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy-100">
                 <div
-                  className="h-full rounded-full bg-brand-500 transition-all"
+                  className="h-full rounded-full bg-brand-500 transition-[width] duration-160 ease-out"
                   style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
                 />
               </div>
@@ -495,7 +509,7 @@ function ChecklistItemRow({
         type="button"
         onClick={canEdit ? onToggle : undefined}
         disabled={!canEdit}
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+        className={`press mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-[background-color,border-color,transform] duration-120 ease-out ${
           item.isDone ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-navy-300 bg-white'
         } ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
         aria-label={item.isDone ? 'Снять отметку выполнения' : 'Отметить выполненным'}
@@ -531,7 +545,7 @@ function ChecklistItemRow({
                 type="button"
                 disabled={!canEdit}
                 onClick={() => onLevel(l.value)}
-                className={`rounded-lg border px-2 py-0.5 text-xs font-medium transition ${
+                className={`press rounded-lg border px-2 py-0.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-120 ease-out ${
                   item.level === l.value ? l.on : `bg-white ${l.off}`
                 } ${canEdit ? '' : 'cursor-not-allowed opacity-70'}`}
               >
@@ -551,7 +565,7 @@ function ChecklistItemRow({
       {canEdit && (
         <button
           onClick={onRemove}
-          className="shrink-0 rounded-lg p-1 text-navy-600 hover:bg-red-50 hover:text-red-600"
+          className="press shrink-0 rounded-lg p-1 text-navy-600 hover:bg-red-50 hover:text-red-600"
           title="Удалить пункт"
         >
           <X className="h-3.5 w-3.5" />

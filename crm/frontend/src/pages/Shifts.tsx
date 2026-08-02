@@ -14,12 +14,13 @@ import {
 import { api } from '../api/client';
 import { useFetch, invalidate } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Spinner, PageHeader, Modal, EmptyState, ErrorState, Badge } from '../components/ui';
+import { SkeletonList, PageHeader, Modal, EmptyState, ErrorState, Badge } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { DatePicker } from '../components/DatePicker';
 import { TimePicker } from '../components/TimePicker';
 import { HistoryPanel } from '../components/HistoryPanel';
+import { ScrollArea } from '../components/ScrollArea';
 import {
   DrillValue,
   DetailModal,
@@ -88,7 +89,7 @@ export function Shifts() {
   }, [tab, showMoney]);
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Смены и выезды"
       />
@@ -328,7 +329,7 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
       {error ? (
         <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !data ? (
-        <Spinner />
+        <SkeletonList rows={3} />
       ) : !data || data.length === 0 ? (
         <EmptyState text="За выбранный период выездов нет. Запланируйте выезд, чтобы зафиксировать адрес и состав бригады." />
       ) : (
@@ -418,7 +419,7 @@ function ShiftGroupCard({
         <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0 sm:justify-end">
           <button
             onClick={onHistory}
-            className="rounded-lg px-2 py-1.5 text-xs font-medium text-navy-600 hover:bg-navy-50 hover:text-navy-700"
+            className="press rounded-lg px-2 py-1.5 text-xs font-medium text-navy-600 hover:bg-navy-50 hover:text-navy-700"
           >
             История
           </button>
@@ -430,14 +431,14 @@ function ShiftGroupCard({
               </button>
               <button
                 onClick={onClose}
-                className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
+                className="press inline-flex items-center gap-1 rounded-xl border border-emerald-200 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
               >
                 <Lock className="h-3.5 w-3.5" />
                 Закрыть смену
               </button>
               <button
                 onClick={onDelete}
-                className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                 title="В корзину"
               >
                 <Trash2 className="h-4 w-4" />
@@ -711,7 +712,7 @@ function ShiftGroupModal({
                   onClick={() =>
                     setGuests((prev) => prev.filter((_, j) => j !== i))
                   }
-                  className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                  className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                   aria-label="Убрать разового клинера"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -723,7 +724,7 @@ function ShiftGroupModal({
               onClick={() =>
                 setGuests((prev) => [...prev, { fullName: '', rate: '' }])
               }
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="press text-sm font-medium text-brand-600 hover:underline"
             >
               + разовый клинер
             </button>
@@ -800,7 +801,7 @@ function OrderPicker({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="shrink-0 text-navy-600 hover:text-red-600"
+            className="press shrink-0 text-navy-600 hover:text-red-600"
             aria-label="Убрать привязку к заказу"
           >
             <X className="h-4 w-4" />
@@ -815,33 +816,35 @@ function OrderPicker({
             onChange={(e) => setQuery(e.target.value)}
           />
           {query.trim() && (
-            <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-navy-100 bg-white shadow-card">
-              {error ? (
-                <div className="p-3 text-sm text-navy-600">Не удалось загрузить заказы</div>
-              ) : loading && !data ? (
-                <div className="p-3 text-sm text-navy-600">Загрузка…</div>
-              ) : filtered.length === 0 ? (
-                <div className="p-3 text-sm text-navy-600">Ничего не найдено</div>
-              ) : (
-                filtered.map((o) => (
-                  <button
-                    type="button"
-                    key={o.id}
-                    onClick={() => {
-                      onChange(o);
-                      setQuery('');
-                    }}
-                    className="block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
-                  >
-                    <div className="font-medium text-navy-900">
-                      {o.client?.fullName ?? 'Без клиента'}
-                    </div>
-                    <div className="text-xs text-navy-600">
-                      {o.address || 'без адреса'} · {STAGE_LABEL[o.stage]}
-                    </div>
-                  </button>
-                ))
-              )}
+            <div className="absolute z-10 mt-1 w-full animate-drop-in overflow-hidden rounded-xl border border-navy-100 bg-white shadow-pop">
+              <ScrollArea axis="y" innerClassName="max-h-56" label="Найденные заказы">
+                {error ? (
+                  <div className="p-3 text-sm text-navy-600">Не удалось загрузить заказы</div>
+                ) : loading && !data ? (
+                  <div className="p-3 text-sm text-navy-600">Загрузка…</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-3 text-sm text-navy-600">Ничего не найдено</div>
+                ) : (
+                  filtered.map((o) => (
+                    <button
+                      type="button"
+                      key={o.id}
+                      onClick={() => {
+                        onChange(o);
+                        setQuery('');
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-navy-50"
+                    >
+                      <div className="font-medium text-navy-900">
+                        {o.client?.fullName ?? 'Без клиента'}
+                      </div>
+                      <div className="text-xs text-navy-600">
+                        {o.address || 'без адреса'} · {STAGE_LABEL[o.stage]}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </ScrollArea>
             </div>
           )}
         </div>
@@ -924,7 +927,7 @@ function PayrollSummarySection() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => shiftMonthAnchor(-1)}
-            className="rounded-lg p-2 text-navy-600 hover:bg-navy-50"
+            className="press rounded-lg p-2 text-navy-600 hover:bg-navy-50"
             aria-label="Предыдущий месяц"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -934,7 +937,7 @@ function PayrollSummarySection() {
           </span>
           <button
             onClick={() => shiftMonthAnchor(1)}
-            className="rounded-lg p-2 text-navy-600 hover:bg-navy-50"
+            className="press rounded-lg p-2 text-navy-600 hover:bg-navy-50"
             aria-label="Следующий месяц"
           >
             <ChevronRight className="h-4 w-4" />
@@ -943,180 +946,187 @@ function PayrollSummarySection() {
       </div>
 
       {loading && !payroll ? (
-        <Spinner />
+        <SkeletonList rows={6} />
       ) : rows.length === 0 ? (
         <EmptyState text="В этом месяце смен ещё не отмечено" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
-                <th className="py-2.5 pr-3 font-semibold">Клинер</th>
-                <th className="py-2.5 pr-3 font-semibold">Бригада</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">Смены</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">Начислено</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">Штрафы</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">К выплате</th>
-                <th className="py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.cleanerId} className="border-b border-navy-50">
-                  <td className="py-2.5 pr-3 font-medium text-navy-900">
-                    <DrillValue
-                      tone="strong"
-                      title={`Все смены и штрафы: ${r.fullName}`}
-                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
-                    >
-                      {r.fullName}
-                    </DrillValue>
-                  </td>
-                  <td className="py-2.5 pr-3 text-navy-600">
-                    {r.brigade ? (
+        <div>
+          {/*
+            Ведомость шире экрана телефона. Край растворяется с той стороны,
+            куда ещё можно тянуть, и гаснет на упоре — так видно, что таблица
+            продолжается, и не нужна подпись «листайте вправо».
+          */}
+          <ScrollArea axis="x" label="Ведомость выплат">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
+                  <th className="py-2.5 pr-3 font-semibold">Клинер</th>
+                  <th className="py-2.5 pr-3 font-semibold">Бригада</th>
+                  <th className="py-2.5 pr-3 text-right font-semibold">Смены</th>
+                  <th className="py-2.5 pr-3 text-right font-semibold">Начислено</th>
+                  <th className="py-2.5 pr-3 text-right font-semibold">Штрафы</th>
+                  <th className="py-2.5 pr-3 text-right font-semibold">К выплате</th>
+                  <th className="py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.cleanerId} className="border-b border-navy-50">
+                    <td className="py-2.5 pr-3 font-medium text-navy-900">
                       <DrillValue
-                        tone="muted"
-                        title={`Вся бригада: ${r.brigade}`}
+                        tone="strong"
+                        title={`Все смены и штрафы: ${r.fullName}`}
+                        onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                      >
+                        {r.fullName}
+                      </DrillValue>
+                    </td>
+                    <td className="py-2.5 pr-3 text-navy-600">
+                      {r.brigade ? (
+                        <DrillValue
+                          tone="muted"
+                          title={`Вся бригада: ${r.brigade}`}
+                          onClick={() =>
+                            setDrillGroup({
+                              title: r.brigade!,
+                              subtitle: `Выплаты бригады · ${label}`,
+                              rows: (payroll?.rows ?? []).filter(
+                                (x) => x.brigadeId === r.brigadeId,
+                              ),
+                            })
+                          }
+                        >
+                          {r.brigade}
+                        </DrillValue>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right text-navy-800">
+                      <DrillValue
+                        align="right"
+                        disabled={r.shifts === 0}
+                        title={`Какие именно смены: ${r.fullName}`}
+                        onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                      >
+                        {r.shifts}
+                      </DrillValue>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right text-navy-800">
+                      <DrillValue
+                        align="right"
+                        disabled={r.shifts === 0}
+                        title="Из чего сложилось начисление"
+                        onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                      >
+                        {formatPrice(r.accrued)}
+                      </DrillValue>
+                    </td>
+                    <td
+                      className={`py-2.5 pr-3 text-right ${
+                        r.fines > 0 ? '' : 'text-navy-600'
+                      }`}
+                    >
+                      <DrillValue
+                        align="right"
+                        tone="danger"
+                        disabled={r.fines === 0}
+                        title="За что назначены штрафы"
+                        onClick={() => setDrillRow({ row: r, tab: 'fines' })}
+                      >
+                        {r.fines > 0 ? `− ${formatPrice(r.fines)}` : '—'}
+                      </DrillValue>
+                    </td>
+                    <td
+                      className={`py-2.5 pr-3 text-right font-bold ${
+                        r.total < 0 ? 'text-red-600' : 'text-navy-900'
+                      }`}
+                      title={r.total < 0 ? 'Штрафы превысили начисления (долг)' : undefined}
+                    >
+                      <DrillValue
+                        align="right"
+                        tone={r.total < 0 ? 'danger' : 'strong'}
+                        title="Полный расчёт по клинеру"
+                        onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
+                      >
+                        {formatPrice(r.total)}
+                      </DrillValue>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <button
+                        onClick={() => setFineFor(r.cleanerId)}
+                        className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                        title="Оштрафовать"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {payroll && (
+                <tfoot>
+                  <tr className="text-sm font-bold text-navy-900">
+                    <td className="py-3 pr-3">Итого</td>
+                    <td />
+                    <td className="py-3 pr-3 text-right">
+                      <DrillValue
+                        align="right"
+                        tone="strong"
+                        disabled={rows.length === 0}
+                        title="Кто из чего сложил эти смены"
+                        onClick={() => setDrillGroup(totalsDrill)}
+                      >
+                        {payroll.totals.shifts}
+                      </DrillValue>
+                    </td>
+                    <td className="py-3 pr-3 text-right">
+                      <DrillValue
+                        align="right"
+                        tone="strong"
+                        disabled={rows.length === 0}
+                        title="Разбивка начислений по клинерам"
+                        onClick={() => setDrillGroup(totalsDrill)}
+                      >
+                        {formatPrice(payroll.totals.accrued)}
+                      </DrillValue>
+                    </td>
+                    <td className="py-3 pr-3 text-right text-red-600">
+                      <DrillValue
+                        align="right"
+                        tone="danger"
+                        disabled={payroll.totals.fines === 0}
+                        title="Все штрафы за период"
                         onClick={() =>
                           setDrillGroup({
-                            title: r.brigade!,
-                            subtitle: `Выплаты бригады · ${label}`,
-                            rows: (payroll?.rows ?? []).filter(
-                              (x) => x.brigadeId === r.brigadeId,
-                            ),
+                            title: 'Штрафы за период',
+                            subtitle: `Кому и сколько · ${label}`,
+                            rows: (payroll?.rows ?? []).filter((x) => x.fines > 0),
                           })
                         }
                       >
-                        {r.brigade}
+                        {payroll.totals.fines > 0
+                          ? `− ${formatPrice(payroll.totals.fines)}`
+                          : '—'}
                       </DrillValue>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="py-2.5 pr-3 text-right text-navy-800">
-                    <DrillValue
-                      align="right"
-                      disabled={r.shifts === 0}
-                      title={`Какие именно смены: ${r.fullName}`}
-                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
-                    >
-                      {r.shifts}
-                    </DrillValue>
-                  </td>
-                  <td className="py-2.5 pr-3 text-right text-navy-800">
-                    <DrillValue
-                      align="right"
-                      disabled={r.shifts === 0}
-                      title="Из чего сложилось начисление"
-                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
-                    >
-                      {formatPrice(r.accrued)}
-                    </DrillValue>
-                  </td>
-                  <td
-                    className={`py-2.5 pr-3 text-right ${
-                      r.fines > 0 ? '' : 'text-navy-600'
-                    }`}
-                  >
-                    <DrillValue
-                      align="right"
-                      tone="danger"
-                      disabled={r.fines === 0}
-                      title="За что назначены штрафы"
-                      onClick={() => setDrillRow({ row: r, tab: 'fines' })}
-                    >
-                      {r.fines > 0 ? `− ${formatPrice(r.fines)}` : '—'}
-                    </DrillValue>
-                  </td>
-                  <td
-                    className={`py-2.5 pr-3 text-right font-bold ${
-                      r.total < 0 ? 'text-red-600' : 'text-navy-900'
-                    }`}
-                    title={r.total < 0 ? 'Штрафы превысили начисления (долг)' : undefined}
-                  >
-                    <DrillValue
-                      align="right"
-                      tone={r.total < 0 ? 'danger' : 'strong'}
-                      title="Полный расчёт по клинеру"
-                      onClick={() => setDrillRow({ row: r, tab: 'shifts' })}
-                    >
-                      {formatPrice(r.total)}
-                    </DrillValue>
-                  </td>
-                  <td className="py-2.5 text-right">
-                    <button
-                      onClick={() => setFineFor(r.cleanerId)}
-                      className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
-                      title="Оштрафовать"
-                    >
-                      <AlertTriangle className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {payroll && (
-              <tfoot>
-                <tr className="text-sm font-bold text-navy-900">
-                  <td className="py-3 pr-3">Итого</td>
-                  <td />
-                  <td className="py-3 pr-3 text-right">
-                    <DrillValue
-                      align="right"
-                      tone="strong"
-                      disabled={rows.length === 0}
-                      title="Кто из чего сложил эти смены"
-                      onClick={() => setDrillGroup(totalsDrill)}
-                    >
-                      {payroll.totals.shifts}
-                    </DrillValue>
-                  </td>
-                  <td className="py-3 pr-3 text-right">
-                    <DrillValue
-                      align="right"
-                      tone="strong"
-                      disabled={rows.length === 0}
-                      title="Разбивка начислений по клинерам"
-                      onClick={() => setDrillGroup(totalsDrill)}
-                    >
-                      {formatPrice(payroll.totals.accrued)}
-                    </DrillValue>
-                  </td>
-                  <td className="py-3 pr-3 text-right text-red-600">
-                    <DrillValue
-                      align="right"
-                      tone="danger"
-                      disabled={payroll.totals.fines === 0}
-                      title="Все штрафы за период"
-                      onClick={() =>
-                        setDrillGroup({
-                          title: 'Штрафы за период',
-                          subtitle: `Кому и сколько · ${label}`,
-                          rows: (payroll?.rows ?? []).filter((x) => x.fines > 0),
-                        })
-                      }
-                    >
-                      {payroll.totals.fines > 0
-                        ? `− ${formatPrice(payroll.totals.fines)}`
-                        : '—'}
-                    </DrillValue>
-                  </td>
-                  <td className="py-3 pr-3 text-right">
-                    <DrillValue
-                      align="right"
-                      tone={payroll.totals.total < 0 ? 'danger' : 'success'}
-                      disabled={rows.length === 0}
-                      title="Полная ведомость за период"
-                      onClick={() => setDrillGroup(totalsDrill)}
-                    >
-                      {formatPrice(payroll.totals.total)}
-                    </DrillValue>
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
+                    </td>
+                    <td className="py-3 pr-3 text-right">
+                      <DrillValue
+                        align="right"
+                        tone={payroll.totals.total < 0 ? 'danger' : 'success'}
+                        disabled={rows.length === 0}
+                        title="Полная ведомость за период"
+                        onClick={() => setDrillGroup(totalsDrill)}
+                      >
+                        {formatPrice(payroll.totals.total)}
+                      </DrillValue>
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </ScrollArea>
           {idle.length > 0 && (
             <p className="mt-2 text-xs text-navy-600">
               Без смен в этом месяце:{' '}
@@ -1531,7 +1541,7 @@ function FinesSection() {
           <PeriodFilter value={period} onChange={setPeriod} showMonthArrows />
           <button
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+            className="press inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
           >
             <AlertTriangle className="h-4 w-4" />
             Штраф
@@ -1542,7 +1552,7 @@ function FinesSection() {
       {error ? (
         <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !fines ? (
-        <Spinner />
+        <SkeletonList rows={4} />
       ) : !fines || fines.length === 0 ? (
         <EmptyState text="За период штрафов не назначено" />
       ) : (
@@ -1568,7 +1578,7 @@ function FinesSection() {
                 </span>
                 <button
                   onClick={() => removeFine(f)}
-                  className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-100 hover:text-red-600"
+                  className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-100 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, ShieldCheck, UserRound, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
-import { Spinner, PageHeader, Badge, Modal, PasswordInput } from '../components/ui';
+import {
+  SkeletonCards,
+  PageHeader,
+  Badge,
+  Modal,
+  PasswordInput,
+} from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
@@ -74,7 +80,7 @@ export function UsersPage() {
   };
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Сотрудники"
         action={
@@ -86,14 +92,16 @@ export function UsersPage() {
       />
 
       {loading || !data ? (
-        <Spinner />
+        // «!» — заглушка обязана лечь в ту же сетку, что и настоящие карточки,
+        // иначе при загрузке экран перестроится; у SkeletonCards свои колонки
+        <SkeletonCards count={6} className="lg:!grid-cols-3" />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((u) => (
             <div
               key={u.id}
               onClick={() => navigate(`/profile/${u.id}`)}
-              className="card cursor-pointer p-5 transition-shadow hover:shadow-lg"
+              className="card-interactive press p-5"
             >
               <div className="flex items-center gap-3">
                 <span
@@ -130,7 +138,7 @@ export function UsersPage() {
                       e.stopPropagation();
                       toggleActive(u.id, !u.isActive);
                     }}
-                    className={`text-xs font-semibold ${
+                    className={`press text-xs font-semibold ${
                       u.isActive ? 'text-green-600' : 'text-navy-600'
                     }`}
                   >
@@ -142,7 +150,7 @@ export function UsersPage() {
                         e.stopPropagation();
                         removeUser(u);
                       }}
-                      className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                      className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       title="Удалить сотрудника"
                     >
                       <Trash2 className="h-4 w-4" />

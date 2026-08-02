@@ -62,7 +62,12 @@ export function About() {
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 0.08}>
-              <div className="card-light group h-full p-6 transition-all duration-300 hover:-translate-y-1 hover:border-navy-300 hover:shadow-glow">
+              {/*
+                Карточка преимущества никуда не ведёт, поэтому под курсором она
+                не поднимается: подъём и усиленная тень на сайте обещают
+                нажатие, а нажимать тут нечего.
+              */}
+              <div className="card-light group h-full p-6 transition-colors duration-120 ease-out hover:border-navy-300">
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-white transition-colors group-hover:bg-brand-600">
                   <f.icon className="h-6 w-6" />
                 </span>
@@ -77,7 +82,7 @@ export function About() {
 
         {/* Статистика — тёмная панель внутри белой секции */}
         <Reveal delay={0.1}>
-          <div className="mt-12 grid grid-cols-2 gap-4 rounded-3xl bg-navy-gradient p-8 text-white sm:grid-cols-4">
+          <div className="mt-12 grid grid-cols-2 gap-4 rounded-3xl bg-navy-gradient p-8 text-white shadow-card sm:grid-cols-4">
             {STATS.map(([num, label]) => (
               <div key={label} className="text-center">
                 <div className="text-3xl font-extrabold text-white sm:text-4xl">

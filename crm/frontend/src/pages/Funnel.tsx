@@ -11,7 +11,7 @@ import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
-import { Spinner, PageHeader, Badge, ErrorState } from '../components/ui';
+import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { OrderModal } from '../components/OrderModal';
 import { AddClientModal, type NewOrderInput } from './Clients';
@@ -175,7 +175,7 @@ function OrderCardBody({
           {o.stage === 'REJECTED' ? (
             <button
               onClick={() => onChange(o.id, 'NEW')}
-              className="flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50"
+              className="press flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50"
             >
               <ChevronLeft className="h-4 w-4" />
               Вернуть в работу
@@ -185,7 +185,7 @@ function OrderCardBody({
               <button
                 onClick={() => prevStage && onChange(o.id, prevStage)}
                 disabled={!prevStage}
-                className="flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30"
+                className="press flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30"
                 title={prevStage ? STAGE_LABEL[prevStage] : ''}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -193,14 +193,14 @@ function OrderCardBody({
               </button>
               <button
                 onClick={() => onChange(o.id, 'REJECTED')}
-                className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50"
+                className="press rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50"
               >
                 Отказ
               </button>
               <button
                 onClick={() => nextStage && onChange(o.id, nextStage)}
                 disabled={!nextStage}
-                className="flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30"
+                className="press flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30"
                 title={nextStage ? STAGE_LABEL[nextStage] : ''}
               >
                 Далее
@@ -211,6 +211,32 @@ function OrderCardBody({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Заглушка доски на первую загрузку: те же колонки, шапки этапов и карточки.
+ * Крутящийся кружок оставлял экран пустым, и в момент прихода данных вёрстка
+ * прыгала с нуля до полной высоты доски.
+ */
+function BoardSkeleton() {
+  return (
+    <div
+      className="flex gap-3 overflow-hidden pr-4 sm:gap-4 sm:pr-0"
+      role="status"
+      aria-label="Загрузка"
+    >
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex w-[85vw] shrink-0 flex-col sm:w-72">
+          <Skeleton className="mb-3 h-16 w-full rounded-xl" />
+          <div className="space-y-2.5 p-1">
+            {Array.from({ length: 3 }).map((_, j) => (
+              <Skeleton key={j} className="h-32 w-full rounded-md" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -247,6 +273,10 @@ export function Funnel() {
   const inFlightRef = useRef(0);
   // доска: прокрутка стрелками — мышью тянуть полосу неудобно на большом экране
   const boardRef = useRef<HTMLDivElement>(null);
+  // обёртка доски: на ней рисуются растворяющиеся края (см. .scroll-edge)
+  const boardWrapRef = useRef<HTMLDivElement>(null);
+  // точки под доской: сколько этапов и на каком вы сейчас
+  const dotsRef = useRef<HTMLDivElement>(null);
   const scrollBoard = (dir: -1 | 1) =>
     boardRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
@@ -311,13 +341,84 @@ export function Funnel() {
      * наблюдение за ним давало бесконечный пересчёт.
      */
     const ro = new ResizeObserver(measure);
-    // блок фильтров — прямой сосед доски сверху
-    const above = el.previousElementSibling;
+    // блок фильтров — сосед сверху у обёртки доски (сама доска лежит внутри неё)
+    const above = el.parentElement?.previousElementSibling;
     if (above) ro.observe(above);
     return () => {
       window.removeEventListener('resize', measure);
       ro.disconnect();
     };
+  }, [data]);
+
+  /*
+   * Края доски и точка текущего этапа.
+   *
+   * Признаки ставим прямо в DOM, как это делает ScrollArea: событие прокрутки
+   * приходит на каждый кадр, и состояние React перерисовывало бы доску со
+   * всеми карточками. Сам ScrollArea здесь не подошёл — доске нужен свой ref
+   * (стрелки прокрутки и замер высоты) и своя видимая полоса .board-scroll.
+   */
+  useEffect(() => {
+    const box = boardRef.current;
+    const wrap = boardWrapRef.current;
+    if (!box || !wrap) return;
+    const sync = () => {
+      const pos = box.scrollLeft;
+      const size = box.clientWidth;
+      const full = box.scrollWidth;
+      // допуск в пиксель: при дробном масштабе браузера конец не совпадает точно
+      const fits = full <= size + 1;
+      wrap.setAttribute('data-at-start', String(fits || pos <= 1));
+      wrap.setAttribute('data-at-end', String(fits || pos + size >= full - 1));
+
+      const dots = dotsRef.current;
+      const count = dots?.children.length ?? 0;
+      if (dots && count > 1) {
+        const step = full / count;
+        const active = Math.max(
+          0,
+          Math.min(count - 1, step > 0 ? Math.round(pos / step) : 0),
+        );
+        for (let i = 0; i < count; i += 1) {
+          (dots.children[i] as HTMLElement).dataset.active = String(i === active);
+        }
+      }
+    };
+    sync();
+    box.addEventListener('scroll', sync, { passive: true });
+    // ширина меняется и без прокрутки: свернули меню, повернули телефон
+    const ro = new ResizeObserver(sync);
+    ro.observe(box);
+    return () => {
+      box.removeEventListener('scroll', sync);
+      ro.disconnect();
+    };
+  }, [data]);
+
+  /*
+   * Тень под шапкой этапа, когда список карточек прокручен, — единственный
+   * знак, что колонка листается: обернуть список в ScrollArea нельзя, его
+   * прокруткой управляет библиотека перетаскивания.
+   *
+   * Один слушатель на всю доску вместо useStuck на колонку: хук нельзя
+   * вызывать в цикле по этапам, а метка-датчик внутри Droppable оказалась бы
+   * лишним ребёнком списка перетаскивания. Событие прокрутки не всплывает,
+   * но доходит до доски на фазе перехвата.
+   */
+  useEffect(() => {
+    const box = boardRef.current;
+    if (!box) return;
+    const onScroll = (e: Event) => {
+      const list = e.target as HTMLElement;
+      if (list === box) return; // это горизонтальная прокрутка самой доски
+      const head = list.previousElementSibling;
+      if (head?.classList.contains('sticky-head')) {
+        head.setAttribute('data-stuck', String(list.scrollTop > 0));
+      }
+    };
+    box.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () =>
+      box.removeEventListener('scroll', onScroll, { capture: true });
   }, [data]);
   // «Добавить клиента» прямо из воронки — та же форма, что в «Клиентах»
   const [showAddClient, setShowAddClient] = useState(false);
@@ -459,7 +560,7 @@ export function Funnel() {
 
   if (!data) {
     if (error && !loading) return <ErrorState text={error ?? undefined} onRetry={reload} />;
-    return <Spinner />;
+    return <BoardSkeleton />;
   }
 
   // менеджеры, у которых есть заказы (для выпадающего фильтра)
@@ -502,7 +603,7 @@ export function Funnel() {
   const board = filtered;
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Воронка продаж"
         /*
@@ -574,7 +675,7 @@ export function Funnel() {
                 setManagerFilter('ALL');
                 setTagFilter('ALL');
               }}
-              className="text-xs font-medium text-navy-600 underline-offset-2 hover:text-navy-600 hover:underline"
+              className="press text-xs font-medium text-navy-600 underline-offset-2 hover:text-navy-600 hover:underline"
             >
               Сбросить
             </button>
@@ -606,195 +707,230 @@ export function Funnel() {
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
         {/*
-          Отступ справа на телефоне: без него последняя колонка упиралась
-          ровно в край экрана и обрезалась на середине слова («Нов…», «Сумм…»).
-          С sm: и выше — прежние отступы и промежуток, десктоп не меняется.
+          Обёртка нужна растворяющемуся краю: он рисуется поверх доски, а не
+          внутри прокрутки, иначе уезжал бы вместе с колонками.
         */}
         <div
-          ref={boardRef}
-          style={boardHeight ? { height: boardHeight } : undefined}
-          className="board-scroll flex snap-x snap-mandatory gap-3 pr-4 sm:snap-none sm:gap-4 sm:pr-0"
+          ref={boardWrapRef}
+          className="scroll-edge scroll-edge-x"
+          data-at-start="true"
+          data-at-end="true"
         >
-          {board.map((col) => {
-            /*
-             * Сумма этапа — полная стоимость заказов, а не остаток к оплате:
-             * это деньги, которые компания на этапе заработала. Считаем по
-             * карточкам колонки, а не берём готовое число сервера, — иначе
-             * при фильтре по менеджеру шапка показывала бы итог всей доски.
-             */
-            const total = col.orders.reduce((sum, o) => sum + orderTotal(o), 0);
-            // долг по этапу: сумма остатков заказов, где оплата ещё не полная
-            const debt = col.orders.reduce((sum, o) => sum + orderDebt(o), 0);
-            const isDue = col.stage === 'DONE';
-            return (
-            <div
-              key={col.stage}
-              className={`flex w-[85vw] shrink-0 snap-start flex-col sm:w-72 ${
-                isDue
-                  ? /*
-                     * Прилипает к левому краю: список должников виден, до
-                     * каких бы этапов ни докрутили доску. Только с sm: и
-                     * выше — на телефоне закреплённая колонка накрыла бы
-                     * почти весь экран и читать остальные было бы нечем.
-                     */
-                    /*
-                     * z-10, а не z-20: колонке достаточно быть выше соседних
-                     * колонок доски. С z-20 она вставала вровень с шапкой
-                     * приложения и, будучи ниже по разметке, перекрывала её —
-                     * выпадающие уведомления и меню пользователя уходили под
-                     * карточки должников.
-                     */
-                    'sm:sticky sm:left-0 sm:z-10 sm:-ml-1 sm:rounded-2xl sm:bg-navy-50/95 sm:px-1 sm:pt-1 sm:backdrop-blur'
-                  : ''
-              }`}
-            >
-              {/*
-                Шапка этапа: название, сумма денег и количество карточек.
-                Сумма нужна руководителю не меньше количества — по ней видно,
-                сколько денег стоит каждый шаг воронки. Отдельной строкой —
-                сколько из этих денег ещё не получено.
-              */}
+          {/*
+            Отступ справа на телефоне: без него последняя колонка упиралась
+            ровно в край экрана и обрезалась на середине слова («Нов…», «Сумм…»).
+            С sm: и выше — прежние отступы и промежуток, десктоп не меняется.
+          */}
+          <div
+            ref={boardRef}
+            style={boardHeight ? { height: boardHeight } : undefined}
+            className="board-scroll flex snap-x snap-mandatory gap-3 pr-4 sm:snap-none sm:gap-4 sm:pr-0"
+          >
+            {board.map((col) => {
+              /*
+               * Сумма этапа — полная стоимость заказов, а не остаток к оплате:
+               * это деньги, которые компания на этапе заработала. Считаем по
+               * карточкам колонки, а не берём готовое число сервера, — иначе
+               * при фильтре по менеджеру шапка показывала бы итог всей доски.
+               */
+              const total = col.orders.reduce((sum, o) => sum + orderTotal(o), 0);
+              // долг по этапу: сумма остатков заказов, где оплата ещё не полная
+              const debt = col.orders.reduce((sum, o) => sum + orderDebt(o), 0);
+              const isDue = col.stage === 'DONE';
+              return (
               <div
-                className={`mb-3 shrink-0 rounded-xl border bg-white px-3 py-2 ${
-                  isDue ? 'border-red-300 ring-1 ring-red-200' : 'border-navy-100'
+                key={col.stage}
+                className={`flex w-[85vw] shrink-0 snap-start flex-col sm:w-72 ${
+                  isDue
+                    ? /*
+                       * Прилипает к левому краю: список должников виден, до
+                       * каких бы этапов ни докрутили доску. Только с sm: и
+                       * выше — на телефоне закреплённая колонка накрыла бы
+                       * почти весь экран и читать остальные было бы нечем.
+                       */
+                      /*
+                       * z-10, а не z-20: колонке достаточно быть выше соседних
+                       * колонок доски. С z-20 она вставала вровень с шапкой
+                       * приложения и, будучи ниже по разметке, перекрывала её —
+                       * выпадающие уведомления и меню пользователя уходили под
+                       * карточки должников.
+                       */
+                      'sm:sticky sm:left-0 sm:z-10 sm:-ml-1 sm:rounded-2xl sm:bg-navy-50/95 sm:px-1 sm:pt-1 sm:backdrop-blur'
+                    : ''
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  {/*
-                    Название этапа занимает всё свободное место и при нехватке
-                    ширины сокращается многоточием, а не переносится посреди
-                    слова. Счётчик не сжимается и остаётся на своей строке.
-                  */}
-                  <span className="min-w-0 flex-1">
-                    <Badge className={`${STAGE_COLOR[col.stage]} max-w-full`}>
-                      <span className="min-w-0 truncate">{col.label}</span>
-                    </Badge>
-                  </span>
-                  <span className="shrink-0 text-sm font-bold text-navy-600">
-                    <DrillValue
-                      tone="muted"
-                      disabled={col.orders.length === 0}
-                      title={`Все заказы на этапе «${col.label}» с суммами`}
-                      onClick={() => setStageDrill(col)}
-                    >
-                      {col.orders.length}
-                    </DrillValue>
-                  </span>
-                </div>
-                <div className="mt-1 whitespace-nowrap text-xs text-navy-600">
-                  Сумма:{' '}
-                  <span className="font-bold text-navy-800">
-                    {formatPrice(total)}
-                  </span>
-                </div>
-                {/* сколько из этой суммы — недоплата по уже начатым заказам */}
-                {debt > 0 && (
-                  <div className="mt-0.5 whitespace-nowrap text-xs font-semibold text-red-700">
-                    Из них долг: {formatPrice(debt)}
-                  </div>
-                )}
-              </div>
+                {/*
+                  Шапка этапа: название, сумма денег и количество карточек.
+                  Сумма нужна руководителю не меньше количества — по ней видно,
+                  сколько денег стоит каждый шаг воронки. Отдельной строкой —
+                  сколько из этих денег ещё не получено.
 
-              {/*
-                renderClone обязателен: колонка прокручивается, и поднятая
-                карточка обрезалась её краем — на экране оставалось пустое
-                место, пока держишь. Клон рисуется поверх доски и виден
-                целиком на всём пути переноса.
-              */}
-              <Droppable
-                droppableId={col.stage}
-                isDropDisabled={isTouch}
-                renderClone={(p, _snap, rubric) => {
-                  const o = col.orders[rubric.source.index];
-                  return (
+                  z-0 гасит z-20 из .sticky-head: с ним шапка обычного этапа
+                  оказалась бы выше закреплённой колонки «К оплате» и рисовалась
+                  бы поверх неё при прокрутке доски.
+                */}
+                <div
+                  className={`sticky-head z-0 mb-3 shrink-0 rounded-xl border bg-white px-3 py-2 shadow-card ${
+                    isDue ? 'border-red-300 ring-1 ring-red-200' : 'border-navy-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    {/*
+                      Название этапа занимает всё свободное место и при нехватке
+                      ширины сокращается многоточием, а не переносится посреди
+                      слова. Счётчик не сжимается и остаётся на своей строке.
+                    */}
+                    <span className="min-w-0 flex-1">
+                      <Badge className={`${STAGE_COLOR[col.stage]} max-w-full`}>
+                        <span className="min-w-0 truncate">{col.label}</span>
+                      </Badge>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-navy-600">
+                      <DrillValue
+                        tone="muted"
+                        disabled={col.orders.length === 0}
+                        title={`Все заказы на этапе «${col.label}» с суммами`}
+                        onClick={() => setStageDrill(col)}
+                      >
+                        {col.orders.length}
+                      </DrillValue>
+                    </span>
+                  </div>
+                  <div className="mt-1 whitespace-nowrap text-xs text-navy-600">
+                    Сумма:{' '}
+                    <span className="font-bold text-navy-800">
+                      {formatPrice(total)}
+                    </span>
+                  </div>
+                  {/* сколько из этой суммы — недоплата по уже начатым заказам */}
+                  {debt > 0 && (
+                    <div className="mt-0.5 whitespace-nowrap text-xs font-semibold text-red-700">
+                      Из них долг: {formatPrice(debt)}
+                    </div>
+                  )}
+                </div>
+
+                {/*
+                  renderClone обязателен: колонка прокручивается, и поднятая
+                  карточка обрезалась её краем — на экране оставалось пустое
+                  место, пока держишь. Клон рисуется поверх доски и виден
+                  целиком на всём пути переноса.
+                */}
+                <Droppable
+                  droppableId={col.stage}
+                  isDropDisabled={isTouch}
+                  renderClone={(p, _snap, rubric) => {
+                    const o = col.orders[rubric.source.index];
+                    return (
+                      <div
+                        ref={p.innerRef}
+                        {...p.draggableProps}
+                        {...p.dragHandleProps}
+                        className={`card w-72 cursor-pointer border-l-4 p-3.5 text-left shadow-pop ring-1 ring-brand-300 ${
+                          orderDebt(o) > 0
+                            ? 'border-l-red-500 bg-red-50/70'
+                            : STAGE_BORDER[o.stage]
+                        }`}
+                      >
+                        <OrderCardBody
+                          o={o}
+                          isTouch={isTouch}
+                          onChange={changeStage}
+                        />
+                      </div>
+                    );
+                  }}
+                >
+                  {(provided, snapshot) => (
                     <div
-                      ref={p.innerRef}
-                      {...p.draggableProps}
-                      {...p.dragHandleProps}
-                      className={`card w-72 cursor-pointer border-l-4 p-3.5 text-left shadow-xl ring-1 ring-brand-300 ${
-                        orderDebt(o) > 0
-                          ? 'border-l-red-500 bg-red-50/70'
-                          : STAGE_BORDER[o.stage]
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      /*
+                       * Карточки листаются внутри колонки. Библиотека
+                       * перетаскивания сама прокручивает этот блок, когда
+                       * тянешь карточку к его краю, — переносить заказ между
+                       * этапами по-прежнему можно.
+                       */
+                      className={`min-h-0 flex-1 space-y-2.5 overflow-y-auto rounded-2xl p-1 transition-colors ${
+                        snapshot.isDraggingOver ? 'bg-navy-100/60' : ''
                       }`}
                     >
-                      <OrderCardBody
-                        o={o}
-                        isTouch={isTouch}
-                        onChange={changeStage}
-                      />
+                      {col.orders.map((o, index) => (
+                        <Draggable
+                          key={o.id}
+                          draggableId={o.id}
+                          index={index}
+                          isDragDisabled={isTouch}
+                        >
+                          {(p, snap) => (
+                            <div
+                              ref={p.innerRef}
+                              {...p.draggableProps}
+                              {...p.dragHandleProps}
+                              onClick={() => {
+                                // это был драг, а не клик — модалку не открываем
+                                if (draggingRef.current) return;
+                                setOpenOrder(o);
+                              }}
+                              /*
+                                Цветная рамка по этапу — как на образце: этап
+                                карточки виден, не читая шапку колонки.
+
+                                Частично оплаченный заказ — это долг клиента.
+                                Красная полоса и фон видны в общем списке, не
+                                открывая карточку.
+
+                                Подъём под курсором собран утилитами, а не
+                                классом .card-interactive: тот на наведении
+                                перекрашивает рамку целиком и погасил бы цветную
+                                полосу этапа слева.
+                              */
+                              className={`card cursor-pointer border-l-4 p-3.5 text-left transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift ${
+                                orderDebt(o) > 0
+                                  ? 'border-l-red-500 bg-red-50/70'
+                                  : STAGE_BORDER[o.stage]
+                              } ${
+                                snap.isDragging ? 'shadow-pop ring-1 ring-brand-300' : ''
+                              }`}
+                            >
+                              <OrderCardBody
+                                o={o}
+                                isTouch={isTouch}
+                                onChange={changeStage}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                      {col.orders.length === 0 && !snapshot.isDraggingOver && (
+                        <div className="rounded-xl border border-dashed border-navy-200 py-6 text-center text-xs text-navy-600">
+                          {isTouch ? 'Нет заказов' : 'Перетащите сюда'}
+                        </div>
+                      )}
                     </div>
-                  );
-                }}
-              >
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    /*
-                     * Карточки листаются внутри колонки. Библиотека
-                     * перетаскивания сама прокручивает этот блок, когда
-                     * тянешь карточку к его краю, — переносить заказ между
-                     * этапами по-прежнему можно.
-                     */
-                    className={`min-h-0 flex-1 space-y-2.5 overflow-y-auto rounded-2xl p-1 transition-colors ${
-                      snapshot.isDraggingOver ? 'bg-navy-100/60' : ''
-                    }`}
-                  >
-                    {col.orders.map((o, index) => (
-                      <Draggable
-                        key={o.id}
-                        draggableId={o.id}
-                        index={index}
-                        isDragDisabled={isTouch}
-                      >
-                        {(p, snap) => (
-                          <div
-                            ref={p.innerRef}
-                            {...p.draggableProps}
-                            {...p.dragHandleProps}
-                            onClick={() => {
-                              // это был драг, а не клик — модалку не открываем
-                              if (draggingRef.current) return;
-                              setOpenOrder(o);
-                            }}
-                            /*
-                              Цветная рамка по этапу — как на образце: этап
-                              карточки виден, не читая шапку колонки.
-                            */
-                            /*
-                              Частично оплаченный заказ — это долг клиента.
-                              Красная полоса и фон видны в общем списке, не
-                              открывая карточку.
-                            */
-                            className={`card cursor-pointer border-l-4 p-3.5 text-left transition-shadow hover:shadow-lg ${
-                              orderDebt(o) > 0
-                                ? 'border-l-red-500 bg-red-50/70'
-                                : STAGE_BORDER[o.stage]
-                            } ${
-                              snap.isDragging ? 'shadow-xl ring-1 ring-brand-300' : ''
-                            }`}
-                          >
-                            <OrderCardBody
-                              o={o}
-                              isTouch={isTouch}
-                              onChange={changeStage}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                    {col.orders.length === 0 && !snapshot.isDraggingOver && (
-                      <div className="rounded-xl border border-dashed border-navy-200 py-6 text-center text-xs text-navy-600">
-                        {isTouch ? 'Нет заказов' : 'Перетащите сюда'}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-            );
-          })}
+                  )}
+                </Droppable>
+              </div>
+              );
+            })}
+          </div>
+          {/*
+            Точки — сколько всего этапов и на каком вы сейчас. На большом
+            экране ту же работу делает видимая полоса .board-scroll, поэтому
+            там они скрыты. Лежат поверх нижнего отступа раздела: доска
+            занимает ровно остаток экрана, и строка под ней вернула бы
+            прокрутку всей странице.
+          */}
+          <div
+            ref={dotsRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-3 left-0 right-0 flex items-center justify-center gap-1.5 sm:hidden"
+          >
+            {board.map((col) => (
+              <span key={col.stage} className="swipe-dot" />
+            ))}
+          </div>
         </div>
       </DragDropContext>
 

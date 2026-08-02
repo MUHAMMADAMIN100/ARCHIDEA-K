@@ -73,8 +73,21 @@
 
   /* ── Карточки ── */
   /* Светлая карточка (на белых секциях) */
+  /*
+   * Карточка — первый уровень высоты: лежит на странице. Рамка осталась:
+   * на ярком экране тень одна границу не держит.
+   */
   .card-light {
-    @apply rounded-md border border-navy-200 bg-white;
+    @apply rounded-md border border-navy-200 bg-white shadow-card;
+  }
+  /*
+   * Карточка, которую можно нажать (тариф, услуга): под курсором
+   * приподнимается на пиксель. Больше — и сетка начинает «дышать»
+   * при каждом движении мыши.
+   */
+  .card-interactive {
+    @apply card-light cursor-pointer transition-[box-shadow,transform,border-color] duration-120 ease-out;
+    @apply hover:-translate-y-px hover:border-navy-300 hover:shadow-lift;
   }
   /* Стеклянная карточка (на тёмных секциях) */
   /* На тёмной секции — та же строгая карточка, без стекла и размытия */
@@ -82,9 +95,75 @@
     @apply rounded-md border border-white/15 bg-white/[0.04];
   }
 
+  /*
+   * Отклик на нажатие. На телефоне наведения нет, и без подтверждения
+   * непонятно, попал ли палец по кнопке: человек жмёт второй раз.
+   */
+  .press {
+    @apply transition-transform duration-120 ease-out active:scale-[0.97];
+  }
+
+  /*
+   * Край прокрутки: содержимое растворяется с той стороны, куда ещё есть
+   * куда крутить. Признаки проставляет разметка страницы; без них край
+   * не показывается вовсе — обещать продолжение там, где его нет, хуже,
+   * чем не подсказывать совсем.
+   */
+  .scroll-edge {
+    position: relative;
+    --fade-bg: #ffffff;
+  }
+  .scroll-edge::before,
+  .scroll-edge::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2.5rem;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+  }
+  .scroll-edge::before {
+    left: 0;
+    background: linear-gradient(to right, var(--fade-bg), transparent);
+  }
+  .scroll-edge::after {
+    right: 0;
+    background: linear-gradient(to left, var(--fade-bg), transparent);
+  }
+  .scroll-edge[data-at-start='false']::before {
+    opacity: 1;
+  }
+  .scroll-edge[data-at-end='false']::after {
+    opacity: 1;
+  }
+
   /* Заголовки крупные, но не «плакатные»: минус один шаг размера */
   .section-title {
     @apply text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl;
+  }
+}
+
+/*
+ * Уважаем системную настройку «меньше движения».
+ *
+ * Её включают не ради вкуса: анимация вызывает тошноту и головокружение у
+ * людей с вестибулярными нарушениями. Содержимое обязано остаться на месте
+ * и полностью видимым — гасим движение, а не показ.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card-interactive:hover {
+    transform: none !important;
   }
 }
 

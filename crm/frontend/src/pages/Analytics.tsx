@@ -14,7 +14,8 @@ import {
 } from 'recharts';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { Spinner, PageHeader, ErrorState } from '../components/ui';
+import { Skeleton, PageHeader, ErrorState } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { Period, PeriodFilter, StatCard } from '../components/common';
 import {
   DetailModal,
@@ -77,11 +78,12 @@ function BreakdownCard<T>({
       {rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-navy-600">{emptyText}</p>
       ) : (
-        <div className="-mx-1 overflow-x-auto px-1">
+        <ScrollArea axis="x" className="-mx-1" innerClassName="px-1" label={title}>
           {/*
             На телефоне таблица шире экрана. Минимальная ширина не даёт
             колонкам схлопнуться до нечитаемого, а прокрутка остаётся
-            внутри блока — страница вбок не едет.
+            внутри блока — страница вбок не едет. Растворяющийся край
+            ScrollArea показывает, что справа есть продолжение.
           */}
           <table className="w-full min-w-[32rem] text-sm">
             <thead>
@@ -115,7 +117,7 @@ function BreakdownCard<T>({
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollArea>
       )}
     </div>
   );
@@ -162,7 +164,7 @@ export function Analytics() {
     (reconciliation.ordersWithoutPrice > 0 || reconciliation.paidWithoutCloseDate > 0);
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Аналитика и отчёты"
         subtitle={seesAll ? `Аналитика компании · ${rangeLabel}` : `Аналитика по вашим заказам · ${rangeLabel}`}
@@ -172,7 +174,31 @@ export function Analytics() {
       {error ? (
         <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !data ? (
-        <Spinner />
+        /*
+         * Заглушка повторяет раскладку страницы: ряд плиток с цифрами и
+         * блоки диаграмм под ними. Место занято заранее, поэтому цифры
+         * приходят на готовые позиции и экран не прыгает.
+         */
+        <div role="status" aria-label="Загрузка">
+          <Skeleton className="mb-5 h-4 w-full max-w-2xl rounded-md" />
+          {isDirector && (
+            <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 rounded-md" />
+              ))}
+            </div>
+          )}
+          <div className="mb-5 grid gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 rounded-md" />
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Skeleton className="h-80 rounded-md lg:col-span-2" />
+            <Skeleton className="h-80 rounded-md" />
+            <Skeleton className="h-80 rounded-md" />
+          </div>
+        </div>
       ) : !data ? null : (
         <>
           <p className="mb-5 text-xs text-navy-600">
@@ -181,7 +207,7 @@ export function Analytics() {
           </p>
 
           {hasDiscrepancy && reconciliation && (
-            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-card">
               <div className="font-semibold">Сверка за период</div>
               <div className="mt-1">
                 Оплаченных заказов:{' '}
@@ -902,7 +928,11 @@ export function Analytics() {
                     </div>
 
                     {/* Компьютер: обычная таблица */}
-                    <div className="hidden overflow-x-auto sm:block">
+                    <ScrollArea
+                      axis="x"
+                      className="hidden sm:block"
+                      label="KPI менеджеров"
+                    >
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
@@ -950,7 +980,7 @@ export function Analytics() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollArea>
                   </>
                 )}
               </div>

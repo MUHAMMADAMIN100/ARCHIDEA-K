@@ -184,12 +184,12 @@ export function DatePicker({
           <>
             {/* подложка: клик мимо закрывает календарь на любом устройстве */}
             <div
-              className="fixed inset-0 z-[60] bg-navy-950/10 sm:bg-transparent"
+              className="fixed inset-0 z-[60] animate-fade-in bg-navy-950/10 sm:bg-transparent"
               onClick={() => setOpen(false)}
             />
             <div
               ref={popRef}
-              className="fixed z-[61] max-h-[85vh] w-max max-w-[calc(100vw-1rem)] overflow-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
+              className="fixed z-[61] max-h-[85vh] w-max max-w-[calc(100vw-1rem)] animate-drop-in overflow-auto rounded-2xl border border-navy-100 bg-white p-2 shadow-pop"
               style={{
                 ...rdpVars,
                 top: pos?.top ?? 0,

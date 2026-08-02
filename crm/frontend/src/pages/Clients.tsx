@@ -271,7 +271,7 @@ export function Clients() {
   ];
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="База клиентов"
         /*
@@ -591,7 +591,7 @@ export function AddClientModal({
                 onClick={() =>
                   setExtraPhones((prev) => prev.filter((_, j) => j !== i))
                 }
-                className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                className="press mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                 aria-label="Убрать номер"
               >
                 <X className="h-4 w-4" />
@@ -729,7 +729,7 @@ export function AddClientModal({
                         prev.filter((_, j) => j !== i),
                       )
                     }
-                    className="shrink-0 rounded-lg p-1 text-navy-600 hover:text-red-600"
+                    className="press shrink-0 rounded-lg p-1 text-navy-600 hover:text-red-600"
                     aria-label="Убрать услугу"
                   >
                     <X className="h-4 w-4" />
@@ -755,7 +755,7 @@ export function AddClientModal({
                     },
                   ])
                 }
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
+                className="press mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
               >
                 <span className="text-lg leading-none">+</span>
                 ещё услуга
@@ -770,7 +770,7 @@ export function AddClientModal({
                       key={d}
                       type="button"
                       onClick={() => setDirtLevel(d)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      className={`press rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                         dirtLevel === d
                           ? 'bg-brand-500 text-white ring-1 ring-brand-300'
                           : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'

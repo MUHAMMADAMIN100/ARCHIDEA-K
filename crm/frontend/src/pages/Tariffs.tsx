@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
-import { Spinner, PageHeader, Modal, Badge, ErrorState } from '../components/ui';
+import { Skeleton, PageHeader, Modal, Badge, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Tabs } from '../components/common';
@@ -127,7 +127,26 @@ export function Tariffs() {
   }, [data]);
 
   if (error) return <ErrorState text={error ?? undefined} onRetry={reload} />;
-  if (loading || !data) return <Spinner />;
+  /*
+   * Заглушка повторяет обе сетки страницы: три колонки услуг и четыре —
+   * дополнительных. Так при появлении цен ничего не переезжает, а по форме
+   * заглушки сразу понятно, что грузится.
+   */
+  if (loading || !data)
+    return (
+      <div className="animate-page-in" role="status" aria-label="Загрузка">
+        <div className="mb-8 grid gap-4 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-72 rounded-md" />
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-52 rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
 
   const saveTariff = (t: Tariff) => {
     const p = prices[t.key];
@@ -263,7 +282,7 @@ export function Tariffs() {
   };
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Управление тарифами"
         action={
@@ -390,7 +409,7 @@ export function Tariffs() {
               <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-navy-100 pt-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
+                  className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => setTariffModal({ item: t })}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -398,7 +417,7 @@ export function Tariffs() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
+                  className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => setHistoryKey({ key: t.key, title: t.title })}
                 >
                   <HistoryIcon className="h-3.5 w-3.5" />
@@ -406,7 +425,7 @@ export function Tariffs() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
+                  className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => toggleTariffActive(t)}
                 >
                   {t.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -422,7 +441,7 @@ export function Tariffs() {
                 ) : (
                   <button
                     type="button"
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+                    className="press ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
                     onClick={() => removeTariff(t)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -510,7 +529,7 @@ export function Tariffs() {
               <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-navy-100 pt-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
+                  className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => setExtraModal({ item: e })}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -518,7 +537,7 @@ export function Tariffs() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
+                  className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
                   onClick={() => toggleExtraActive(e)}
                 >
                   {e.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -534,7 +553,7 @@ export function Tariffs() {
                 ) : (
                   <button
                     type="button"
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
+                    className="press ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50"
                     onClick={() => removeExtra(e)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

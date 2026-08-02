@@ -196,7 +196,7 @@ export function ReminderModal({
                 key={q.days}
                 type="button"
                 onClick={() => pickInterval(q.days)}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                className={`press rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
                   mode === 'interval' && intervalDays === q.days
                     ? 'border-brand-400 bg-brand-50 text-brand-800'
                     : 'border-navy-200 text-navy-600 hover:bg-navy-50'

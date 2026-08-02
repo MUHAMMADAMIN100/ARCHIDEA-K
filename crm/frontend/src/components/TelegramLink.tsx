@@ -82,7 +82,7 @@ export function TelegramLink() {
             {busy ? 'Готовим ссылку…' : 'Подключить Telegram'}
           </button>
           {url && (
-            <p className="text-xs text-navy-600">
+            <p className="animate-fade-in text-xs text-navy-600">
               Если Telegram не открылся сам — перейдите по ссылке и нажмите
               «Старт»:{' '}
               <a

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { api } from '../api/client';
+import { ScrollArea } from './ScrollArea';
 import type { NotificationItem } from '../types';
 import { formatDateTime, notificationTarget } from '../lib/labels';
 
@@ -116,7 +117,7 @@ export function NotificationsBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={openAndRead}
-        className="relative rounded-xl border border-navy-200 bg-white p-2.5 text-navy-600 hover:bg-navy-50"
+        className="press relative rounded-xl border border-navy-200 bg-white p-2.5 text-navy-600 hover:bg-navy-50"
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
@@ -137,7 +138,12 @@ export function NotificationsBell() {
               // до первого замера не показываем — иначе кадр мигает в углу
               visibility: pos ? 'visible' : 'hidden',
             }}
-            className="fixed z-[70] max-h-[70vh] overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
+            className="fixed z-[70] animate-drop-in rounded-2xl border border-navy-100 bg-white p-2 shadow-pop"
+          >
+          <ScrollArea
+            axis="y"
+            innerClassName="max-h-[70vh] overscroll-contain"
+            label="Уведомления"
           >
           <div className="px-3 py-2 text-sm font-bold text-navy-900">
             Уведомления
@@ -160,7 +166,7 @@ export function NotificationsBell() {
                   navigate(target);
                 }}
                 className={`block w-full rounded-xl px-3 py-2.5 text-left ${
-                  target ? 'cursor-pointer hover:bg-navy-50' : 'cursor-default'
+                  target ? 'press cursor-pointer hover:bg-navy-50' : 'cursor-default'
                 }`}
               >
                 <div className="text-sm font-semibold text-navy-800">
@@ -173,6 +179,7 @@ export function NotificationsBell() {
               </button>
             );
           })}
+          </ScrollArea>
           </div>,
           document.body,
         )}

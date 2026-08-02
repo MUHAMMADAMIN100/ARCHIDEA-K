@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock } from 'lucide-react';
+import { ScrollArea } from './ScrollArea';
 
 /**
  * Выбор времени в 24-часовом виде.
@@ -190,7 +191,7 @@ export function TimePicker({
         tabIndex={-1}
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className="absolute right-0 top-0 flex h-11 w-9 items-center justify-center text-navy-600"
+        className="press absolute right-0 top-0 flex h-11 w-9 items-center justify-center text-navy-600"
         aria-label="Выбрать время из списка"
       >
         <Clock className="h-4 w-4" />
@@ -206,7 +207,7 @@ export function TimePicker({
             />
             <div
               ref={popRef}
-              className="fixed z-[61] max-h-[15rem] overflow-y-auto overscroll-contain rounded-xl border border-navy-100 bg-white py-1 shadow-card"
+              className="fixed z-[61] animate-drop-in rounded-xl border border-navy-100 bg-white py-1 shadow-pop"
               style={{
                 top: pos?.top ?? 0,
                 left: pos?.left ?? 0,
@@ -214,6 +215,11 @@ export function TimePicker({
                 visibility: pos ? 'visible' : 'hidden',
               }}
             >
+              <ScrollArea
+                axis="y"
+                innerClassName="max-h-[15rem] overscroll-contain"
+                label="Время"
+              >
               {OPTIONS.map((t) => (
                 <button
                   key={t}
@@ -224,7 +230,7 @@ export function TimePicker({
                     commit(t);
                     setOpen(false);
                   }}
-                  className={`block w-full px-3 py-2 text-left text-sm tabular-nums transition-colors ${
+                  className={`press block w-full px-3 py-2 text-left text-sm tabular-nums transition-[background-color,color,transform] duration-120 ease-out ${
                     t === value
                       ? 'bg-brand-500 font-semibold text-white'
                       : 'text-navy-800 hover:bg-brand-50'
@@ -233,6 +239,7 @@ export function TimePicker({
                   {t}
                 </button>
               ))}
+              </ScrollArea>
             </div>
           </>,
           document.body,

@@ -35,7 +35,7 @@ export function Footer() {
                   href={s.href}
                   target="_blank"
                   aria-label={s.label}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/40 hover:text-white"
+                  className="press flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition-[transform,border-color,color] duration-120 ease-out hover:-translate-y-px hover:border-white/40 hover:text-white"
                 >
                   <s.icon className="h-5 w-5" />
                 </a>
@@ -57,7 +57,7 @@ export function Footer() {
                 <li key={id}>
                   <button
                     onClick={() => scrollToId(id)}
-                    className="transition hover:text-white"
+                    className="transition-colors duration-120 ease-out hover:text-white"
                   >
                     {label}
                   </button>
@@ -77,7 +77,7 @@ export function Footer() {
                 <li key={p.href}>
                   <a
                     href={p.href}
-                    className="flex items-center gap-2.5 transition hover:text-white"
+                    className="flex items-center gap-2.5 transition-colors duration-120 ease-out hover:text-white"
                   >
                     <IconPhone className="h-4 w-4 text-white" />
                     {p.display}

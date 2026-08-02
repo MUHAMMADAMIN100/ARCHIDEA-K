@@ -55,10 +55,16 @@ export function Tariffs() {
         <div className="mt-14 grid gap-6 lg:grid-cols-3">
           {pricing.types.map((type, i) => (
             <Reveal key={type.id} delay={i * 0.1}>
+              {/*
+                Карточка услуги отзывается на курсор: приподнимается на пиксель
+                и добирает тень. Раньше подъём был на восемь — сетка «дышала»
+                от каждого движения мыши. Указатель остаётся только на кнопке:
+                нажимается именно она.
+              */}
               <div
-                className={`relative flex h-full flex-col rounded-3xl p-7 transition-all duration-300 hover:-translate-y-2 ${
+                className={`relative flex h-full flex-col rounded-3xl p-7 transition-[box-shadow,transform,background-color] duration-120 ease-out hover:-translate-y-px ${
                   type.popular
-                    ? 'bg-white text-navy-900 shadow-glow ring-2 ring-navy-300'
+                    ? 'bg-white text-navy-900 shadow-card ring-2 ring-navy-300 hover:shadow-lift'
                     : 'border border-white/10 bg-white/5 text-white hover:bg-white/10'
                 }`}
               >

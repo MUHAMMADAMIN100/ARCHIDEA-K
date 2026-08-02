@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useFetch } from '../api/hooks';
-import { Badge, EmptyState, ErrorState, Spinner } from './ui';
+import { Badge, EmptyState, ErrorState, SkeletonList } from './ui';
 import { formatDateTimeTz } from '../lib/date';
 import {
   AUDIT_ACTION_COLOR,
@@ -65,7 +65,7 @@ export function AuditEntryRow({
     >
       <div
         className={`flex flex-wrap items-center gap-2 ${
-          hasChanges ? 'cursor-pointer select-none' : ''
+          hasChanges ? 'press cursor-pointer select-none' : ''
         }`}
         onClick={hasChanges ? () => setOpen((v) => !v) : undefined}
       >
@@ -102,7 +102,9 @@ export function AuditEntryRow({
       )}
 
       {hasChanges && open && (
-        <ul className="mt-2 space-y-1 border-t border-navy-50 pt-2 text-sm">
+        // раскрытые поля проявляются целым блоком: построчная анимация на
+        // длинной истории превращается в мельтешение
+        <ul className="mt-2 animate-fade-in space-y-1 border-t border-navy-50 pt-2 text-sm">
           {entry.changes!.map((c, i) => (
             <li key={i} className="text-navy-600">
               <span className="font-medium text-navy-800">
@@ -153,7 +155,7 @@ export function HistoryPanel({
         Загрузка истории…
       </div>
     ) : (
-      <Spinner />
+      <SkeletonList rows={4} />
     );
   }
   if (entries.length === 0) {

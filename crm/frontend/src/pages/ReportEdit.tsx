@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, EmptyState } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { useToast } from '../components/Toast';
 import { PhoneInput } from '../components/ContactFields';
 import { DatePicker } from '../components/DatePicker';
@@ -384,14 +385,14 @@ export function ReportEdit() {
   if (id && !existing) {
     if (error && !loading) {
       return (
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-4xl animate-page-in">
           <button
             onClick={() => navigate('/reports')}
-            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+            className="press mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
           >
             <ArrowLeft className="h-4 w-4" /> К списку
           </button>
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 shadow-card">
             {error}
           </div>
         </div>
@@ -405,10 +406,10 @@ export function ReportEdit() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl animate-page-in">
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+        className="press mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
       >
         <ArrowLeft className="h-4 w-4" /> Назад
       </button>
@@ -542,7 +543,7 @@ export function ReportEdit() {
               <button
                 key={b.id}
                 onClick={() => addBrigade(b)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
+                className="press inline-flex items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
               >
                 <Users className="h-3.5 w-3.5" />
                 {b.name}
@@ -550,7 +551,7 @@ export function ReportEdit() {
             ))}
             <button
               onClick={() => setWorkers((p) => [...p, emptyWorker()])}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
+              className="press inline-flex items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
             >
               <Plus className="h-3.5 w-3.5" />
               Работник
@@ -561,7 +562,9 @@ export function ReportEdit() {
         {workers.length === 0 ? (
           <EmptyState text="Добавьте бригаду целиком или работников по одному" />
         ) : (
-          <div className="overflow-x-auto">
+          // таблица шире телефона: край растворяется с той стороны, куда ещё
+          // можно тянуть, и гаснет на упоре — так видно, что колонки есть дальше
+          <ScrollArea axis="x" label="Таблица работников">
             <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
@@ -677,7 +680,7 @@ export function ReportEdit() {
                         onClick={() =>
                           setWorkers((p) => p.filter((x) => x.key !== w.key))
                         }
-                        className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                        className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -697,7 +700,7 @@ export function ReportEdit() {
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </ScrollArea>
         )}
       </div>
 
@@ -707,7 +710,7 @@ export function ReportEdit() {
           <h3 className="font-bold text-navy-900">Доп. расходы</h3>
           <button
             onClick={() => setExpenses((p) => [...p, emptyExpense()])}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
+            className="press inline-flex items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-xs font-medium text-navy-600 transition hover:bg-navy-50"
           >
             <Plus className="h-3.5 w-3.5" />
             Расход
@@ -719,7 +722,7 @@ export function ReportEdit() {
             Расходов нет. Например: такси, расходные материалы, обед бригады.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <ScrollArea axis="x" label="Таблица дополнительных расходов">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
@@ -778,7 +781,7 @@ export function ReportEdit() {
                         onClick={() =>
                           setExpenses((p) => p.filter((x) => x.key !== e.key))
                         }
-                        className="rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                        className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -796,7 +799,7 @@ export function ReportEdit() {
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </ScrollArea>
         )}
       </div>
 

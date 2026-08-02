@@ -177,7 +177,7 @@ export function Reminders() {
           {r.status === 'PENDING' && (
             <button
               onClick={() => markDone(r)}
-              className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              className="press inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
             >
               <PhoneCall className="h-3.5 w-3.5" />
               Позвонил
@@ -186,7 +186,7 @@ export function Reminders() {
           {r.status === 'PENDING' && (
             <button
               onClick={() => cancelReminder(r)}
-              className="rounded-lg border border-navy-200 px-2 py-1 text-xs text-navy-600 transition hover:bg-navy-50"
+              className="press rounded-lg border border-navy-200 px-2 py-1 text-xs text-navy-600 transition hover:bg-navy-50"
             >
               Отменить
             </button>
@@ -194,7 +194,7 @@ export function Reminders() {
           {r.status !== 'CANCELLED' && (
             <button
               onClick={() => setEditing(r)}
-              className="rounded-lg p-1.5 text-navy-600 transition hover:bg-navy-50 hover:text-navy-700"
+              className="press rounded-lg p-1.5 text-navy-600 transition hover:bg-navy-50 hover:text-navy-700"
               title="Изменить"
             >
               <Pencil className="h-4 w-4" />
@@ -202,7 +202,7 @@ export function Reminders() {
           )}
           <button
             onClick={() => removeReminder(r)}
-            className="rounded-lg p-1.5 text-navy-600 transition hover:bg-red-50 hover:text-red-600"
+            className="press rounded-lg p-1.5 text-navy-600 transition hover:bg-red-50 hover:text-red-600"
             title="Удалить"
           >
             <Trash2 className="h-4 w-4" />
@@ -213,7 +213,7 @@ export function Reminders() {
   ];
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Напоминания"
       />

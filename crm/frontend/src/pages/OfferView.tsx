@@ -11,6 +11,7 @@ import {
 import { api } from '../api/client';
 import { useFetch, invalidate } from '../api/hooks';
 import { Spinner, Badge, ErrorState } from '../components/ui';
+import { ScrollArea } from '../components/ScrollArea';
 import { PrintSheet } from '../components/common';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
@@ -54,10 +55,10 @@ export function OfferView() {
   if (loading && !p) return <Spinner />;
   if (error || !p) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-4xl animate-page-in">
         <button
           onClick={() => navigate('/offers')}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+          className="press mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
@@ -146,12 +147,12 @@ export function OfferView() {
   const volumeLabel = p.area != null ? `${p.area} м²` : '—';
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl animate-page-in">
       {/* ── Панель действий (не печатается) ── */}
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={() => navigate('/offers')}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+          className="press inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
@@ -174,14 +175,14 @@ export function OfferView() {
             <>
               <button
                 onClick={() => changeStatus('ACCEPTED')}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
+                className="press inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Принято
               </button>
               <button
                 onClick={() => changeStatus('REJECTED')}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                className="press inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
               >
                 <XCircle className="h-4 w-4" />
                 Отклонено
@@ -190,7 +191,7 @@ export function OfferView() {
           )}
           <button
             onClick={removeProposal}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+            className="press inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -252,7 +253,17 @@ export function OfferView() {
             <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-navy-700">
               Позиции
             </h3>
-            <div className="overflow-x-auto">
+            {/*
+              Растворяющийся край — сигнал «таблица шире экрана» для телефона.
+              В PDF его гасим: на листе таблица помещается целиком, а признак
+              прокрутки снимается с экранной раскладки и лёг бы белым пятном
+              поверх колонки «Сумма».
+            */}
+            <ScrollArea
+              axis="x"
+              className="print:[&::before]:hidden print:[&::after]:hidden"
+              label="Позиции сметы"
+            >
               <table className="w-full min-w-[520px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-navy-500 text-left text-xs text-white print:bg-white print:text-navy-900">
@@ -301,7 +312,7 @@ export function OfferView() {
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </ScrollArea>
           </div>
         )}
 

@@ -17,7 +17,7 @@ import {
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
-import { Spinner, PageHeader, ErrorState, Modal } from '../components/ui';
+import { Skeleton, PageHeader, ErrorState, Modal } from '../components/ui';
 import { TaskModal } from '../components/TaskModal';
 import { OrderModal } from '../components/OrderModal';
 import {
@@ -128,7 +128,7 @@ function TaskCard({ task, compact }: { task: Task; compact: boolean }) {
   const done = task.status === 'DONE';
   return (
     <div
-      className={`rounded-lg border px-2 py-1.5 text-left transition-shadow hover:shadow-sm ${
+      className={`rounded-lg border px-2 py-1.5 text-left shadow-card transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift ${
         TASK_TYPE_COLOR[task.type]
       } ${done ? 'opacity-60' : ''}`}
     >
@@ -171,7 +171,7 @@ function TaskCard({ task, compact }: { task: Task; compact: boolean }) {
 function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
   return (
     <div
-      className={`rounded-lg border px-2 py-1.5 text-left transition-shadow hover:shadow-sm ${
+      className={`rounded-lg border px-2 py-1.5 text-left shadow-card transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift ${
         STAGE_COLOR[order.stage]
       } ${STAGE_BORDER[order.stage]}`}
     >
@@ -220,7 +220,7 @@ function DayOrderRow({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-navy-100 bg-white p-2.5 text-left transition hover:bg-navy-50"
+      className="press flex w-full items-center gap-2.5 rounded-xl border border-navy-100 bg-white p-2.5 text-left shadow-card transition duration-120 ease-out hover:-translate-y-px hover:bg-navy-50 hover:shadow-lift"
     >
       <span
         className={`h-9 w-1 shrink-0 rounded-full ${STAGE_DOT[order.stage]}`}
@@ -269,7 +269,7 @@ function CallbackRow({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-2.5 text-left transition hover:bg-orange-100"
+      className="press flex w-full items-center gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-2.5 text-left shadow-card transition duration-120 ease-out hover:-translate-y-px hover:bg-orange-100 hover:shadow-lift"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
         <Phone className="h-4 w-4" />
@@ -297,7 +297,7 @@ function DayTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-navy-100 bg-white p-2.5 text-left transition hover:bg-navy-50"
+      className="press flex w-full items-center gap-2.5 rounded-xl border border-navy-100 bg-white p-2.5 text-left shadow-card transition duration-120 ease-out hover:-translate-y-px hover:bg-navy-50 hover:shadow-lift"
     >
       <span
         className={`h-9 w-1 shrink-0 rounded-full ${TASK_TYPE_DOT[task.type]}`}
@@ -586,7 +586,28 @@ export function Calendar() {
 
   if (!data) {
     if (error && !loading) return <ErrorState text={error ?? undefined} onRetry={reload} />;
-    return <Spinner />;
+    /*
+     * Заглушка повторяет сетку месяца: те же семь колонок и та же высота
+     * клетки. Кружок посреди пустого экрана не показывал, что грузится
+     * календарь, а появление сетки сдвигало страницу на целый экран вниз.
+     */
+    return (
+      <div className="animate-page-in">
+        <div className="mb-2 grid grid-cols-7 gap-1 sm:gap-2">
+          {WEEKDAYS.map((w) => (
+            <Skeleton key={w} className="h-3 w-8" />
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <Skeleton
+              key={i}
+              className="aspect-square rounded-xl sm:aspect-auto sm:h-[104px]"
+            />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   // актуальная версия открытой задачи (не снимок на момент клика)
@@ -596,7 +617,7 @@ export function Calendar() {
   const cellMin = view === 'week' ? 'min-h-[260px]' : 'min-h-[104px]';
 
   return (
-    <div>
+    <div className="animate-page-in">
       <PageHeader
         title="Календарь"
         action={
@@ -617,9 +638,9 @@ export function Calendar() {
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              className={`press rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 view === v
-                  ? 'bg-white text-navy-900 shadow-sm'
+                  ? 'bg-white text-navy-900 shadow-card'
                   : 'text-navy-600 hover:text-navy-800'
               }`}
             >
@@ -637,7 +658,7 @@ export function Calendar() {
         <div className="flex w-full items-center gap-1 sm:w-auto">
           <button
             onClick={() => shift(-1)}
-            className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 sm:p-2"
+            className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 sm:p-2"
             title="Назад"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -647,14 +668,14 @@ export function Calendar() {
           </span>
           <button
             onClick={() => shift(1)}
-            className="shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 sm:p-2"
+            className="press shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 sm:p-2"
             title="Вперёд"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
           <button
             onClick={() => setCursor(new Date())}
-            className="ml-1 shrink-0 rounded-xl border border-navy-200 px-2 py-1.5 text-xs font-medium text-navy-700 transition hover:bg-navy-50 sm:ml-2 sm:px-3 sm:text-sm"
+            className="press ml-1 shrink-0 rounded-xl border border-navy-200 px-2 py-1.5 text-xs font-medium text-navy-700 transition hover:bg-navy-50 sm:ml-2 sm:px-3 sm:text-sm"
           >
             Сегодня
           </button>
@@ -688,7 +709,7 @@ export function Calendar() {
           <button
             key={st}
             onClick={() => setStageFilter(st)}
-            className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:inline-flex ${
+            className={`press hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:inline-flex ${
               stageFilter === st
                 ? 'bg-brand-500 text-white'
                 : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
@@ -757,7 +778,7 @@ export function Calendar() {
                   type="button"
                   onClick={() => pickDay(key)}
                   aria-label={`${humanDay(key)}: дел ${count}`}
-                  className={`flex aspect-square flex-col items-center justify-center rounded-xl border-2 transition-colors ${
+                  className={`press flex aspect-square flex-col items-center justify-center rounded-xl border-2 transition-colors ${
                     /* сегодня — заливка цветом логотипа во всю клетку */
                     isToday
                       ? 'bg-brand-500 text-white'
@@ -814,7 +835,7 @@ export function Calendar() {
               return (
                 <div
                   key={key}
-                  className={`rounded-2xl border p-2 ${
+                  className={`rounded-2xl border p-2 shadow-card ${
                     isToday
                       ? 'border-brand-300 bg-brand-50/50'
                       : 'border-navy-100 bg-white'
@@ -834,7 +855,7 @@ export function Calendar() {
                     <button
                       type="button"
                       onClick={() => setModal({ mode: 'create', date: key })}
-                      className="inline-flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-navy-600"
+                      className="press inline-flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-navy-600"
                     >
                       <Plus className="h-3 w-3" />
                       задача
@@ -918,7 +939,7 @@ export function Calendar() {
                           e.stopPropagation();
                           pickDay(key);
                         }}
-                        className={`rounded px-1 text-xs font-semibold hover:bg-navy-100 sm:text-sm ${
+                        className={`press rounded px-1 text-xs font-semibold hover:bg-navy-100 sm:text-sm ${
                           isToday ? 'text-navy-700' : 'text-navy-600'
                         }`}
                         title="Показать все дела этого дня"
@@ -933,7 +954,7 @@ export function Calendar() {
                         )}
                         <button
                           onClick={() => setModal({ mode: 'create', date: key })}
-                          className={`inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-600 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
+                          className={`press inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-600 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
                             isTouch ? '' : 'opacity-0 group-hover:opacity-100'
                           }`}
                         >
@@ -949,7 +970,7 @@ export function Calendar() {
                         <div
                           key={c.id}
                           onClick={() => navigate(`/clients/${c.id}`)}
-                          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1.5 text-left"
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1.5 text-left shadow-card transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift"
                           title={`Позвонить ${c.fullName}`}
                         >
                           <Phone className="h-3 w-3 shrink-0 text-orange-600" />
@@ -962,7 +983,7 @@ export function Calendar() {
                           <div
                             key={o.id}
                             onClick={() => setOpenOrder(o)}
-                            className="cursor-pointer"
+                            className="press cursor-pointer"
                           >
                             <OrderCard order={o} compact={view === 'month'} />
                           </div>
@@ -983,8 +1004,9 @@ export function Calendar() {
                                 if (draggingRef.current || isTemp(t.id)) return;
                                 setModal({ mode: 'edit', id: t.id });
                               }}
+                              /* в руке карточка оторвана от страницы — уровень выпадашки */
                               className={`cursor-pointer ${
-                                snap.isDragging ? 'shadow-lg' : ''
+                                snap.isDragging ? 'shadow-pop' : ''
                               }`}
                             >
                               <TaskCard task={t} compact={view === 'month'} />
@@ -1089,7 +1111,7 @@ export function Calendar() {
                 onClick={() => {
                   if (isNarrow) setUndatedOpen((o) => !o);
                 }}
-                className="mb-2 flex w-full items-center gap-1.5 text-left text-xs font-semibold text-navy-600"
+                className="press mb-2 flex w-full items-center gap-1.5 text-left text-xs font-semibold text-navy-600"
               >
                 <Inbox className="h-3.5 w-3.5 shrink-0" />
                 Без даты
@@ -1126,7 +1148,7 @@ export function Calendar() {
                         <div
                           key={o.id}
                           onClick={() => setOpenOrder(o)}
-                          className="w-44 cursor-pointer"
+                          className="press w-44 cursor-pointer"
                         >
                           <OrderCard order={o} compact />
                         </div>
@@ -1150,7 +1172,7 @@ export function Calendar() {
                             }}
                             className={`cursor-pointer ${
                               isNarrow ? 'w-full' : 'w-52'
-                            } ${snap.isDragging ? 'shadow-lg' : ''}`}
+                            } ${snap.isDragging ? 'shadow-pop' : ''}`}
                           >
                             <TaskCard task={t} compact={false} />
                           </div>
@@ -1171,7 +1193,7 @@ export function Calendar() {
         занимали три ряда внизу экрана и ничего не добавляли: в списке дня
         этап и так написан словами.
       */}
-      <div className="mt-4 hidden flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3 sm:flex">
+      <div className="mt-4 hidden flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3 shadow-card sm:flex">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold text-navy-600">Легенда:</span>
           {STAGE_ORDER.map((st) => (

@@ -20,14 +20,19 @@ export function Header() {
     ? 'text-navy-600 hover:text-navy-900'
     : 'text-white hover:text-white/80';
 
+  /*
+    Тень у шапки появляется только после прокрутки: она и означает, что под
+    шапкой проехало содержимое. Над первым экраном шапка лежит на фоне —
+    поднимать её там не за чем.
+  */
   return (
     <motion.header
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+      className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,box-shadow,color] duration-160 ease-out ${
         scrolled
-          ? 'border-b border-navy-100 bg-white/90 text-navy-900 shadow-sm backdrop-blur-xl'
+          ? 'border-b border-navy-100 bg-white/90 text-navy-900 shadow-card backdrop-blur-xl'
           : 'border-b border-transparent bg-transparent text-white'
       }`}
     >
@@ -48,7 +53,7 @@ export function Header() {
             <button
               key={id}
               onClick={() => scrollToId(id)}
-              className={`transition ${navLink}`}
+              className={`transition-colors duration-120 ease-out ${navLink}`}
             >
               {label}
             </button>
@@ -57,7 +62,7 @@ export function Header() {
 
         <a
           href={COMPANY.phoneHref}
-          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all sm:gap-2 sm:px-4 sm:py-2 sm:text-sm [@media(max-width:359px)]:px-2 [@media(max-width:359px)]:text-[11px] ${
+          className={`press inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-120 ease-out sm:gap-2 sm:px-4 sm:py-2 sm:text-sm [@media(max-width:359px)]:px-2 [@media(max-width:359px)]:text-[11px] ${
             scrolled
               ? 'bg-brand-500 text-white hover:bg-brand-600'
               : 'border border-white/25 bg-white/5 text-white backdrop-blur hover:bg-white/10'

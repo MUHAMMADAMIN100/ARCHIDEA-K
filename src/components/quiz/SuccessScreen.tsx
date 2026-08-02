@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { IconCheck, IconPhone } from '../ui/icons';
 import { formatPrice } from '../../lib/format';
 import { COMPANY } from '../../config/company';
@@ -20,23 +19,19 @@ interface Props {
 export function SuccessScreen({ total, name, phone, delivered = null }: Props) {
   if (delivered === false) return <FailureScreen name={name} />;
 
+  /*
+    Экран приходит на место снизу за 200 мс — этого хватает, чтобы человек
+    заметил подмену формы ответом. Галочка отдельно больше не пружинит:
+    два разных движения подряд на одном экране читались как праздник, а не
+    как подтверждение.
+  */
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5 }}
-      className="card-light mx-auto max-w-xl p-8 text-center text-navy-900 sm:p-12"
-    >
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 14, delay: 0.1 }}
-        className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-navy-100"
-      >
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-navy-500 shadow-glow">
+    <div className="card-light animate-pop-in mx-auto max-w-xl p-8 text-center text-navy-900 sm:p-12">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-navy-100">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-navy-500">
           <IconCheck className="h-8 w-8 text-white" />
         </span>
-      </motion.div>
+      </div>
 
       <h3 className="mt-6 text-2xl font-extrabold sm:text-3xl">
         Заявка отправлена!
@@ -63,7 +58,7 @@ export function SuccessScreen({ total, name, phone, delivered = null }: Props) {
       </div>
 
       <p className="mt-6 text-xs text-navy-400">{COMPANY.workingHours}</p>
-    </motion.div>
+    </div>
   );
 }
 
@@ -77,12 +72,7 @@ export function SuccessScreen({ total, name, phone, delivered = null }: Props) {
  */
 function FailureScreen({ name }: { name: string }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
-      className="card-light mx-auto max-w-xl p-8 text-center text-navy-900 sm:p-12"
-    >
+    <div className="card-light animate-pop-in mx-auto max-w-xl p-8 text-center text-navy-900 sm:p-12">
       <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500">
           <IconPhone className="h-7 w-7 text-white" />
@@ -109,6 +99,6 @@ function FailureScreen({ name }: { name: string }) {
       </div>
 
       <p className="mt-6 text-xs text-navy-400">{COMPANY.workingHours}</p>
-    </motion.div>
+    </div>
   );
 }
