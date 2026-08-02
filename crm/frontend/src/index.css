@@ -159,13 +159,18 @@ select.input {
  * Только телефон: с 640px и выше размеры прежние.
  */
 @media (max-width: 639.98px) {
+  /*
+   * !important здесь по делу: у полей часто стоит утилита text-xs или
+   * text-sm, а класс всегда сильнее правила по тегу. Без него Safari
+   * продолжал приближать страницу на списках задач и на чипах-селектах.
+   */
   input,
   select,
   textarea,
   .input,
   .input-sm,
   .input-xs {
-    font-size: 16px;
+    font-size: 16px !important;
   }
   .input-sm,
   .input-xs {

@@ -78,7 +78,12 @@ function BreakdownCard<T>({
         <p className="py-8 text-center text-sm text-navy-600">{emptyText}</p>
       ) : (
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className="w-full text-sm">
+          {/*
+            На телефоне таблица шире экрана. Минимальная ширина не даёт
+            колонкам схлопнуться до нечитаемого, а прокрутка остаётся
+            внутри блока — страница вбок не едет.
+          */}
+          <table className="w-full min-w-[32rem] text-sm">
             <thead>
               <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-600">
                 {columns.map((c) => (

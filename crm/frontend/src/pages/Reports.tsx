@@ -99,7 +99,7 @@ export function Reports() {
                     {REPORT_STATUS_LABEL[r.status]}
                   </Badge>
                 </div>
-                <div className="mt-0.5 text-xs text-navy-600">
+                <div className="no-vertical-text mt-0.5 text-xs text-navy-600">
                   {r.workDate ? formatDate(r.workDate) : formatDate(r.createdAt)}
                   {r.address && ` · ${r.address}`}
                   {isDirector && r.managerName && ` · ${r.managerName}`}

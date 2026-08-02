@@ -296,6 +296,12 @@ export function Team() {
                             <UserRound className="h-4 w-4" />
                           )}
                         </span>
+                        {/*
+                          Имя, телефон и ставка идут столбиком друг под
+                          другом. Раньше ставка стояла сбоку и не сжималась —
+                          имени с телефоном оставалось несколько пикселей, и
+                          «телефон не указан» вставало вертикально по букве.
+                        */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-sm font-medium text-navy-900">
                             <span className="truncate">{c.fullName}</span>
@@ -305,16 +311,16 @@ export function Team() {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-navy-600">
+                          <div className="truncate text-xs text-navy-600">
                             {c.phone || 'телефон не указан'}
                           </div>
+                          {showRates && (
+                            <span className="mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
+                              <Wallet className="h-3.5 w-3.5 shrink-0 text-navy-600" />
+                              {c.rate} с/смена
+                            </span>
+                          )}
                         </div>
-                        {showRates && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
-                            <Wallet className="h-3.5 w-3.5 text-navy-600" />
-                            {c.rate} с/смена
-                          </span>
-                        )}
                         {isLeader && c.duties && (
                           <button
                             onClick={() =>
