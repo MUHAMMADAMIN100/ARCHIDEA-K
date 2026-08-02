@@ -98,7 +98,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                 onClick={() => onChange({ ...state, seats: v })}
                 className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
                   state.seats === v
-                    ? 'bg-navy-500 text-white'
+                    ? 'bg-brand-500 text-white'
                     : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
                 }`}
               >
@@ -137,7 +137,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                   onClick={() => onChange({ ...state, area: v })}
                   className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
                     state.area === v
-                      ? 'bg-navy-500 text-white'
+                      ? 'bg-brand-500 text-white'
                       : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
                   }`}
                 >
@@ -198,7 +198,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                     <span
                       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
                         active
-                          ? 'border-navy-500 bg-navy-500 text-white'
+                          ? 'border-navy-500 bg-brand-500 text-white'
                           : 'border-navy-300 text-transparent'
                       }`}
                     >

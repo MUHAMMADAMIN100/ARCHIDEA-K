@@ -15,33 +15,13 @@ export function Hero() {
       id="top"
       className="relative flex min-h-screen items-center overflow-hidden bg-navy-gradient pt-16 text-white"
     >
-      {/* Декоративные свечения */}
-      <div className="pointer-events-none absolute inset-0 bg-hero-radial" />
-      <motion.div
-        className="pointer-events-none absolute -left-20 top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl"
-        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.55, 0.3] }}
-        transition={{ duration: 8, repeat: Infinity }}
-      />
-      <motion.div
-        className="pointer-events-none absolute -right-10 bottom-10 h-80 w-80 rounded-full bg-navy-500/40 blur-3xl"
-        animate={{ scale: [1.1, 1, 1.1], opacity: [0.4, 0.7, 0.4] }}
-        transition={{ duration: 10, repeat: Infinity }}
-      />
-      {/* Плавающие «пузырьки чистоты» */}
-      {[...Array(6)].map((_, i) => (
-        <motion.span
-          key={i}
-          className="pointer-events-none absolute rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur"
-          style={{
-            width: 12 + i * 8,
-            height: 12 + i * 8,
-            left: `${10 + i * 15}%`,
-            top: `${20 + ((i * 13) % 60)}%`,
-          }}
-          animate={{ y: [0, -30, 0], opacity: [0.2, 0.6, 0.2] }}
-          transition={{ duration: 6 + i, repeat: Infinity, delay: i * 0.5 }}
-        />
-      ))}
+      {/*
+        Декораций нет намеренно.
+        Здесь были плавающие «пузырьки чистоты», два размытых пятна и
+        радиальное свечение — по ним страница и читалась как рекламный
+        баннер. Деловому сайту достаточно ровного тёмного фона: внимание
+        должно уходить на заголовок и цену, а не на движение.
+      */}
 
       <div className="container-px relative grid items-center gap-12 py-16 lg:grid-cols-2">
         {/* Левая колонка — текст */}
@@ -50,7 +30,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-sm text-white backdrop-blur"
+            className="mb-6 inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-1.5 text-sm text-white"
           >
             Профессиональный клининг в {COMPANY.city}
           </motion.div>
@@ -116,10 +96,10 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           className="relative mx-auto w-full max-w-md"
         >
-          <div className="animate-float-slow rounded-3xl bg-white p-8 text-navy-900 shadow-glow">
+          <div className="rounded-md border border-navy-200 bg-white p-8 text-navy-900">
             <div className="flex items-center justify-between">
               <span className="text-sm text-navy-500">Стоимость от</span>
-              <span className="rounded-full bg-navy-100 px-3 py-1 text-xs font-semibold text-navy-700">
+              <span className="rounded-md bg-navy-100 px-2.5 py-1 text-xs font-semibold text-navy-700">
                 выгодно
               </span>
             </div>

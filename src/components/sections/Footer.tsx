@@ -18,7 +18,7 @@ const SOCIALS = [
 
 export function Footer() {
   return (
-    <footer id="footer" className="bg-navy-500 text-white">
+    <footer id="footer" className="bg-brand-500 text-white">
       <div className="container-px py-16">
         <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr_1fr]">
           {/* Бренд */}

@@ -132,11 +132,14 @@ export function Dashboard() {
         })}
       </div>
 
-      {/* Доход — приходит только руководителю (финансы) */}
+      {/*
+        Доход — приходит только руководителю (финансы).
+        Единственная тёмная плашка на экране: это главная цифра дня.
+      */}
       {data.revenueMonth !== undefined && (
-        <div className="mt-4 card flex flex-col items-start gap-4 border-0 bg-navy-gradient p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="mt-4 card flex flex-col items-start gap-4 border-ink-900 bg-ink-900 p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex min-w-0 items-center gap-4">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+            <span className="flex h-12 w-12 items-center justify-center rounded-md bg-white/10">
               <Wallet className="h-6 w-6 text-white" />
             </span>
             <div>

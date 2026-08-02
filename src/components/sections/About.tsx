@@ -63,7 +63,7 @@ export function About() {
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 0.08}>
               <div className="card-light group h-full p-6 transition-all duration-300 hover:-translate-y-1 hover:border-navy-300 hover:shadow-glow">
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-navy-500 text-white transition-colors group-hover:bg-navy-600">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-white transition-colors group-hover:bg-brand-600">
                   <f.icon className="h-6 w-6" />
                 </span>
                 <h3 className="mt-5 text-lg font-bold">{f.title}</h3>

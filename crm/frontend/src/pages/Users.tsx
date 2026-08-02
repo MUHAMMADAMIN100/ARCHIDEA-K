@@ -99,7 +99,7 @@ export function UsersPage() {
                 <span
                   className={`flex h-11 w-11 items-center justify-center rounded-xl ${
                     u.role === 'DIRECTOR'
-                      ? 'bg-navy-500 text-white'
+                      ? 'bg-brand-500 text-white'
                       : 'bg-navy-100 text-navy-700'
                   }`}
                 >

@@ -690,7 +690,7 @@ export function Calendar() {
             onClick={() => setStageFilter(st)}
             className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:inline-flex ${
               stageFilter === st
-                ? 'bg-navy-500 text-white'
+                ? 'bg-brand-500 text-white'
                 : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
             }`}
           >
@@ -1186,8 +1186,8 @@ export function Calendar() {
         </div>
         <span className="text-xs text-navy-600">
           {isTouch
-            ? '💡 Нажмите на заказ или задачу, чтобы открыть карточку'
-            : '💡 Нажмите на заказ, чтобы открыть его; задачи перетаскиваются'}
+            ? 'Нажмите на заказ или задачу, чтобы открыть карточку'
+            : 'Нажмите на заказ, чтобы открыть его; задачи перетаскиваются'}
         </span>
       </div>
 

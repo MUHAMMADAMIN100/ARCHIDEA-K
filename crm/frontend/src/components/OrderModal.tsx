@@ -821,7 +821,7 @@ export function OrderModal({
                           }}
                           className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                             clientTags.includes(t)
-                              ? TAG_COLOR[t] + ' ring-2 ring-navy-300'
+                              ? TAG_COLOR[t] + ' ring-1 ring-brand-300'
                               : 'border border-navy-200 bg-white text-navy-600'
                           }`}
                         >
@@ -957,7 +957,7 @@ export function OrderModal({
                         onClick={() => onDirtChange(d)}
                         className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                           editDirt === d
-                            ? 'bg-navy-500 text-white ring-2 ring-navy-300'
+                            ? 'bg-brand-500 text-white ring-1 ring-brand-300'
                             : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
                         }`}
                       >
@@ -996,7 +996,7 @@ export function OrderModal({
                         }}
                         className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                           stage === s
-                            ? STAGE_COLOR[s] + ' ring-2 ring-navy-300'
+                            ? STAGE_COLOR[s] + ' ring-1 ring-brand-300'
                             : 'bg-white text-navy-600 border border-navy-200 hover:bg-navy-50'
                         } ${blocked ? 'cursor-not-allowed opacity-40' : ''}`}
                       >

@@ -3,25 +3,56 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      /*
+       * Деловой минимализм: графитовая шкала для текста, рамок и фонов,
+       * синий #0078C9 — только на действиях. Прежняя палитра была целиком
+       * голубой: фон, подписи, рамки и кнопки одного цвета, и сайт читался
+       * как рекламный баннер, а не как страница компании.
+       *
+       * Имя navy оставлено: на него завязаны сотни классов в разметке.
+       */
       colors: {
-        // Брендовая палитра «Archidea Cleaning» — вокруг цвета логотипа #0078C9
         navy: {
-          50: '#e6f3fb',
-          100: '#c9e6f8',
-          200: '#95cdf0',
-          300: '#5fb1e8',
-          400: '#2a93da',
+          50: '#f6f7f9',
+          100: '#eaecf0',
+          200: '#d6d9e0',
+          300: '#b2b8c4',
+          400: '#858d9d',
+          500: '#5c6474',
+          600: '#454c59',
+          700: '#343a45',
+          800: '#242932',
+          900: '#171b21',
+          950: '#0d1015',
+        },
+        brand: {
+          50: '#eef6fc',
+          100: '#d6e9f7',
+          200: '#addaf2',
+          300: '#6ebde6',
+          400: '#2f9bd6',
           500: '#0078c9', // ← точный цвет логотипа
-          600: '#0063a8',
-          700: '#014e85',
-          800: '#053a63',
-          900: '#0a2a48',
-          950: '#061a2e',
+          600: '#0064a9',
+          700: '#01528a',
+          800: '#053f68',
+          900: '#0a2c48',
         },
         accent: {
           DEFAULT: '#0078c9',
-          light: '#5fb1e8',
+          light: '#2f9bd6',
         },
+      },
+      /* Скругления мелкие: круглые кнопки-«таблетки» — примета рекламной вёрстки */
+      borderRadius: {
+        none: '0',
+        sm: '2px',
+        DEFAULT: '3px',
+        md: '4px',
+        lg: '4px',
+        xl: '5px',
+        '2xl': '6px',
+        '3xl': '8px',
+        full: '9999px',
       },
       fontFamily: {
         // системный набор: Montserrat с CDN не грузится из-за политики
@@ -36,25 +67,25 @@ export default {
           'sans-serif',
         ],
       },
+      /* Тени почти нет: блок держит рамка 1 px */
       boxShadow: {
-        glow: '0 0 40px -10px rgba(0, 120, 201, 0.5)',
-        card: '0 12px 40px -14px rgba(6, 26, 46, 0.22)',
+        glow: 'none',
+        card: '0 1px 2px 0 rgba(23, 27, 33, 0.06)',
       },
       backgroundImage: {
-        'navy-gradient':
-          'linear-gradient(140deg, #0078c9 0%, #0063a8 60%, #014e85 100%)',
-        'hero-radial':
-          'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12), transparent 55%)',
+        // ровная тёмная заливка вместо голубого градиента
+        'navy-gradient': 'linear-gradient(180deg, #171b21 0%, #171b21 100%)',
+        'hero-radial': 'none',
       },
       keyframes: {
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-14px)' },
+          '50%': { transform: 'translateY(0)' },
         },
       },
       animation: {
-        float: 'float 6s ease-in-out infinite',
-        'float-slow': 'float 9s ease-in-out infinite',
+        float: 'none',
+        'float-slow': 'none',
       },
     },
   },

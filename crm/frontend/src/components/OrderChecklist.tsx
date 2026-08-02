@@ -367,7 +367,7 @@ export function OrderChecklistCard({
             {totalCount > 0 && (
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy-100">
                 <div
-                  className="h-full rounded-full bg-navy-500 transition-all"
+                  className="h-full rounded-full bg-brand-500 transition-all"
                   style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
                 />
               </div>

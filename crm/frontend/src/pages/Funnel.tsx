@@ -696,7 +696,7 @@ export function Funnel() {
                       ref={p.innerRef}
                       {...p.draggableProps}
                       {...p.dragHandleProps}
-                      className={`card w-72 cursor-pointer border-l-4 p-3.5 text-left shadow-xl ring-2 ring-navy-300 ${
+                      className={`card w-72 cursor-pointer border-l-4 p-3.5 text-left shadow-xl ring-1 ring-brand-300 ${
                         orderDebt(o) > 0
                           ? 'border-l-red-500 bg-red-50/70'
                           : STAGE_BORDER[o.stage]
@@ -756,7 +756,7 @@ export function Funnel() {
                                 ? 'border-l-red-500 bg-red-50/70'
                                 : STAGE_BORDER[o.stage]
                             } ${
-                              snap.isDragging ? 'shadow-xl ring-2 ring-navy-300' : ''
+                              snap.isDragging ? 'shadow-xl ring-1 ring-brand-300' : ''
                             }`}
                           >
                             <OrderCardBody

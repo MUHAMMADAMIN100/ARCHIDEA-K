@@ -68,7 +68,7 @@ export function OptionCard({
       {icon && (
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
-            active ? 'bg-navy-500 text-white' : 'bg-navy-100 text-navy-600'
+            active ? 'bg-brand-500 text-white' : 'bg-navy-100 text-navy-600'
           }`}
         >
           {icon}

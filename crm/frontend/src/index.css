@@ -15,7 +15,12 @@
 
 @layer base {
   body {
-    @apply bg-navy-50 text-navy-900 font-sans antialiased;
+    /*
+     * Фон страницы — белый, а не голубой. Голубая подложка спорила с
+     * карточками и делала экран «нарядным»; отделяет карточку от фона
+     * теперь рамка, а не цвет.
+     */
+    @apply bg-white text-navy-900 font-sans antialiased;
     /*
      * Длинные слова переносим, а не выпускаем за пределы блока.
      * Имена вроде «Мухаммадамин Туразода», адреса и почта на экране 320 px
@@ -39,40 +44,44 @@
     overflow-y: hidden;
     padding-bottom: 0.5rem;
     scrollbar-width: auto;
-    scrollbar-color: #0078c9 #e6f3fb;
+    scrollbar-color: #b2b8c4 #f6f7f9;
   }
   .board-scroll::-webkit-scrollbar {
     height: 12px;
   }
   .board-scroll::-webkit-scrollbar-track {
-    background: #e6f3fb;
-    border-radius: 9999px;
+    background: #f6f7f9;
   }
   .board-scroll::-webkit-scrollbar-thumb {
-    background: #0078c9;
-    border-radius: 9999px;
+    background: #b2b8c4;
   }
   .board-scroll::-webkit-scrollbar-thumb:hover {
-    background: #0063a8;
+    background: #858d9d;
   }
 
+  /*
+   * Кнопки. Основная — синяя, она в разделе одна: то самое действие, ради
+   * которого экран открыли. Остальные — рамка на белом, они не спорят с ней
+   * за внимание.
+   */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-navy-500 text-white hover:bg-navy-600;
+    @apply btn bg-brand-500 text-white hover:bg-brand-600;
   }
   .btn-ghost {
-    @apply btn border border-navy-200 bg-white text-navy-700 hover:bg-navy-50;
+    @apply btn border border-navy-200 bg-white text-navy-700 hover:border-navy-300 hover:bg-navy-50;
   }
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-500;
+    @apply btn bg-red-600 text-white hover:bg-red-700;
   }
+  /* Границу карточки держит рамка, а не тень */
   .card {
-    @apply rounded-2xl border border-navy-100 bg-white shadow-card;
+    @apply rounded-md border border-navy-200 bg-white;
   }
   .input {
-    @apply w-full rounded-xl border border-navy-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 outline-none transition-colors placeholder:text-navy-500 focus:border-navy-500 focus:ring-2 focus:ring-navy-100;
+    @apply w-full rounded-md border border-navy-300 bg-white px-3 py-2 text-sm text-navy-900 outline-none transition-colors placeholder:text-navy-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500;
   }
   /*
    * Компактные поля. Уменьшаем не только высоту, но и вертикальные отступы:
@@ -86,7 +95,7 @@
     @apply h-8 px-2.5 py-1 text-xs;
   }
   .label {
-    @apply mb-1.5 block text-sm font-medium text-navy-700;
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-navy-500;
   }
 }
 
@@ -96,7 +105,7 @@ select.input {
   -moz-appearance: none;
   appearance: none;
   padding-right: 2.35rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230063a8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%235c6474' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.85rem center;
   background-size: 1.15rem 1.15rem;
@@ -107,11 +116,11 @@ select.input {
   height: 9px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #95cdf0;
+  background: #d6d9e0;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #5fb1e8;
+  background: #b2b8c4;
 }
 
 /* ── Печать платёжной ведомости ── */
@@ -146,8 +155,8 @@ select.input {
  */
 .recharts-legend-item-text,
 .recharts-cartesian-axis-tick-value {
-  color: #0a2a48 !important;
-  fill: #0a2a48;
+  color: #171b21 !important;
+  fill: #171b21;
 }
 
 /*
@@ -197,12 +206,8 @@ select.input {
  * чистый белый бликует, и текст читается тяжелее; лёгкий серый снимает
  * блик и отделяет карточку от фона страницы. На десктопе оставляем белый.
  */
-@media (max-width: 639.98px) {
-  .card {
-    /*
-     * Заметный серый, а не «почти белый»: прежний #f7fafc отличался от
-     * белого на глаз неразличимо, и карточки сливались с фоном страницы.
-     */
-    background-color: #eceff4;
-  }
-}
+/*
+ * На телефоне карточка остаётся белой: фон страницы теперь тоже белый,
+ * и отделяет её рамка. Серую заливку убрали вместе с голубым фоном —
+ * серый на белом читался как «выключено».
+ */

@@ -608,7 +608,7 @@ function StaffCard({
       <div className="flex items-center gap-3">
         <span
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-bold ${
-            isDirector ? 'bg-navy-500 text-white' : 'bg-navy-100 text-navy-700'
+            isDirector ? 'bg-brand-500 text-white' : 'bg-navy-100 text-navy-700'
           }`}
         >
           {person.fullName[0]}

@@ -949,7 +949,7 @@ function AddOrderModal({
                   onClick={() => setDirtLevel(d)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     dirtLevel === d
-                      ? 'bg-navy-500 text-white ring-2 ring-navy-300'
+                      ? 'bg-brand-500 text-white ring-1 ring-brand-300'
                       : 'border border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
                   }`}
                 >

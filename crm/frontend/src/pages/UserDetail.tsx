@@ -168,7 +168,7 @@ export function UserDetail() {
         <div className="flex flex-wrap items-center gap-4">
           <span
             className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold ${
-              isDirector ? 'bg-navy-500 text-white' : 'bg-navy-100 text-navy-700'
+              isDirector ? 'bg-brand-500 text-white' : 'bg-navy-100 text-navy-700'
             }`}
           >
             {isDirector ? (
