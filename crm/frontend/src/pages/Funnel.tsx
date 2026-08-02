@@ -291,7 +291,19 @@ export function Funnel() {
        * доска получалась вдвое выше экрана.
        */
       const top = el.getBoundingClientRect().top;
-      const next = Math.max(320, Math.round(window.innerHeight - top - 16));
+      /*
+       * Нижний отступ раздела вычитаем по факту, а не константой: иначе
+       * доска на пару десятков пикселей выше экрана, и страница всё равно
+       * прокручивается — ровно то, от чего уходили.
+       */
+      const main = el.closest('main');
+      const padBottom = main
+        ? parseFloat(getComputedStyle(main).paddingBottom) || 0
+        : 0;
+      const next = Math.max(
+        320,
+        Math.round(window.innerHeight - top - padBottom - 4),
+      );
       // порог в 2px: без него наблюдатель размеров зациклился бы сам на себе
       setBoardHeight((prev) =>
         prev !== undefined && Math.abs(prev - next) < 2 ? prev : next,
