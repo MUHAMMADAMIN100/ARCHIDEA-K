@@ -701,6 +701,16 @@ export function PrintSheet({
  * рядом с пустыми фильтрами — шум. Стоит в одном ряду с самими фильтрами,
  * чтобы её не приходилось искать.
  */
+/**
+ * Кнопка сброса фильтров. Всегда на месте, даже когда сбрасывать нечего.
+ *
+ * Раньше она появлялась только при активном фильтре — и в момент фильтрации
+ * в ряду возникал новый элемент, из-за чего все селекты рядом сдвигались.
+ * Человек выбирал значение и видел, как перестраивается вся панель.
+ *
+ * Пока сбрасывать нечего, кнопка бледная и неактивная: место занято,
+ * ничего не прыгает, а состояние «фильтры не заданы» читается сразу.
+ */
 export function FilterReset({
   show,
   onReset,
@@ -710,12 +720,17 @@ export function FilterReset({
   onReset: () => void;
   className?: string;
 }) {
-  if (!show) return null;
   return (
     <button
       type="button"
       onClick={onReset}
-      className={`press inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-navy-200 px-2.5 py-1.5 text-xs font-medium text-navy-600 transition hover:border-navy-400 hover:bg-navy-50 ${className}`}
+      disabled={!show}
+      aria-label={show ? 'Сбросить фильтры' : 'Фильтры не заданы'}
+      className={`press inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-120 ${
+        show
+          ? 'border-navy-200 text-navy-600 hover:border-navy-400 hover:bg-navy-50'
+          : 'cursor-default border-navy-100 text-navy-300'
+      } ${className}`}
     >
       <X className="h-3.5 w-3.5" />
       Сбросить

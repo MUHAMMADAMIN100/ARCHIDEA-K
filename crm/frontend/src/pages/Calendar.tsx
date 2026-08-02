@@ -367,7 +367,8 @@ export function Calendar() {
    * месте. При входе выбран сегодняшний день: свои дела видно сразу.
    */
   const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()));
-  const dayListRef = useRef<HTMLDivElement>(null);
+  /** Открыто ли окно с делами выбранного дня */
+  const [dayOpen, setDayOpen] = useState(false);
   // «Без даты» на телефоне свёрнут в строку со счётчиком
   const [undatedOpen, setUndatedOpen] = useState(false);
 
@@ -486,20 +487,49 @@ export function Calendar() {
     );
 
   /**
-   * Тап по дню на телефоне: месяц остаётся на месте, обновляется список.
+   * Точки под числом дня: есть ли дела и насколько они горят.
    *
-   * Если список ушёл под нижний край экрана, подводим его в поле зрения —
-   * иначе тап выглядит так, будто ничего не произошло.
+   * Цвет берём по САМОЙ СРОЧНОЙ задаче дня — иначе одна серая точка не
+   * отличает «завтра позвонить» от «просрочено вчера», и смысл отметки
+   * теряется. Точек не больше трёх: клетка на телефоне шириной сорок
+   * пикселей, четвёртая уже не помещается.
+   */
+  const dayDots = (key: string): string[] => {
+    const tasks = byDay.get(key) ?? [];
+    const orders = ordersByDay.get(key) ?? [];
+    if (tasks.length === 0 && orders.length === 0) return [];
+
+    const open = tasks.filter((t) => t.status !== 'DONE');
+
+    // всё, что было на день, закрыто — зелёная точка: день отработан
+    if (open.length === 0 && orders.length === 0) return ['bg-green-500'];
+
+    const worst =
+      open.some((t) => t.priority === 'URGENT') || (key < todayKey && open.length > 0)
+        ? 'bg-red-500'
+        : open.some((t) => t.priority === 'HIGH')
+          ? 'bg-amber-500'
+          : open.length > 0
+            ? 'bg-brand-500'
+            : 'bg-navy-300';
+
+    const total = Math.min(3, open.length + orders.length);
+    // первая точка — цветом срочности, остальные нейтральные: они лишь
+    // показывают, что дел на день несколько
+    return Array.from({ length: total }, (_, i) => (i === 0 ? worst : 'bg-navy-300'));
+  };
+
+  /**
+   * Клик по дню открывает окно с делами этого дня по центру экрана.
+   *
+   * Раньше день раскрывался списком ПОД сеткой, и страницу подкручивало
+   * вниз. На большом экране список уезжал за нижний край: человек нажимал
+   * на 14 августа и не понимал, произошло ли что-нибудь. Окно по центру
+   * видно сразу и одинаково на компьютере и на телефоне.
    */
   const pickDay = (key: string) => {
     setSelectedDay(key);
-    requestAnimationFrame(() => {
-      const el = dayListRef.current;
-      if (!el) return;
-      if (el.getBoundingClientRect().top > window.innerHeight - 140) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+    setDayOpen(true);
   };
 
   /** Оптимистичное изменение задачи в списке */
@@ -772,6 +802,7 @@ export function Calendar() {
                 (ordersByDay.get(key)?.length ?? 0) +
                 (byDay.get(key)?.length ?? 0) +
                 calls;
+              const dots = dayDots(key);
               return (
                 <button
                   key={key}
@@ -795,18 +826,32 @@ export function Calendar() {
                   <span className="text-sm font-semibold tabular-nums">
                     {d.getDate()}
                   </span>
-                  {/* счётчик рисуем, только если на день что-то назначено */}
-                  <span
-                    className={`mt-0.5 flex h-3 items-center gap-1 text-[10px] font-bold leading-none tabular-nums ${
-                      isToday ? 'text-white' : 'text-brand-600'
-                    }`}
-                  >
-                    {count > 0 ? count : ''}
-                    {/* оранжевая точка — на этот день назначен перезвон */}
+                  {/*
+                    Точки под числом: сразу видно, что на день назначены дела
+                    и насколько они горят. Цвет — по самой срочной задаче,
+                    поэтому просроченный день не спутать с обычным.
+                    Оранжевая точка перезвона идёт последней, как и раньше.
+                  */}
+                  <span className="mt-0.5 flex h-3 items-center gap-[3px] leading-none">
+                    {dots.map((c, i) => (
+                      <span
+                        key={i}
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          isToday ? 'bg-white' : c
+                        }`}
+                      />
+                    ))}
                     {calls > 0 && (
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
                           isToday ? 'bg-white' : 'bg-orange-500'
+                        }`}
+                      />
+                    )}
+                    {count > 0 && dots.length === 0 && calls === 0 && (
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          isToday ? 'bg-white' : 'bg-navy-300'
                         }`}
                       />
                     )}
@@ -946,6 +991,19 @@ export function Calendar() {
                       >
                         {d.getDate()}
                       </button>
+                      {/*
+                        Точки срочности рядом с числом — те же, что на телефоне.
+                        В клетке видны карточки, но их цвет означает ЭТАП
+                        заказа, а не «горит ли»: понять, что на день есть
+                        просроченная задача, по ним было нельзя.
+                      */}
+                      {dayDots(key).length > 0 && (
+                        <span className="flex shrink-0 items-center gap-[3px]">
+                          {dayDots(key).map((c, i) => (
+                            <span key={i} className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                          ))}
+                        </span>
+                      )}
                       <div className="flex shrink-0 items-center gap-1">
                         {(ordersByDay.get(key)?.length ?? 0) > 0 && (
                           <span className="rounded-md bg-navy-100 px-1.5 text-[11px] font-semibold text-navy-700">
@@ -1025,68 +1083,73 @@ export function Calendar() {
         )}
 
         {/*
-          Список выбранного дня — под сеткой, на всех экранах.
-          Раньше день раскрывался окном поверх календаря: сетка исчезала, и
-          чтобы посмотреть соседний день, окно приходилось закрывать. Теперь
-          месяц остаётся на месте, а меняется только список под ним.
+          Дела выбранного дня — окном по центру экрана.
+          Раньше список раскрывался ПОД сеткой и страницу подкручивало вниз.
+          На большом экране он уезжал за нижний край: человек нажимал на день
+          и не понимал, произошло ли что-нибудь. Окно видно сразу.
         */}
-        {view === 'month' && (
-          <div ref={dayListRef} className="mt-4 scroll-mt-4">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-bold text-navy-900">
-                {humanDay(selectedDay)}
-              </h3>
-              {selectedDay === todayKey && (
-                <span className="shrink-0 text-xs font-semibold text-brand-500">
-                  сегодня
-                </span>
-              )}
+        <Modal
+          open={dayOpen && view === 'month'}
+          onClose={() => setDayOpen(false)}
+          title={
+            humanDay(selectedDay) +
+            (selectedDay === todayKey ? ' · сегодня' : '')
+          }
+        >
+          {(ordersByDay.get(selectedDay) ?? []).length === 0 &&
+          (byDay.get(selectedDay) ?? []).length === 0 &&
+          (callbacksByDay.get(selectedDay) ?? []).length === 0 ? (
+            <p className="rounded-lg border border-dashed border-navy-200 px-4 py-8 text-center text-sm text-navy-600">
+              На этот день дел нет
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {(callbacksByDay.get(selectedDay) ?? []).map((c) => (
+                <CallbackRow
+                  key={c.id}
+                  item={c}
+                  onOpen={() => {
+                    setDayOpen(false);
+                    navigate(`/clients/${c.id}`);
+                  }}
+                />
+              ))}
+              {(ordersByDay.get(selectedDay) ?? []).map((o) => (
+                <DayOrderRow
+                  key={o.id}
+                  order={o}
+                  onOpen={() => {
+                    setDayOpen(false);
+                    setOpenOrder(o);
+                  }}
+                />
+              ))}
+              {(byDay.get(selectedDay) ?? []).map((t) => (
+                <DayTaskRow
+                  key={t.id}
+                  task={t}
+                  onOpen={() => {
+                    if (isTemp(t.id)) return;
+                    setDayOpen(false);
+                    setModal({ mode: 'edit', id: t.id });
+                  }}
+                />
+              ))}
             </div>
+          )}
 
-            {(ordersByDay.get(selectedDay) ?? []).length === 0 &&
-            (byDay.get(selectedDay) ?? []).length === 0 &&
-            (callbacksByDay.get(selectedDay) ?? []).length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-navy-200 bg-white px-4 py-6 text-center text-sm text-navy-600">
-                На этот день дел нет
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {(callbacksByDay.get(selectedDay) ?? []).map((c) => (
-                  <CallbackRow
-                    key={c.id}
-                    item={c}
-                    onOpen={() => navigate(`/clients/${c.id}`)}
-                  />
-                ))}
-                {(ordersByDay.get(selectedDay) ?? []).map((o) => (
-                  <DayOrderRow
-                    key={o.id}
-                    order={o}
-                    onOpen={() => setOpenOrder(o)}
-                  />
-                ))}
-                {(byDay.get(selectedDay) ?? []).map((t) => (
-                  <DayTaskRow
-                    key={t.id}
-                    task={t}
-                    onOpen={() => {
-                      if (!isTemp(t.id)) setModal({ mode: 'edit', id: t.id });
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setModal({ mode: 'create', date: selectedDay })}
-              className="btn-ghost mt-2 w-full"
-            >
-              <Plus className="h-4 w-4" />
-              Новая задача на этот день
-            </button>
-          </div>
-        )}
+          <button
+            type="button"
+            onClick={() => {
+              setDayOpen(false);
+              setModal({ mode: 'create', date: selectedDay });
+            }}
+            className="btn-ghost mt-3 w-full"
+          >
+            <Plus className="h-4 w-4" />
+            Новая задача на этот день
+          </button>
+        </Modal>
 
         {/* Задачи без срока */}
         <Droppable droppableId={NO_DATE} direction="horizontal" isDropDisabled={isTouch}>

@@ -189,12 +189,15 @@ export function Modal({
   title,
   children,
   wide,
+  headerAction,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   wide?: boolean;
+  /** Кнопка слева от крестика — например, карандаш «править» */
+  headerAction?: ReactNode;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -248,15 +251,18 @@ export function Modal({
         className={`card flex max-h-[92vh] w-full animate-pop-in flex-col shadow-modal ${wide ? 'max-w-2xl' : 'max-w-md'} p-4 sm:max-h-[90vh] sm:p-6`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex shrink-0 items-center justify-between">
-          <h2 className="text-lg font-bold text-navy-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="press rounded-lg p-1 text-navy-600 transition-colors hover:bg-navy-50 hover:text-navy-700"
-            aria-label="Закрыть"
-          >
-            <X className="h-5 w-5" />
-          </button>
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
+          <h2 className="min-w-0 truncate text-lg font-bold text-navy-900">{title}</h2>
+          <div className="flex shrink-0 items-center gap-1">
+            {headerAction}
+            <button
+              onClick={onClose}
+              className="press rounded-lg p-1 text-navy-600 transition-colors hover:bg-navy-50 hover:text-navy-700"
+              aria-label="Закрыть"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
         {/*
          * Содержимое прокручивается внутри окна. Небольшой отступ сверху

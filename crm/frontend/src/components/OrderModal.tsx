@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, RefreshCw, Trash2 } from 'lucide-react';
+import { Bell, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { Modal, Badge, Spinner, ErrorState, EmptyState, Skeleton } from './ui';
@@ -114,6 +114,27 @@ export function OrderModal({
   const [order, setOrder] = useState<Order | null>(null);
   const [detailError, setDetailError] = useState(false);
   const [tab, setTab] = useState<TabKey>('order');
+
+  /**
+   * Режим правки (ТЗ 2.1).
+   *
+   * На телефоне карточка открывается для ЧТЕНИЯ: её смотрят на ходу, и
+   * случайное касание не должно менять сумму, дату или состав бригады.
+   * Правку включает карандаш в углу.
+   *
+   * На компьютере (от 640 px) поля живые сразу — так было всегда, мышью
+   * не промахиваются, и лишний клик только мешал бы работать.
+   *
+   * Ширину читаем один раз при открытии: если человек повернёт телефон,
+   * переключать режим под ним посреди правки — худшее, что можно сделать.
+   */
+  const [editing, setEditing] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 640,
+  );
+  // новый заказ всегда открывается сразу редактируемым — читать там нечего
+  useEffect(() => {
+    if (orderId) setEditing(window.innerWidth >= 640);
+  }, [orderId]);
   const [showReminder, setShowReminder] = useState(false);
 
   const [stage, setStage] = useState<FunnelStage>('NEW');
@@ -680,6 +701,29 @@ export function OrderModal({
       onClose={onClose}
       title={order ? `Заказ — ${order.client?.fullName ?? ''}` : 'Заказ'}
       wide
+      headerAction={
+        /*
+         * Карандаш включает правку — только на телефоне (ТЗ 2.1).
+         *
+         * Заказ там открывается для чтения: карточку смотрят на ходу, и
+         * случайное касание не должно менять сумму или дату. На компьютере
+         * поля живые сразу, как и были: мышью не промахиваются.
+         *
+         * Побочно это закрывает ТЗ 6 — в режиме чтения полей для ввода нет,
+         * и клавиатуре появляться не от чего.
+         */
+        order && !editing ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="press rounded-lg p-1 text-brand-600 transition-colors hover:bg-brand-50 sm:hidden"
+            aria-label="Изменить заказ"
+            title="Изменить"
+          >
+            <Pencil className="h-5 w-5" />
+          </button>
+        ) : null
+      }
     >
       {!order ? (
         detailError ? (
@@ -693,6 +737,31 @@ export function OrderModal({
       ) : (
         <div className="space-y-4">
           <Tabs items={TAB_ITEMS} value={tab} onChange={setTab} />
+
+          {/*
+            Полосой напоминаем, что карточка открыта для чтения, и даём
+            вторую точку входа в правку — не все ищут иконку в углу.
+          */}
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="press flex w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 sm:hidden"
+            >
+              <Pencil className="h-4 w-4" />
+              Изменить заказ
+            </button>
+          )}
+
+          {/*
+            disabled на fieldset выключает ВСЕ вложенные поля разом — это
+            штатное поведение HTML, а не приём. Перечислять полсотни инпутов
+            по одному было бы и длиннее, и надёжнее забыть половину.
+          */}
+          <fieldset
+            disabled={!editing}
+            className="m-0 min-w-0 space-y-4 border-0 p-0 disabled:opacity-100"
+          >
 
           {detailError && (
             <div className="flex animate-fade-in flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -1562,27 +1631,35 @@ export function OrderModal({
             </div>
           )}
 
+          </fieldset>
+
           {/*
             Низ карточки. На телефоне «Отмена» и «Сохранить» — двумя равными
             кнопками во всю ширину, удаление отдельной строкой ниже: раньше
             все три стояли вперемешку и промахнуться по «Удалить» было легко.
+
+            В режиме чтения сохранять и удалять нечего — остаётся «Закрыть».
           */}
           <div className="space-y-2 border-t border-navy-100 pt-4 sm:flex sm:flex-row-reverse sm:items-center sm:justify-between sm:space-y-0">
-            <div className="grid grid-cols-2 gap-2 sm:flex">
+            <div className={`gap-2 sm:flex ${editing ? 'grid grid-cols-2' : 'grid'}`}>
               <button onClick={onClose} className="btn-ghost justify-center">
-                Отмена
+                {editing ? 'Отмена' : 'Закрыть'}
               </button>
-              <button onClick={save} className="btn-primary justify-center">
-                Сохранить
-              </button>
+              {editing && (
+                <button onClick={save} className="btn-primary justify-center">
+                  Сохранить
+                </button>
+              )}
             </div>
-            <button
-              onClick={remove}
-              className="press inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-[background-color,border-color,transform] duration-120 ease-out hover:bg-red-50 sm:w-auto"
-            >
-              <Trash2 className="h-4 w-4" />
-              Удалить заказ
-            </button>
+            {editing && (
+              <button
+                onClick={remove}
+                className="press inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-[background-color,border-color,transform] duration-120 ease-out hover:bg-red-50 sm:w-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+                Удалить заказ
+              </button>
+            )}
           </div>
         </div>
       )}

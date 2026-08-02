@@ -432,6 +432,27 @@ export function Funnel() {
    */
   const [params, setParams] = useSearchParams();
   const wantedOrderId = params.get('order');
+
+  /*
+   * Приход с дашборда: ?stage=NEW прокручивает доску к нужному этапу.
+   * Раньше карточка-цифра открывала список окном, и до самой воронки
+   * человек так и не попадал — а работать он идёт именно туда.
+   */
+  const wantedStage = params.get('stage');
+  useEffect(() => {
+    if (!wantedStage || !data) return;
+    const index = data.findIndex((c) => c.stage === wantedStage);
+    if (index >= 0) {
+      requestAnimationFrame(() => {
+        const box = boardRef.current;
+        const col = box?.children[index] as HTMLElement | undefined;
+        if (box && col) {
+          box.scrollTo({ left: col.offsetLeft - box.offsetLeft, behavior: 'smooth' });
+        }
+      });
+    }
+    setParams({}, { replace: true });
+  }, [wantedStage, data]);
   useEffect(() => {
     if (!wantedOrderId || !data) return;
     const found = data.flatMap((c) => c.orders).find((o) => o.id === wantedOrderId);
@@ -636,7 +657,7 @@ export function Funnel() {
             Менеджер:
           </span>
           <select
-            className="input w-full sm:max-w-[240px]"
+            className="input w-full sm:w-[240px] sm:flex-none"
             value={managerFilter}
             onChange={(e) => setManagerFilter(e.target.value)}
           >
@@ -681,28 +702,6 @@ export function Funnel() {
             </button>
           )}
 
-          {/*
-            Стрелки прокрутки доски. Этапов девять, на экран они не влезают, и
-            тянуть полосу мышью через всю страницу неудобно.
-          */}
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              onClick={() => scrollBoard(-1)}
-              className="btn-ghost px-2 py-1"
-              aria-label="Прокрутить доску влево"
-              title="Влево"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => scrollBoard(1)}
-              className="btn-ghost px-2 py-1"
-              aria-label="Прокрутить доску вправо"
-              title="Вправо"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
       </div>
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
@@ -936,6 +935,31 @@ export function Funnel() {
             {board.map((col) => (
               <span key={col.stage} className="swipe-dot" />
             ))}
+          </div>
+
+          {/*
+            Стрелки прокрутки доски — в правом нижнем углу (ТЗ 2.4).
+            Раньше они стояли над доской, в одном ряду с фильтрами: до них
+            приходилось тянуться вверх через весь экран, хотя листают доску,
+            держа палец внизу. Здесь же они не спорят с точками — те по центру.
+          */}
+          <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center gap-1">
+            <button
+              onClick={() => scrollBoard(-1)}
+              className="press pointer-events-auto rounded-lg border border-navy-200 bg-white/95 p-1.5 text-navy-600 shadow-card backdrop-blur transition-colors hover:bg-navy-50"
+              aria-label="Прокрутить доску влево"
+              title="Влево"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => scrollBoard(1)}
+              className="press pointer-events-auto rounded-lg border border-navy-200 bg-white/95 p-1.5 text-navy-600 shadow-card backdrop-blur transition-colors hover:bg-navy-50"
+              aria-label="Прокрутить доску вправо"
+              title="Вправо"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </DragDropContext>

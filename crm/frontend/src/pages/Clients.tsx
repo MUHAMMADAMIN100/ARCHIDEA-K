@@ -313,24 +313,24 @@ export function Clients() {
         <div className="col-span-2 sm:min-w-[200px] sm:flex-1">
           <SearchInput value={search} onChange={setSearch} placeholder="Поиск по имени или телефону" />
         </div>
-        <select className="input w-full sm:max-w-[180px]" value={tag} onChange={(e) => setTag(e.target.value)}>
+        <select className="input w-full sm:w-[180px] sm:flex-none" value={tag} onChange={(e) => setTag(e.target.value)}>
           <option value="">Все статусы</option>
           {TAGS.map((t) => (
             <option key={t} value={t}>{TAG_LABEL[t]}</option>
           ))}
         </select>
-        <select className="input w-full sm:max-w-[180px]" value={source} onChange={(e) => setSource(e.target.value)}>
+        <select className="input w-full sm:w-[180px] sm:flex-none" value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="">Все источники</option>
           {SOURCES.map((s) => (
             <option key={s} value={s}>{SOURCE_LABEL[s]}</option>
           ))}
         </select>
-        <select className="input w-full sm:max-w-[180px]" value={sort} onChange={(e) => setSort(e.target.value as any)}>
+        <select className="input w-full sm:w-[180px] sm:flex-none" value={sort} onChange={(e) => setSort(e.target.value as any)}>
           <option value="recent">Сначала недавние</option>
           <option value="name">По имени</option>
         </select>
         <select
-          className="input w-full sm:max-w-[180px]"
+          className="input w-full sm:w-[180px] sm:flex-none"
           value={ordersFilter}
           onChange={(e) => setOrdersFilter(e.target.value as OrdersFilter)}
         >
@@ -516,12 +516,27 @@ export function AddClientModal({
     if (!manualPrice) setPrice(computed ? String(computed) : '');
   }, [computed, manualPrice]);
 
-  // кнопку не даём нажать, пока данные некорректны — сервер их всё равно отклонит
-  const canSubmit =
-    isValidPersonName(fullName) &&
-    isValidPhone(phone) &&
-    // второй номер обязателен: пустым его оставить нельзя
-    isValidPhone(extraPhones[0] ?? '');
+  /*
+   * Что мешает сохранить — списком, а не одним «нельзя».
+   *
+   * Раньше кнопка просто гасла, и человек не понимал, чего от него хотят:
+   * поля выглядели заполненными, а заказ не создавался. Теперь причина
+   * названа прямо под кнопкой.
+   *
+   * Запасной номер БОЛЬШЕ НЕ ОБЯЗАТЕЛЕН (решение владельца): клиента с одним
+   * телефоном тоже надо уметь завести. Но если его начали вводить —
+   * дописать придётся, иначе в базу уйдёт обрывок.
+   */
+  const blockers: string[] = [];
+  if (!fullName.trim()) blockers.push('ФИО клиента');
+  else if (!isValidPersonName(fullName)) blockers.push('ФИО без цифр и символов');
+  if (!phone.replace(/\D/g, '')) blockers.push('телефон');
+  else if (!isValidPhone(phone)) blockers.push('телефон полностью, 9 цифр');
+  const extra = extraPhones[0] ?? '';
+  if (extra.replace(/\D/g, '').length > 0 && !isValidPhone(extra)) {
+    blockers.push('запасной номер полностью или очистите поле');
+  }
+  const canSubmit = blockers.length === 0;
 
   const submit = () => {
     if (!canSubmit) return;
@@ -873,17 +888,24 @@ export function AddClientModal({
           </div>
         )}
 
+        {/*
+          Причина, по которой кнопка неактивна, — прямо над ней.
+          Раньше кнопка молча гасла: человек видел заполненную форму и не
+          понимал, чего не хватает, а подсказка в title на телефоне вообще
+          не показывается.
+        */}
+        {!canSubmit && (
+          <p className="pt-2 text-right text-xs text-amber-600">
+            Чтобы сохранить, укажите: {blockers.join(', ')}
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="btn-ghost">Отмена</button>
           <button
             onClick={submit}
             disabled={!canSubmit}
             className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-            title={
-              canSubmit
-                ? undefined
-                : 'Заполните ФИО и оба номера телефона правильно'
-            }
+            title={canSubmit ? undefined : `Укажите: ${blockers.join(', ')}`}
           >
             Создать
           </button>

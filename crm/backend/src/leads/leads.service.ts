@@ -64,33 +64,35 @@ export class LeadsService {
     const missing: string[] = [];
     if (!dto.contact?.name?.trim()) missing.push('имя');
     if (!dto.contact?.phone?.trim()) missing.push('телефон');
-    if (!dto.contact?.phone2?.trim()) missing.push('запасной телефон');
     if (!dto.contact?.address?.trim()) missing.push('адрес');
     if (!dto.quiz?.date?.trim()) missing.push('дату уборки');
     if (missing.length) {
       throw new BadRequestException(`Заполните ${missing.join(', ')}`);
     }
-    // после проверки поля точно есть — сужаем тип для остального кода
+    /*
+     * Запасной номер НЕОБЯЗАТЕЛЕН (решение владельца).
+     *
+     * Пока он был обязательным, человек с одним телефоном не мог отправить
+     * заявку вовсе — форма его не выпускала. Это прямая потеря заказов ради
+     * поля «на всякий случай».
+     */
     const contact = {
       name: dto.contact!.name!.trim(),
       phone: dto.contact!.phone!.trim(),
-      phone2: dto.contact!.phone2!.trim(),
+      phone2: dto.contact?.phone2?.trim() || '',
       address: dto.contact!.address!.trim(),
     };
 
     /*
-     * Запасной номер должен отличаться от основного. Иначе поле в форме
-     * бессмысленно: достаточно скопировать первый номер, и в карточке
-     * клиента окажется один и тот же телефон дважды.
+     * Если запасной номер всё же указали, он должен отличаться от основного:
+     * иначе в карточке клиента окажется один и тот же телефон дважды.
+     * Совпадение не роняем ошибкой — просто не сохраняем дубль: заявка
+     * важнее педантичности.
      */
-    if (
-      normalizePhone(contact.phone) &&
-      normalizePhone(contact.phone) === normalizePhone(contact.phone2)
-    ) {
-      throw new BadRequestException(
-        'Запасной номер должен отличаться от основного',
-      );
-    }
+    const sameAsMain =
+      !!contact.phone2 &&
+      normalizePhone(contact.phone) === normalizePhone(contact.phone2);
+    const extraPhones = contact.phone2 && !sameAsMain ? [contact.phone2] : [];
 
     // 2. Rate-limit: не чаще раза в 20 сек с одного телефона
     // ключ по каноническому номеру: «+992 90…» и «90…» — один и тот же человек
@@ -115,7 +117,7 @@ export class LeadsService {
     const { client } = await this.clients.findOrCreateByPhone({
       fullName: contact.name,
       phone: contact.phone,
-      extraPhones: [contact.phone2],
+      extraPhones,
       source: LeadSource.SITE,
       managerId: managerId ?? undefined,
     });

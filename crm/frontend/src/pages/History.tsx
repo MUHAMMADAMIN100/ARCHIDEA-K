@@ -130,7 +130,7 @@ export function History() {
         <PeriodFilter value={period} onChange={setPeriod} />
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           <select
-            className="input w-full sm:max-w-[200px]"
+            className="input w-full sm:w-[200px] sm:flex-none"
             value={entity}
             onChange={(e) => setEntity(e.target.value)}
           >
@@ -142,7 +142,7 @@ export function History() {
             ))}
           </select>
           <select
-            className="input w-full sm:max-w-[200px]"
+            className="input w-full sm:w-[200px] sm:flex-none"
             value={action}
             onChange={(e) => setAction(e.target.value)}
           >
@@ -153,7 +153,7 @@ export function History() {
               </option>
             ))}
           </select>
-          <div className="w-full sm:min-w-[200px] sm:max-w-[260px] sm:flex-1">
+          <div className="w-full sm:min-w-[200px] sm:w-[260px] sm:flex-none sm:flex-1">
             {/* Список сотрудников (только активные — так же, как везде в CRM,
                 где выбирают исполнителя); уволенных сотрудников можно найти
                 поиском по имени ниже. */}

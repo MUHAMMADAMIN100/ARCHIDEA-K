@@ -92,13 +92,19 @@ export function QuizForm() {
       name: !PERSON_NAME_RE.test(contact.name.trim()),
       phone: contact.phone.replace(/\D/g, '').length < 12, // 992 + 9 цифр
       /*
-       * Запасной номер обязателен и обязан отличаться от основного.
-       * Без проверки на совпадение поле теряет смысл: люди копируют
-       * первый номер, лишь бы форма пропустила дальше.
+       * Запасной номер НЕОБЯЗАТЕЛЕН (решение владельца).
+       *
+       * Пока он был обязательным, человек с одним телефоном не мог отправить
+       * заявку вовсе — форма его не выпускала. Это прямая потеря заказов
+       * ради поля «на всякий случай».
+       *
+       * Проверяем только то, что уже введено: недописанный номер и копия
+       * первого — ошибки, а пустое поле пропускаем.
        */
       phone2:
-        contact.phone2.replace(/\D/g, '').length < 12 ||
-        samePhones(contact.phone, contact.phone2),
+        contact.phone2.replace(/\D/g, '').length > 3 &&
+        (contact.phone2.replace(/\D/g, '').length < 12 ||
+          samePhones(contact.phone, contact.phone2)),
       address: contact.address.trim().length < 4,
     };
     setContactErrors(errs);

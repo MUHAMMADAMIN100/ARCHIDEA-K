@@ -302,7 +302,7 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
         )}
         <PeriodFilter value={period} onChange={setPeriod} showMonthArrows />
         <select
-          className="input w-full sm:max-w-[180px]"
+          className="input w-full sm:w-[180px] sm:flex-none"
           value={status}
           onChange={(e) => setStatus(e.target.value as ShiftGroupStatus | '')}
         >
@@ -312,7 +312,7 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
           <option value="CLOSED">{SHIFT_GROUP_STATUS_LABEL.CLOSED}</option>
         </select>
         <input
-          className="input w-full sm:max-w-[220px]"
+          className="input w-full sm:w-[220px] sm:flex-none"
           placeholder="Поиск: адрес, бригада, ФИО"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
