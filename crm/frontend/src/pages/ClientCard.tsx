@@ -363,14 +363,14 @@ export function ClientCard() {
           <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
             <a
               href={`tel:${formatPhone(data.phone)}`}
-              className="btn-primary min-w-0 flex-1 justify-center text-xs font-medium sm:flex-none sm:text-sm"
+              className="btn-primary min-w-0 flex-1 basis-[12rem] justify-center text-xs font-medium sm:basis-auto sm:flex-none sm:text-sm"
             >
               <Phone className="h-4 w-4 shrink-0" />
               <span className="truncate">{formatPhone(data.phone)}</span>
             </a>
             <button
               onClick={() => setShowReminder(true)}
-              className="btn-ghost min-w-0 flex-1 justify-center text-xs font-medium sm:flex-none sm:text-sm"
+              className="btn-ghost min-w-0 flex-1 basis-[12rem] justify-center text-xs font-medium sm:basis-auto sm:flex-none sm:text-sm"
             >
               <PhoneCall className="h-4 w-4 shrink-0" />
               <span className="truncate">Напомнить позвонить</span>
