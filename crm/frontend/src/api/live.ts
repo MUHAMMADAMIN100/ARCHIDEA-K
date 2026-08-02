@@ -12,7 +12,17 @@ import { applyLiveChange } from './hooks';
  * работаем по потоку событий: он идёт через тот же /api и настройки не
  * требует.
  */
-const WS_URL = import.meta.env.VITE_WS_URL as string | undefined;
+const WS_URL =
+  (import.meta.env.VITE_WS_URL as string | undefined) ||
+  /*
+   * На проде адрес известен и без настройки — сокет идёт напрямую к серверу
+   * приложения. На localhost по умолчанию не подключаемся: там работает
+   * поток событий через прокси разработки, и лезть на прод из локальной
+   * сборки не нужно.
+   */
+  (typeof location !== 'undefined' && location.hostname.endsWith('.vercel.app')
+    ? 'https://archidea-k-production.up.railway.app'
+    : undefined);
 
 /** Сообщение о том, что раздел данных изменился */
 function handle(
