@@ -274,6 +274,12 @@ export function Funnel() {
    */
   const [boardHeight, setBoardHeight] = useState<number>();
 
+  /*
+   * Зависимость от data обязательна: пока доска грузится, компонент
+   * возвращает Spinner и самого блока в разметке ещё нет. Эффект с пустым
+   * списком зависимостей отрабатывал один раз по пустой ссылке и больше
+   * не вызывался — высота так и не проставлялась.
+   */
   useEffect(() => {
     const el = boardRef.current;
     if (!el) return;
@@ -299,13 +305,14 @@ export function Funnel() {
      * наблюдение за ним давало бесконечный пересчёт.
      */
     const ro = new ResizeObserver(measure);
-    const above = el.parentElement?.previousElementSibling;
+    // блок фильтров — прямой сосед доски сверху
+    const above = el.previousElementSibling;
     if (above) ro.observe(above);
     return () => {
       window.removeEventListener('resize', measure);
       ro.disconnect();
     };
-  }, []);
+  }, [data]);
   // «Добавить клиента» прямо из воронки — та же форма, что в «Клиентах»
   const [showAddClient, setShowAddClient] = useState(false);
   // счётчик над колонкой — не просто число: по клику показываем сам список
