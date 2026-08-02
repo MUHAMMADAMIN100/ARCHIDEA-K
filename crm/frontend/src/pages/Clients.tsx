@@ -199,7 +199,7 @@ export function Clients() {
     },
     {
       key: 'tags',
-      title: 'Теги',
+      title: 'Статус',
       hideOnMobile: true,
       render: (c) => (
         <div className="flex flex-wrap gap-1">
@@ -293,7 +293,7 @@ export function Clients() {
           <SearchInput value={search} onChange={setSearch} placeholder="Поиск по имени или телефону" />
         </div>
         <select className="input w-full sm:max-w-[180px]" value={tag} onChange={(e) => setTag(e.target.value)}>
-          <option value="">Все теги</option>
+          <option value="">Все статусы</option>
           {TAGS.map((t) => (
             <option key={t} value={t}>{TAG_LABEL[t]}</option>
           ))}
