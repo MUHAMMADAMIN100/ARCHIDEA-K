@@ -2,6 +2,7 @@ import { useEffect, useState, type MutableRefObject } from 'react';
 import { Trash2, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
+import { ClientPicker } from './ClientPicker';
 import { useAuth } from '../auth/AuthContext';
 import { userManagesTasks } from '../types';
 import { Modal } from './ui';
@@ -64,6 +65,7 @@ export function TaskModal({
       priority: TaskPriority;
       deadline: string | null;
       assigneeIds: string[];
+      clientId: string | null;
     },
     people: { id: string; fullName: string }[],
   ) => void;
@@ -102,6 +104,8 @@ export function TaskModal({
   const [day, setDay] = useState(
     mode === 'edit' ? toDayInput(task?.deadline) : (initialDate ?? ''),
   );
+  // клиент, к которому относится задача — необязателен
+  const [clientId, setClientId] = useState<string | null>(task?.clientId ?? null);
   const [assigneeIds, setAssigneeIds] = useState<string[]>(
     task?.assignments.map((a) => a.userId) ?? [],
   );
@@ -161,6 +165,7 @@ export function TaskModal({
         priority,
         deadline: day || null,
         assigneeIds,
+        clientId,
       },
       chosen.map((p) => ({ id: p.id, fullName: p.fullName })),
     );
@@ -177,6 +182,7 @@ export function TaskModal({
       priority,
       deadline: day || null,
       assigneeIds,
+      clientId,
     };
     // оптимистично: карточка в календаре обновляется сразу
     onPatch(task.id, {
@@ -289,6 +295,15 @@ export function TaskModal({
               </button>
             ))}
           </div>
+        </div>
+
+        {/*
+          Клиент задачи. Встречу и звонок назначают по конкретному человеку,
+          и перед выездом нужны его телефон и адрес — здесь они и появятся.
+        */}
+        <div>
+          <label className="label">Клиент</label>
+          <ClientPicker value={clientId} onChange={(id) => setClientId(id)} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

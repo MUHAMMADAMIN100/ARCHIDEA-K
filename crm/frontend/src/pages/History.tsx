@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { PageHeader, ErrorState, Spinner, EmptyState } from '../components/ui';
-import { PeriodFilter, Period, SearchInput, UserPicker } from '../components/common';
+import {
+  FilterReset,
+  PeriodFilter,
+  Period,
+  SearchInput,
+  UserPicker,
+} from '../components/common';
 import { AuditEntryRow } from '../components/HistoryPanel';
 import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL } from '../lib/labels';
 import { useToast } from '../components/Toast';
@@ -164,6 +170,16 @@ export function History() {
               placeholder="Поиск по объекту, описанию, сотруднику"
             />
           </div>
+          <FilterReset
+            className="col-span-2 justify-center sm:col-auto"
+            show={!!entity || !!action || !!actorId || !!search}
+            onReset={() => {
+              setEntity('');
+              setAction('');
+              setActorId('');
+              setSearch('');
+            }}
+          />
         </div>
       </div>
 

@@ -26,6 +26,7 @@ import {
   DataTable,
   MoneyInput,
   Period,
+  FilterReset,
   PeriodFilter,
   StatCard,
   Tabs,
@@ -575,6 +576,13 @@ function EntriesTab() {
               </option>
             ))}
           </select>
+          <FilterReset
+            show={!!kindFilter || !!categoryFilter}
+            onReset={() => {
+              changeKindFilter('');
+              setCategoryFilter('');
+            }}
+          />
         </div>
 
         <DataTable<FinanceEntry>

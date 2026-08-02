@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { EmptyState, ErrorState, Spinner } from '../ui';
 import { DatePicker } from '../DatePicker';
 import { useFetch } from '../../api/hooks';
@@ -663,5 +663,34 @@ export function PrintSheet({
       </div>
       {children}
     </div>
+  );
+}
+
+/**
+ * Кнопка сброса фильтров.
+ *
+ * Появляется, только когда есть что сбрасывать: постоянная кнопка «Сбросить»
+ * рядом с пустыми фильтрами — шум. Стоит в одном ряду с самими фильтрами,
+ * чтобы её не приходилось искать.
+ */
+export function FilterReset({
+  show,
+  onReset,
+  className = '',
+}: {
+  show: boolean;
+  onReset: () => void;
+  className?: string;
+}) {
+  if (!show) return null;
+  return (
+    <button
+      type="button"
+      onClick={onReset}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-navy-200 px-2.5 py-1.5 text-xs font-medium text-navy-600 transition hover:border-navy-400 hover:bg-navy-50 ${className}`}
+    >
+      <X className="h-3.5 w-3.5" />
+      Сбросить
+    </button>
   );
 }

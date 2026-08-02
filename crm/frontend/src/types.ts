@@ -263,6 +263,15 @@ export interface Client {
   manager?: { id: string; fullName: string } | null;
   _count?: { orders: number };
   orders?: Order[];
+  /** Встречи и звонки, назначенные по клиенту */
+  tasks?: {
+    id: string;
+    title: string;
+    type: TaskType;
+    status: TaskStatus;
+    deadline?: string | null;
+    assignee?: { id: string; fullName: string } | null;
+  }[];
   // ── Повторный клиент (ТЗ 9.4) ──
   isRepeat?: boolean;
   paidOrdersCount?: number;
@@ -373,6 +382,15 @@ export interface Task {
   creator: { id: string; fullName: string };
   /** Всегда непустой: для старых задач бэкенд подставляет основного исполнителя */
   assignments: TaskAssignment[];
+  /** Клиент, к которому относится задача (встреча, звонок, выезд) */
+  clientId?: string | null;
+  client?: {
+    id: string;
+    fullName: string;
+    phone: string;
+    /** последний заказ клиента — из него берём адрес объекта */
+    orders?: { address?: string | null }[];
+  } | null;
   createdAt: string;
 }
 

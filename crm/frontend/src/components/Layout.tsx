@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { prefetch } from '../api/hooks';
 import {
   LayoutDashboard,
@@ -27,6 +27,7 @@ import {
   ListChecks,
   FileSignature,
   BellRing,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
@@ -101,9 +102,78 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/**
+ * Кабинет руководителя: семь разделов по важности и пункт «Ещё».
+ *
+ * У руководителя семнадцать разделов, и плоским списком из пяти групп было
+ * не понять, что проверять каждый день. Наверх вынесено то, на что владелец
+ * смотрит регулярно; остальное убрано за «Ещё» и разложено по смыслу.
+ * У менеджеров навигация прежняя — их работа устроена иначе.
+ */
+const DIRECTOR_NAV: NavItem[] = [
+  { to: '/', label: 'Дашборд', icon: LayoutDashboard },
+  { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'] },
+  { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
+  { to: '/funnel', label: 'Воронка', icon: Filter },
+  { to: '/clients', label: 'Клиенты', icon: Users },
+  { to: '/reports', label: 'Ведомости', icon: FileText },
+];
+
+/** Что лежит за пунктом «Ещё» — две группы с неклика­бельными заголовками */
+const MORE_GROUPS: NavGroup[] = [
+  {
+    title: 'Операции',
+    items: [
+      { to: '/tasks', label: 'Задачи', icon: CheckSquare },
+      { to: '/calendar', label: 'Календарь', icon: CalendarRange },
+      { to: '/team', label: 'Команда', icon: UsersRound },
+      { to: '/shifts', label: 'Смены и выезды', icon: Wallet },
+      { to: '/checklists', label: 'Чек-листы', icon: ListChecks },
+      { to: '/offers', label: 'Коммерческие предложения', icon: FileSignature },
+      { to: '/reminders', label: 'Напоминания', icon: BellRing },
+    ],
+  },
+  {
+    title: 'Настройки',
+    items: [
+      { to: '/tariffs', label: 'Услуги и цены', icon: Tags },
+      { to: '/users', label: 'Сотрудники', icon: UserCog, roles: ['DIRECTOR'] },
+      { to: '/history', label: 'История изменений', icon: History },
+      { to: '/security', label: 'Безопасность', icon: ShieldCheck, roles: ['DIRECTOR'] },
+      { to: '/trash', label: 'Корзина', icon: Trash2, trash: true },
+    ],
+  },
+];
+
+/** Пункт меню: одна разметка на оба кабинета */
+function NavItemLink({
+  item,
+  onClick,
+}: {
+  item: NavItem;
+  onClick: () => void;
+}) {
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/'}
+      onClick={onClick}
+      className={({ isActive }) =>
+        `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+          isActive ? 'bg-white text-navy-900' : 'text-white hover:bg-white/15'
+        }`
+      }
+    >
+      <item.icon className="h-[18px] w-[18px] shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </NavLink>
+  );
+}
+
 export function Layout() {
   const { user, logout, logoutEverywhere } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -127,6 +197,27 @@ export function Layout() {
     ...g,
     items: g.items.filter(visible),
   })).filter((g) => g.items.length > 0);
+
+  /*
+   * Кабинет руководителя: семь пунктов и «Ещё». Список за «Ещё»
+   * раскрывается прямо в сайдбаре — это привычнее выпадающей панели и
+   * одинаково работает на телефоне.
+   */
+  const isDirector = user?.role === 'DIRECTOR';
+  const topNav = DIRECTOR_NAV.filter(visible);
+  const moreGroups = MORE_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter(visible),
+  })).filter((g) => g.items.length > 0);
+  const morePaths = moreGroups.flatMap((g) => g.items.map((i) => i.to));
+  // открыт раздел изнутри «Ещё» — пункт подсвечен, список раскрыт
+  const insideMore = morePaths.some(
+    (path) => location.pathname === path || location.pathname.startsWith(path + '/'),
+  );
+  const [moreOpen, setMoreOpen] = useState(insideMore);
+  useEffect(() => {
+    if (insideMore) setMoreOpen(true);
+  }, [insideMore]);
 
   // Прогрев кэша разделов после входа — переходы будут мгновенными.
   // На мобильном критично: НЕ греем на медленной/эконом-сети и разносим
@@ -210,33 +301,74 @@ export function Layout() {
         </div>
 
         <nav className="mt-2 flex-1 overflow-y-auto px-3 py-2">
-          {groups.map((group) => (
-            <div key={group.title} className="mb-3 last:mb-0">
-              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
-                {group.title}
-              </div>
+          {isDirector ? (
+            <>
               <div className="space-y-1">
-                {group.items.map((item) => (
-                  <NavLink
+                {topNav.map((item) => (
+                  <NavItemLink
                     key={item.to}
-                    to={item.to}
-                    end={item.to === '/'}
+                    item={item}
                     onClick={() => setMobileOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-white text-navy-900'
-                          : 'text-white hover:bg-white/15'
-                      }`
-                    }
-                  >
-                    <item.icon className="h-[18px] w-[18px] shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </NavLink>
+                  />
                 ))}
+
+                {/* «Ещё» — вход в разделы, нужные точечно, а не каждый день */}
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((o) => !o)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    insideMore
+                      ? 'bg-white text-navy-900'
+                      : 'text-white hover:bg-white/15'
+                  }`}
+                >
+                  <MoreHorizontal className="h-[18px] w-[18px] shrink-0" />
+                  <span className="truncate">Ещё</span>
+                  <ChevronDown
+                    className={`ml-auto h-4 w-4 shrink-0 transition-transform ${
+                      moreOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
               </div>
-            </div>
-          ))}
+
+              {moreOpen &&
+                moreGroups.map((group) => (
+                  <div key={group.title} className="mt-3">
+                    {/* заголовок группы — только разделитель, не ссылка */}
+                    <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                      {group.title}
+                    </div>
+                    <div className="space-y-1">
+                      {group.items.map((item) => (
+                        <NavItemLink
+                          key={item.to}
+                          item={item}
+                          onClick={() => setMobileOpen(false)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </>
+          ) : (
+            groups.map((group) => (
+              <div key={group.title} className="mb-3 last:mb-0">
+                <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                  {group.title}
+                </div>
+                <div className="space-y-1">
+                  {group.items.map((item) => (
+                    <NavItemLink
+                      key={item.to}
+                      item={item}
+                      onClick={() => setMobileOpen(false)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </nav>
 
         <div className="shrink-0 p-3">

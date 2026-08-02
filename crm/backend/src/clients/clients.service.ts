@@ -98,6 +98,20 @@ export class ClientsService {
             cleaners: { select: { id: true, fullName: true } },
           },
         },
+        // встречи и звонки, назначенные по этому клиенту
+        tasks: {
+          where: NOT_DELETED,
+          orderBy: { deadline: 'asc' },
+          take: 50,
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            deadline: true,
+            assignee: { select: { id: true, fullName: true } },
+          },
+        },
       },
     });
     if (!client) throw new NotFoundException('Клиент не найден');

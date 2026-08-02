@@ -32,6 +32,7 @@ import {
   UserPicker,
   Tabs,
   Period,
+  FilterReset,
   PeriodFilter,
 } from '../components/common';
 import {
@@ -314,6 +315,13 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
           placeholder="Поиск: адрес, бригада, ФИО"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+        />
+        <FilterReset
+          show={!!status || !!search}
+          onReset={() => {
+            setStatus('');
+            setSearch('');
+          }}
         />
       </div>
 

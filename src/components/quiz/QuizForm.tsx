@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalculatorStep } from './CalculatorStep';
 import { SpecificsStep } from './SpecificsStep';
@@ -27,6 +27,8 @@ function todayISO(): string {
 }
 
 export function QuizForm() {
+  // куда прокрутить после отправки — к самой форме, а не к подвалу
+  const formRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(0); // 0,1,2
   const [done, setDone] = useState(false);
   // null — ответа от сервера ещё нет; false — заявка не дошла
@@ -129,21 +131,34 @@ export function QuizForm() {
       (ok) => setDelivered(ok),
     );
     setDone(true);
+    /*
+     * Экран благодарности показываем сверху.
+     *
+     * Форма занимала весь экран, человек прокручивал её до кнопки внизу —
+     * и после отправки на месте формы оказывался короткий экран «Заявка
+     * отправлена», а в поле зрения оставался подвал сайта. Со стороны это
+     * выглядело так, будто ничего не произошло.
+     */
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   if (done) {
     return (
-      <SuccessScreen
-        total={breakdown.total}
-        name={contact.name}
-        phone={contact.phone}
-        delivered={delivered}
-      />
+      <div ref={formRef}>
+        <SuccessScreen
+          total={breakdown.total}
+          name={contact.name}
+          phone={contact.phone}
+          delivered={delivered}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+    <div ref={formRef} className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
       {/*
         Левая часть — шаги формы (светлая карточка).
 

@@ -445,6 +445,7 @@ model Client {
   orders        Order[]
   proposals     Proposal[] // коммерческие предложения (ТЗ 9)
   reminders     Reminder[] // напоминания перезвонить (ТЗ 10.1)
+  tasks         Task[] // встречи и звонки, назначенные по этому клиенту
 
   // ── Повторный клиент (ТЗ 9.4) ──
   /// true со второго ОПЛАЧЕННОГО заказа
@@ -564,6 +565,11 @@ model Task {
   assigneeId  String
   creator     User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   creatorId   String
+  /// Клиент, к которому относится задача: встречу и звонок назначают по
+  /// конкретному человеку, и перед выездом нужны его телефон и адрес.
+  /// Необязателен — внутренние задачи клиента не имеют.
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId    String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -576,6 +582,7 @@ model Task {
 
   @@index([assigneeId])
   @@index([deletedAt])
+  @@index([clientId])
 }
 
 /// Исполнитель задачи со своим статусом (в одной задаче их может быть несколько)

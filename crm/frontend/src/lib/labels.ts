@@ -191,13 +191,18 @@ export const TASK_STATUS_COLOR: Record<TaskStatus, string> = {
   DONE: 'bg-green-100 text-green-700',
 };
 
-/** Типы задач календаря (порядок = порядок кнопок фильтра и легенды) */
+/**
+ * Типы задач календаря (порядок = порядок кнопок фильтра и легенды).
+ *
+ * «Личное» из списка убрано: задачи в CRM ставят друг другу по работе, а
+ * личные дела вели в другом месте. Старые задачи этого типа переведены во
+ * «Встречу» миграцией, поэтому в системе его больше нет.
+ */
 export const TASK_TYPE_ORDER: TaskType[] = [
   'CALL',
   'INSPECTION',
   'VISIT',
   'MEETING',
-  'PERSONAL',
 ];
 
 export const TASK_TYPE_LABEL: Record<TaskType, string> = {

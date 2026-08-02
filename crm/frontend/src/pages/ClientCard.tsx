@@ -33,6 +33,10 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { ReminderModal } from '../components/ReminderModal';
 import { CleanerPicker, Tabs } from '../components/common';
 import {
+  TASK_TYPE_DOT,
+  TASK_TYPE_LABEL,
+  TASK_STATUS_COLOR,
+  TASK_STATUS_LABEL,
   CALL_TYPE_COLOR,
   CALL_TYPE_LABEL,
   CALL_TYPE_ORDER,
@@ -420,6 +424,43 @@ export function ClientCard() {
               <Row label="Всего заказов" value={String(data.orders?.length ?? 0)} />
             </dl>
           </div>
+
+          {/*
+            Встречи и звонки по клиенту. Раньше задача и клиент жили
+            порознь: назначенную встречу было видно только в календаре, и в
+            карточке человека о ней ничего не говорилось.
+          */}
+          {(data.tasks ?? []).length > 0 && (
+            <div className="card p-5">
+              <h3 className="mb-3 font-bold text-navy-900">Задачи по клиенту</h3>
+              <div className="space-y-2">
+                {(data.tasks ?? []).map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-start gap-2.5 rounded-xl border border-navy-100 p-2.5"
+                  >
+                    <span
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TASK_TYPE_DOT[t.type]}`}
+                      title={TASK_TYPE_LABEL[t.type]}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-navy-900">
+                        {t.title}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-navy-600">
+                        {TASK_TYPE_LABEL[t.type]}
+                        {t.deadline ? ` · ${formatDate(t.deadline)}` : ''}
+                        {t.assignee ? ` · ${t.assignee.fullName}` : ''}
+                      </span>
+                    </span>
+                    <Badge className={TASK_STATUS_COLOR[t.status]}>
+                      {TASK_STATUS_LABEL[t.status]}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="card p-5">
             <h3 className="font-bold text-navy-900">Предпочтения клиента</h3>
@@ -1088,13 +1129,16 @@ function EditClientModal({
   return (
     <Modal open onClose={onClose} title="Данные клиента">
       <div className="space-y-3">
+        {/*
+          Подпись рисует сам компонент поля — своей быть не должно.
+          Раньше над «ФИО *» стояло ещё одно «ФИО», а над «Телефон *» —
+          «Телефон»: заголовок дублировался в каждой форме с контактами.
+        */}
         <div>
-          <label className="label">ФИО</label>
           <NameInput value={fullName} onChange={setFullName} autoFocus />
         </div>
 
         <div>
-          <label className="label">Телефон</label>
           <PhoneInput value={phone} onChange={setPhone} required />
           {extraPhones.map((p, i) => (
             <div key={i} className="mt-2 flex items-start gap-2">

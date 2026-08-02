@@ -15,6 +15,7 @@ import {
   TASK_TYPE_LABEL,
   formatDate,
 } from '../lib/labels';
+import { formatPhone } from '../lib/contact';
 import { tempId, nowISO, withRetry } from '../lib/util';
 import { userManagesTasks } from '../types';
 import type { Task, TaskPriority, TaskStatus, TaskType } from '../types';
@@ -117,6 +118,7 @@ export function Tasks() {
       priority: TaskPriority;
       deadline: string | null;
       assigneeIds: string[];
+      clientId: string | null;
     },
     people: { id: string; fullName: string }[],
   ) => {
@@ -203,6 +205,29 @@ export function Tasks() {
                     </div>
                     {t.description && (
                       <p className="mt-1 text-sm text-navy-600">{t.description}</p>
+                    )}
+                    {/*
+                      Клиент задачи с телефоном и адресом: перед выездом на
+                      встречу их не приходится искать в другом разделе.
+                    */}
+                    {t.client && (
+                      <div className="mt-1.5 inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-navy-100 bg-navy-50/60 px-2 py-1 text-xs">
+                        <span className="font-semibold text-navy-900">
+                          {t.client.fullName}
+                        </span>
+                        <a
+                          href={`tel:+992${t.client.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-brand-600 hover:underline"
+                        >
+                          {formatPhone(t.client.phone)}
+                        </a>
+                        {t.client.orders?.[0]?.address && (
+                          <span className="text-navy-600">
+                            · {t.client.orders[0].address}
+                          </span>
+                        )}
+                      </div>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-navy-600">
                       <span>{TASK_TYPE_LABEL[t.type]}</span>

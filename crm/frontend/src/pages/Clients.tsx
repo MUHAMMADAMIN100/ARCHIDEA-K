@@ -6,7 +6,7 @@ import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, Badge, Modal, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
-import { Column, DataTable, SearchInput } from '../components/common';
+import { Column, DataTable, FilterReset, SearchInput } from '../components/common';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   TAG_LABEL,
@@ -317,6 +317,17 @@ export function Clients() {
           <option value="repeat">Только повторные</option>
           <option value="none">Без заказов</option>
         </select>
+        <FilterReset
+          className="col-span-2 justify-center sm:col-auto"
+          show={!!search || !!tag || !!source || sort !== 'recent' || ordersFilter !== 'all'}
+          onReset={() => {
+            setSearch('');
+            setTag('');
+            setSource('');
+            setSort('recent');
+            setOrdersFilter('all');
+          }}
+        />
       </div>
 
       <DataTable

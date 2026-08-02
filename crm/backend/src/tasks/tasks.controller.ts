@@ -39,6 +39,8 @@ export class TasksController {
       assigneeIds?: string[];
       priority?: TaskPriority;
       deadline?: string;
+      /** клиент, к которому относится задача (встреча, звонок) */
+      clientId?: string | null;
     },
   ) {
     return this.service.create(user, dto);
@@ -78,6 +80,7 @@ export class TasksController {
       priority?: TaskPriority;
       deadline?: string | null;
       assigneeIds?: string[];
+      clientId?: string | null;
     },
   ) {
     return this.service.update(user, id, dto);

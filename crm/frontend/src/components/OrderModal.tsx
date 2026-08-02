@@ -719,8 +719,8 @@ export function OrderModal({
               <div className="space-y-3 rounded-xl bg-navy-50 p-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="label">Клиент</label>
                     <NameInput
+                      label="Клиент"
                       value={clientName}
                       onChange={(v) => {
                         markTouched('client');
@@ -729,7 +729,6 @@ export function OrderModal({
                     />
                   </div>
                   <div>
-                    <label className="label">Телефон</label>
                     <PhoneInput
                       value={clientPhone}
                       onChange={(v) => {

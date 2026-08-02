@@ -10,6 +10,7 @@ import {
   Column,
   DataTable,
   Period,
+  FilterReset,
   PeriodFilter,
   SearchInput,
   Tabs,
@@ -361,6 +362,7 @@ export function Trash() {
           <SearchInput value={search} onChange={setSearch} placeholder="Поиск по названию, адресу, телефону" />
         </div>
         <PeriodFilter value={period} onChange={setPeriod} presets={['today', 'week', 'month', 'quarter', 'year', 'all']} />
+        <FilterReset show={!!search} onReset={() => setSearch('')} />
       </div>
 
       <DataTable

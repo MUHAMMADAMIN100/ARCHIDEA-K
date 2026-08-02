@@ -707,6 +707,17 @@ export class OrdersService {
      * недоплата не должна проскакивать ни перетаскиванием, ни прямым
      * запросом к серверу.
      */
+    /*
+     * Возврат из «Оплачено» в «К оплате» запрещён: заказ, за который клиент
+     * полностью рассчитался, снова оказывался в долгах этапа. Тот же запрет
+     * стоит в воронке — здесь он на случай прямого запроса к серверу.
+     */
+    if (order.stage === FunnelStage.PAID && dto.stage === FunnelStage.DONE) {
+      throw new BadRequestException(
+        'Заказ уже оплачен — вернуть его в «К оплате» нельзя, иначе он снова попадёт в долги',
+      );
+    }
+
     if (dto.stage === FunnelStage.PAID) {
       const total = order.finalPrice ?? order.estimatedPrice ?? 0;
       const due = Math.max(0, total - (order.paidAmount ?? 0));

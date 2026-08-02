@@ -31,6 +31,23 @@ const seesAll = seesAllTasks;
 const taskInclude = {
   assignee: { select: { id: true, fullName: true } },
   creator: { select: { id: true, fullName: true } },
+  /*
+   * Клиент задачи — с телефоном и адресом последнего заказа: перед выездом
+   * на встречу их искать отдельно неудобно, а адрес живёт в заказе.
+   */
+  client: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      orders: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' as const },
+        take: 1,
+        select: { address: true },
+      },
+    },
+  },
   assignments: {
     select: {
       id: true,
@@ -178,6 +195,7 @@ export class TasksService {
       assigneeIds?: string[];
       priority?: TaskPriority;
       deadline?: string;
+      clientId?: string | null;
     },
   ) {
     const title = (dto.title ?? '').trim();
@@ -233,6 +251,7 @@ export class TasksService {
         creatorId: user.id,
         priority: dto.priority ?? TaskPriority.MEDIUM,
         deadline,
+        clientId: dto.clientId || null,
         assignments: { create: ids.map((userId) => ({ userId })) },
       },
       include: taskInclude,
@@ -358,6 +377,7 @@ export class TasksService {
       priority?: TaskPriority;
       deadline?: string | null;
       assigneeIds?: string[];
+      clientId?: string | null;
     },
   ) {
     const task = await this.prisma.task.findFirst({
@@ -401,6 +421,12 @@ export class TasksService {
     if (dto.priority !== undefined) data.priority = dto.priority;
     if (dto.deadline !== undefined) {
       data.deadline = dto.deadline ? this.parseDate(dto.deadline) : null;
+    }
+    // клиент задачи: пустое значение снимает связь
+    if (dto.clientId !== undefined) {
+      data.client = dto.clientId
+        ? { connect: { id: dto.clientId } }
+        : { disconnect: true };
     }
 
     // смена состава исполнителей: добавленным — уведомление, убранным — удаление

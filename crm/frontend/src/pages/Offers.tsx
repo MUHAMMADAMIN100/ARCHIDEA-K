@@ -20,6 +20,7 @@ import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components
 import {
   DataTable,
   type Column,
+  FilterReset,
   PeriodFilter,
   type Period,
   Tabs,
@@ -384,6 +385,14 @@ function ProposalsTab() {
         <div className="min-w-[200px] flex-1">
           <SearchInput value={search} onChange={setSearch} placeholder="Поиск по клиенту или телефону" />
         </div>
+        <FilterReset
+          show={!!search || !!status || !!managerId}
+          onReset={() => {
+            setSearch('');
+            setStatus('');
+            setManagerId(null);
+          }}
+        />
         <button onClick={() => setShowCreate(true)} className="btn-primary shrink-0">
           <Plus className="h-4 w-4" />
           Новое КП
