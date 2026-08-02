@@ -176,9 +176,15 @@ export function Clients() {
     {
       key: 'client',
       title: 'Клиент',
+      /*
+       * На телефоне строка карточки — «подпись слева, значение справа».
+       * Имя прижимаем вправо вместе с телефоном: раньше оно оставалось у
+       * левого края, рядом с подписью «КЛИЕНТ», а номер под ним уходил
+       * вправо — и две части одного значения расходились по разным краям.
+       */
       render: (c) => (
         <div>
-          <div className="flex items-center gap-1.5 font-semibold text-navy-900">
+          <div className="flex items-center justify-end gap-1.5 font-semibold text-navy-900 md:justify-start">
             {c.fullName}
             {c.isRepeat && (
               <Badge className="bg-teal-100 text-teal-700">
@@ -268,15 +274,30 @@ export function Clients() {
     <div>
       <PageHeader
         title="База клиентов"
+        /*
+         * На телефоне кнопки — значки рядом с заголовком: с подписями они
+         * занимали отдельную строку и отодвигали фильтры и сам список вниз.
+         * На компьютере подписи остаются.
+         */
         action={
           <div className="flex gap-2">
-            <button onClick={exportCsv} className="btn-ghost">
-              <Download className="h-4 w-4" />
-              Экспорт
+            <button
+              onClick={exportCsv}
+              className="btn-ghost h-10 w-10 p-0 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2"
+              aria-label="Экспорт в CSV"
+              title="Экспорт в CSV"
+            >
+              <Download className="h-5 w-5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Экспорт</span>
             </button>
-            <button onClick={() => setShowAdd(true)} className="btn-primary">
-              <Plus className="h-4 w-4" />
-              Добавить
+            <button
+              onClick={() => setShowAdd(true)}
+              className="btn-primary h-10 w-10 p-0 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2"
+              aria-label="Добавить клиента"
+              title="Добавить клиента"
+            >
+              <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Добавить</span>
             </button>
           </div>
         }

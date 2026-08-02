@@ -505,10 +505,20 @@ export function Funnel() {
     <div>
       <PageHeader
         title="Воронка продаж"
+        /*
+         * На телефоне кнопка — только плюс, рядом с заголовком: подпись
+         * «Добавить клиента» занимала целую строку над фильтрами и отодвигала
+         * доску вниз. На компьютере подпись остаётся — там места хватает.
+         */
         action={
-          <button onClick={() => setShowAddClient(true)} className="btn-primary">
-            <Plus className="h-4 w-4" />
-            Добавить клиента
+          <button
+            onClick={() => setShowAddClient(true)}
+            className="btn-primary h-10 w-10 p-0 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2"
+            aria-label="Добавить клиента"
+            title="Добавить клиента"
+          >
+            <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Добавить клиента</span>
           </button>
         }
       />
@@ -517,12 +527,15 @@ export function Funnel() {
         Панель отбора. Выбор менеджера — только тем, кто видит всю компанию;
         статус клиента и тег нужны каждому, кто работает с воронкой.
       */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
         {canFilter && (
           <>
-          <span className="text-xs font-medium text-navy-600">Менеджер:</span>
+          {/* подпись только на компьютере: в самом селекте уже написано «Все менеджеры» */}
+          <span className="hidden text-xs font-medium text-navy-600 sm:inline">
+            Менеджер:
+          </span>
           <select
-            className="input max-w-[240px]"
+            className="input w-full sm:max-w-[240px]"
             value={managerFilter}
             onChange={(e) => setManagerFilter(e.target.value)}
           >
@@ -539,9 +552,11 @@ export function Funnel() {
           </>
         )}
           {/* Отбор по клиенту: статус и свободный тег */}
-          <label className="ml-1 text-xs font-medium text-navy-600">Статус:</label>
+          <label className="hidden text-xs font-medium text-navy-600 sm:ml-1 sm:inline">
+            Статус:
+          </label>
           <select
-            className="input input-sm w-auto"
+            className="input w-full sm:w-auto"
             value={tagFilter}
             onChange={(e) => setTagFilter(e.target.value as ClientTag | 'ALL')}
           >
