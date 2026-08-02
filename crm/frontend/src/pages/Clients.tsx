@@ -24,9 +24,10 @@ import {
   formatPrice,
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
-import { tempId, nowISO } from '../lib/util';
+import { tempId, nowISO, isTempId } from '../lib/util';
 import { isValidPersonName, isValidPhone } from '../lib/contact';
 import { NameInput, PhoneInput } from '../components/ContactFields';
+import { LabelPicker } from '../components/LabelPicker';
 import { userSeesAll } from '../types';
 import type {
   BoardColumn,
@@ -331,7 +332,18 @@ export function Clients() {
         loading={loading}
         error={error}
         onRetry={reload}
-        onRowClick={(c) => navigate(`/clients/${c.id}`)}
+        /*
+         * Клиент, только что созданный, до ответа сервера живёт под
+         * временным номером. Переход по нему открывал карточку, которой на
+         * сервере ещё нет, и человек видел «Не удалось загрузить данные».
+         */
+        onRowClick={(c) => {
+          if (isTempId(c.id)) {
+            toast.success('Клиент ещё сохраняется — откройте через секунду');
+            return;
+          }
+          navigate(`/clients/${c.id}`);
+        }}
         perPage={15}
         emptyText="Клиенты не найдены — измените фильтры или добавьте нового клиента"
       />
@@ -348,7 +360,10 @@ export function Clients() {
       {ordersFor && (
         <ClientOrdersModal
           client={ordersFor}
-          onOpenCard={() => navigate(`/clients/${ordersFor.id}`)}
+          onOpenCard={() => {
+            if (isTempId(ordersFor.id)) return;
+            navigate(`/clients/${ordersFor.id}`);
+          }}
           onClose={() => setOrdersFor(null)}
         />
       )}
@@ -592,52 +607,10 @@ export function AddClientModal({
           />
         </div>
 
-        {/* Свободные теги (ТЗ 1.2): свой текст, сколько угодно */}
+        {/* Теги выбираются кнопками из общего списка, а не печатаются */}
         <div>
           <label className="label">Теги</label>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {labels.map((l) => (
-              <span
-                key={l}
-                className="inline-flex items-center gap-1 rounded-lg bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700"
-              >
-                {l}
-                <X
-                  className="h-3 w-3 cursor-pointer text-navy-600 hover:text-red-600"
-                  onClick={() =>
-                    setLabels((prev) => prev.filter((x) => x !== l))
-                  }
-                />
-              </span>
-            ))}
-            <input
-              className="input input-sm w-40"
-              value={labelInput}
-              maxLength={40}
-              list="client-label-hints"
-              onChange={(e) => setLabelInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const v = labelInput.trim();
-                  if (v && !labels.includes(v)) setLabels((p) => [...p, v]);
-                  setLabelInput('');
-                }
-              }}
-              onBlur={() => {
-                const v = labelInput.trim();
-                if (v && !labels.includes(v)) setLabels((p) => [...p, v]);
-                setLabelInput('');
-              }}
-              placeholder="тег и Enter"
-            />
-            {/* подсказка из уже использованных тегов */}
-            <datalist id="client-label-hints">
-              {knownLabels.map((l) => (
-                <option key={l} value={l} />
-              ))}
-            </datalist>
-          </div>
+          <LabelPicker value={labels} onChange={setLabels} />
         </div>
         {isDirector && (
           <div>
@@ -736,8 +709,13 @@ export function AddClientModal({
                   </div>
                 </div>
               ))}
+              {/*
+                Добавление услуги — крупная кнопка по центру: её видно, и
+                она не теряется среди подписей, как прежняя ссылка.
+              */}
               <button
                 type="button"
+                title="Добавить ещё одну услугу в эту заявку"
                 onClick={() =>
                   setMoreServices((prev) => [
                     ...prev,
@@ -749,9 +727,10 @@ export function AddClientModal({
                     },
                   ])
                 }
-                className="mt-1.5 text-sm font-medium text-brand-600 hover:underline"
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
               >
-                + ещё услуга
+                <span className="text-lg leading-none">+</span>
+                ещё услуга
               </button>
             </div>
             {hasLevels && (
@@ -830,9 +809,35 @@ export function AddClientModal({
                   </>
                 ) : (
                   <span>
-                    {units > 0 && unitPrice > 0
-                      ? `${units} × ${unitPrice} = ${computed} сомони`
-                      : 'Укажите объём и цену — сумма посчитается сама'}
+                    {units > 0 && unitPrice > 0 ? (
+                      /*
+                       * Раньше здесь стояло «20 × 25 = 1900», хотя 20 × 25
+                       * это 500, а 1 900 получалось вместе с доп. услугами.
+                       * Теперь расчёт расписан по строкам и сходится.
+                       */
+                      <span className="block">
+                        <span className="block">
+                          {isFurniture ? 'Мест' : 'Площадь'}: {units} ×{' '}
+                          {unitPrice} = {units * unitPrice} сомони
+                        </span>
+                        {moreRows
+                          .filter((r) => r.qtyN > 0)
+                          .map((r, i) => (
+                            <span key={i} className="block">
+                              {r.title}: {r.qtyN} × {r.pricePerUnit} ={' '}
+                              {r.total} сомони
+                            </span>
+                          ))}
+                        {moreSum > 0 && (
+                          <span className="block font-semibold text-navy-800">
+                            Итого: {units * unitPrice} + {moreSum} = {computed}{' '}
+                            сомони
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      'Укажите объём и цену — сумма посчитается сама'
+                    )}
                   </span>
                 )}
               </div>

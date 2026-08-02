@@ -30,7 +30,7 @@ import {
   orderTotal,
 } from '../lib/labels';
 import { userSeesAll } from '../types';
-import type { BoardColumn, FunnelStage, Order } from '../types';
+import type { BoardColumn, ClientTag, FunnelStage, Order } from '../types';
 
 // основной конвейер этапов (без «Отказа» — он отдельной кнопкой на мобильном)
 const PIPELINE: FunnelStage[] = STAGE_ORDER.filter((s) => s !== 'REJECTED');
@@ -44,6 +44,9 @@ function cardDate(iso: string): string {
 }
 
 const NO_MANAGER = '__none__';
+
+/** Статусы клиента для фильтра воронки */
+const CLIENT_TAGS: ClientTag[] = ['VIP', 'REGULAR', 'POTENTIAL', 'REFUSED'];
 
 /** Цвет левой рамки карточки по этапу воронки */
 const STAGE_BORDER: Record<FunnelStage, string> = {
@@ -223,6 +226,9 @@ export function Funnel() {
   // фильтр по менеджеру — только для тех, кто видит всю компанию
   const canFilter = userSeesAll(user);
   const [managerFilter, setManagerFilter] = useState<string>('ALL');
+  // отбор карточек по клиенту: статус (VIP и т.д.) и свободный тег
+  const [tagFilter, setTagFilter] = useState<ClientTag | 'ALL'>('ALL');
+  const [labelFilter, setLabelFilter] = useState<string>('ALL');
   // на тач-устройствах (телефон/планшет) перетаскивание неудобно —
   // отключаем drag и показываем стрелки для смены этапа
   const isTouch = useMemo(
@@ -367,27 +373,46 @@ export function Funnel() {
   })();
 
   // доска с учётом фильтра по менеджеру
-  const filtered =
-    !canFilter || managerFilter === 'ALL'
-      ? data
-      : data.map((col) => ({
-          ...col,
-          orders: col.orders.filter((o) =>
-            managerFilter === NO_MANAGER
-              ? !o.manager
-              : o.manager?.id === managerFilter,
-          ),
-        }));
+  // все теги, встречающиеся на доске, — для выпадающего списка фильтра
+  const labelOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          data.flatMap((c) => c.orders.flatMap((o) => o.client?.labels ?? [])),
+        ),
+      ].sort((a, b) => a.localeCompare(b, 'ru')),
+    [data],
+  );
+
+  const filtered = data.map((col) => ({
+    ...col,
+    orders: col.orders.filter((o) => {
+      if (canFilter && managerFilter !== 'ALL') {
+        const ok =
+          managerFilter === NO_MANAGER
+            ? !o.manager
+            : o.manager?.id === managerFilter;
+        if (!ok) return false;
+      }
+      if (tagFilter !== 'ALL' && !(o.client?.tags ?? []).includes(tagFilter)) {
+        return false;
+      }
+      if (
+        labelFilter !== 'ALL' &&
+        !(o.client?.labels ?? []).includes(labelFilter)
+      ) {
+        return false;
+      }
+      return true;
+    }),
+  }));
 
   /*
-   * «К оплате» — колонка должников, и она идёт первой: это деньги, которые
-   * компания уже заработала, но ещё не получила. Порядок остальных этапов
-   * не меняется.
+   * Колонки идут так, как движется сделка: «Новая заявка» первой, дальше
+   * по ходу работы. Должников это не прячет — у колонки «К оплате» красная
+   * рамка, строка «Из них долг» и красные карточки с недоплатой.
    */
-  const board = [
-    ...filtered.filter((c) => c.stage === 'DONE'),
-    ...filtered.filter((c) => c.stage !== 'DONE'),
-  ];
+  const board = filtered;
 
   return (
     <div>
@@ -406,8 +431,13 @@ export function Funnel() {
         }
       />
 
-      {canFilter && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+      {/*
+        Панель отбора. Выбор менеджера — только тем, кто видит всю компанию;
+        статус клиента и тег нужны каждому, кто работает с воронкой.
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {canFilter && (
+          <>
           <span className="text-xs font-medium text-navy-600">Менеджер:</span>
           <select
             className="input max-w-[240px]"
@@ -424,9 +454,50 @@ export function Funnel() {
               <option value={NO_MANAGER}>Без менеджера</option>
             )}
           </select>
-          {managerFilter !== 'ALL' && (
+          </>
+        )}
+          {/* Отбор по клиенту: статус и свободный тег */}
+          <label className="ml-1 text-xs font-medium text-navy-600">Статус:</label>
+          <select
+            className="input input-sm w-auto"
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value as ClientTag | 'ALL')}
+          >
+            <option value="ALL">Все статусы</option>
+            {CLIENT_TAGS.map((t) => (
+              <option key={t} value={t}>
+                {TAG_LABEL[t]}
+              </option>
+            ))}
+          </select>
+
+          {labelOptions.length > 0 && (
+            <>
+              <label className="ml-1 text-xs font-medium text-navy-600">Тег:</label>
+              <select
+                className="input input-sm w-auto"
+                value={labelFilter}
+                onChange={(e) => setLabelFilter(e.target.value)}
+              >
+                <option value="ALL">Все теги</option>
+                {labelOptions.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          {(managerFilter !== 'ALL' ||
+            tagFilter !== 'ALL' ||
+            labelFilter !== 'ALL') && (
             <button
-              onClick={() => setManagerFilter('ALL')}
+              onClick={() => {
+                setManagerFilter('ALL');
+                setTagFilter('ALL');
+                setLabelFilter('ALL');
+              }}
               className="text-xs font-medium text-navy-600 underline-offset-2 hover:text-navy-600 hover:underline"
             >
               Сбросить
@@ -455,8 +526,7 @@ export function Funnel() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-        </div>
-      )}
+      </div>
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
         {/*

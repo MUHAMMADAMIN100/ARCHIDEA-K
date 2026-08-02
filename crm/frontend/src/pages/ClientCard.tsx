@@ -9,6 +9,7 @@ import { Spinner, PageHeader, Badge, Modal, ErrorState } from '../components/ui'
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { OrderModal } from '../components/OrderModal';
+import { LabelPicker } from '../components/LabelPicker';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { ReminderModal } from '../components/ReminderModal';
 import { CleanerPicker, Tabs } from '../components/common';
@@ -350,54 +351,11 @@ export function ClientCard() {
               ))}
             </div>
 
-            {/* Свободные теги (ТЗ 1.2): свой текст, сколько угодно */}
+            {/* Теги выбираются кнопками из общего списка, а не печатаются */}
             <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-600">
               Теги
             </h4>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {curLabels.map((l) => (
-                <span
-                  key={l}
-                  className="inline-flex items-center gap-1 rounded-lg bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700"
-                >
-                  {l}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLabels(curLabels.filter((x) => x !== l))
-                    }
-                    className="text-navy-600 hover:text-red-600"
-                    aria-label={`Убрать тег ${l}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <input
-                className="input input-xs w-36"
-                value={labelInput}
-                maxLength={40}
-                onChange={(e) => setLabelInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const v = labelInput.trim();
-                    if (v && !curLabels.includes(v)) {
-                      setLabels([...curLabels, v]);
-                    }
-                    setLabelInput('');
-                  }
-                }}
-                onBlur={() => {
-                  const v = labelInput.trim();
-                  if (v && !curLabels.includes(v)) {
-                    setLabels([...curLabels, v]);
-                  }
-                  setLabelInput('');
-                }}
-                placeholder="тег и Enter"
-              />
-            </div>
+            <LabelPicker value={curLabels} onChange={setLabels} />
             <p className="mt-2 text-xs text-navy-600">
               Сохраняются кнопкой «Сохранить…» ниже.
             </p>
@@ -739,8 +697,10 @@ function AddOrderModal({
               </div>
             </div>
           ))}
+          {/* Крупная кнопка по центру вместо теряющейся ссылки */}
           <button
             type="button"
+            title="Добавить ещё одну услугу в эту заявку"
             onClick={() =>
               setMoreServices((prev) => [
                 ...prev,
@@ -752,9 +712,10 @@ function AddOrderModal({
                 },
               ])
             }
-            className="mt-1.5 text-sm font-medium text-brand-600 hover:underline"
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
           >
-            + ещё услуга
+            <span className="text-lg leading-none">+</span>
+            ещё услуга
           </button>
         </div>
         {hasLevels && (
@@ -829,9 +790,29 @@ function AddOrderModal({
               </>
             ) : (
               <span>
-                {units > 0 && unitPrice > 0
-                  ? `${units} × ${unitPrice} = ${computed} сомони`
-                  : 'Укажите объём и цену — сумма посчитается сама'}
+                {units > 0 && unitPrice > 0 ? (
+                  /* расчёт по строкам: видно, из чего сложился итог */
+                  <span className="block">
+                    <span className="block">
+                      {isFurniture ? 'Мест' : 'Площадь'}: {units} × {unitPrice} ={' '}
+                      {units * unitPrice} сомони
+                    </span>
+                    {moreRows
+                      .filter((r) => r.qtyN > 0)
+                      .map((r, i) => (
+                        <span key={i} className="block">
+                          {r.title}: {r.qtyN} × {r.pricePerUnit} = {r.total} сомони
+                        </span>
+                      ))}
+                    {moreSum > 0 && (
+                      <span className="block font-semibold text-navy-800">
+                        Итого: {units * unitPrice} + {moreSum} = {computed} сомони
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  'Укажите объём и цену — сумма посчитается сама'
+                )}
               </span>
             )}
           </div>

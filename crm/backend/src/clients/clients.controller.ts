@@ -47,6 +47,16 @@ export class ClientsController {
     });
   }
 
+  /**
+   * Все теги, которые уже есть у клиентов. Формы показывают их кнопками,
+   * поэтому справочник тегов ведётся сам собой: завели новый — он сразу
+   * стал вариантом для всех.
+   */
+  @Get('labels')
+  labels(@CurrentUser() user: AuthUser) {
+    return this.service.labels(user);
+  }
+
   @Get('export')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   async export(@CurrentUser() user: AuthUser, @Res() res: Response) {

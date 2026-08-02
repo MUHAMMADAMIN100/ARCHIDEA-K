@@ -6,6 +6,15 @@ export function tempId(): string {
   return `temp_${counter}`;
 }
 
+/**
+ * Запись ещё не сохранена на сервере: показана оптимистично и живёт под
+ * временным номером. Открывать её карточку нельзя — сервер такого номера
+ * не знает и ответит ошибкой.
+ */
+export function isTempId(id: string): boolean {
+  return id.startsWith('temp_');
+}
+
 /** Текущая дата в ISO (для оптимистичных элементов) */
 export function nowISO(): string {
   return new Date().toISOString();

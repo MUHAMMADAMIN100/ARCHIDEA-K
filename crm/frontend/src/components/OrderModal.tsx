@@ -7,6 +7,7 @@ import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
 import { CleanerPicker, Tabs, UserPicker } from './common';
+import { LabelPicker } from './LabelPicker';
 import { NameInput, PhoneInput } from './ContactFields';
 import { withRetry } from '../lib/util';
 import { isValidPersonName, normalizePhone } from '../lib/contact';
@@ -817,51 +818,12 @@ export function OrderModal({
                         </button>
                       ))}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      {clientLabels.map((l) => (
-                        <span
-                          key={l}
-                          className="inline-flex items-center gap-1 rounded-lg bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700"
-                        >
-                          {l}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              markTouched('client');
-                              setClientLabels((prev) =>
-                                prev.filter((x) => x !== l),
-                              );
-                            }}
-                            className="text-navy-600 hover:text-red-600"
-                            aria-label={`Убрать тег ${l}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        className="input input-xs w-36"
-                        value={labelInput}
-                        maxLength={40}
-                        placeholder="тег и Enter"
-                        onChange={(e) => setLabelInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter') return;
-                          e.preventDefault();
-                          const v = labelInput.trim();
-                          if (v && !clientLabels.includes(v)) {
-                            markTouched('client');
-                            setClientLabels((prev) => [...prev, v]);
-                          }
-                          setLabelInput('');
-                        }}
-                        onBlur={() => {
-                          const v = labelInput.trim();
-                          if (v && !clientLabels.includes(v)) {
-                            markTouched('client');
-                            setClientLabels((prev) => [...prev, v]);
-                          }
-                          setLabelInput('');
+                    <div className="mt-2">
+                      <LabelPicker
+                        value={clientLabels}
+                        onChange={(next) => {
+                          markTouched('client');
+                          setClientLabels(next);
                         }}
                       />
                     </div>
