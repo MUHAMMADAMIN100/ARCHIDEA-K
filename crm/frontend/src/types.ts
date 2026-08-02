@@ -249,8 +249,6 @@ export interface Client {
   discount?: number;
   /** Запасные номера «на всякий случай» */
   extraPhones?: string[];
-  /** Свободные теги для сегментации — в дополнение к единственному статусу */
-  labels?: string[];
   /** «От кого» пришёл клиент — рекомендатель или партнёр */
   sourceDetail?: string | null;
   // ── Холодные звонки ──
@@ -331,8 +329,8 @@ export interface Order {
     extraPhones?: string[];
     /** статус клиента — показывается в углу карточки воронки */
     tags?: ClientTag[];
-    /** свободные теги клиента — там же, рядом со статусом */
-    labels?: string[];
+    /** постоянная скидка клиента — подставляется в заказ, если своя не задана */
+    discount?: number;
     preferences?: string | null;
     isRepeat?: boolean;
     paidOrdersCount?: number;

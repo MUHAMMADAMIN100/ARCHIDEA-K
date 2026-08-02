@@ -77,7 +77,6 @@ export function UsersPage() {
     <div>
       <PageHeader
         title="Сотрудники"
-        subtitle="Руководители и менеджеры системы"
         action={
           <button onClick={() => setShowAdd(true)} className="btn-primary">
             <Plus className="h-4 w-4" />

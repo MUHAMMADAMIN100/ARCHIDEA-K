@@ -104,7 +104,6 @@ export function Offers() {
     <div>
       <PageHeader
         title="Коммерческие предложения"
-        subtitle="Отправка КП клиентам, статус и история отправки"
       />
 
       {canManageTemplates && (

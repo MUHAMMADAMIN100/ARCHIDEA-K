@@ -338,7 +338,6 @@ export function Trash() {
     <div>
       <PageHeader
         title="Корзина"
-        subtitle="Удалённые записи можно восстановить одним нажатием, пока они не очищены безвозвратно"
         action={
           canPurge && (
             <button

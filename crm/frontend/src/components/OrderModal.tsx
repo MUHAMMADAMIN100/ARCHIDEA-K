@@ -8,7 +8,6 @@ import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
 import { TimePicker } from './TimePicker';
 import { CleanerPicker, Tabs, UserPicker } from './common';
-import { LabelPicker } from './LabelPicker';
 import { NameInput, PhoneInput } from './ContactFields';
 import { withRetry } from '../lib/util';
 import { isValidPersonName, normalizePhone } from '../lib/contact';
@@ -145,6 +144,8 @@ export function OrderModal({
   // доп. услуги: ключ → количество; скидка в сомони
   const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
   const [discount, setDiscount] = useState('');
+  // скидка подставлена из карточки клиента, а не задана у самого заказа
+  const [discountFromClient, setDiscountFromClient] = useState(false);
   // сколько клиент уже заплатил — остаток считаем от итога
   const [paidAmount, setPaidAmount] = useState('');
   // данные заявки: раньше блок был только для чтения
@@ -161,10 +162,8 @@ export function OrderModal({
   const [editSourceDetail, setEditSourceDetail] = useState('');
   // запасные номера клиента (ТЗ 1.1)
   const [clientExtraPhones, setClientExtraPhones] = useState<string[]>([]);
-  // статус и свободные теги клиента — правятся прямо из карточки заявки
+  // статус клиента — правится прямо из карточки заявки
   const [clientTags, setClientTags] = useState<ClientTag[]>([]);
-  const [clientLabels, setClientLabels] = useState<string[]>([]);
-  const [labelInput, setLabelInput] = useState('');
   // дополнительные основные услуги (ТЗ 1.3): ключ, объём, цена за единицу
   const [addServices, setAddServices] = useState<
     { key: string; qty: string; pricePerUnit: string }[]
@@ -304,7 +303,21 @@ export function OrderModal({
     }
     if (!skip('preferences')) setPreferences(o.preferences ?? '');
     if (!skip('extras')) setSelectedExtras(o.extras ?? {});
-    if (!skip('discount')) setDiscount(o.discount ? String(o.discount) : '');
+    /*
+     * Скидка: своя у заказа, а если её нет — постоянная скидка клиента.
+     *
+     * Раньше постоянная скидка подставлялась только при создании заказа.
+     * Руководитель вписывал её в карточку клиента позже и не понимал,
+     * почему в уже открытой заявке «Скидка 0»: связи между двумя цифрами
+     * на экране не было видно.
+     */
+    if (!skip('discount')) {
+      const own = o.discount ?? 0;
+      const fromClient = o.client?.discount ?? 0;
+      const value = own > 0 ? own : fromClient;
+      setDiscount(value > 0 ? String(value) : '');
+      setDiscountFromClient(own === 0 && fromClient > 0);
+    }
     if (!skip('guests')) {
       setGuests(
         (o.guestCleaners ?? []).map((g) => ({
@@ -321,7 +334,6 @@ export function OrderModal({
       setClientPhone(o.client?.phone ?? '');
       setClientExtraPhones(o.client?.extraPhones ?? []);
       setClientTags(o.client?.tags ?? []);
-      setClientLabels(o.client?.labels ?? []);
     }
     if (!skip('request')) {
       setEditSource(o.source);
@@ -605,7 +617,6 @@ export function OrderModal({
             .map((p) => normalizePhone(p))
             .filter((p): p is string => !!p),
           tags: clientTags,
-          labels: clientLabels,
         });
       }
       if (cleanersChangedFlag) {
@@ -818,15 +829,6 @@ export function OrderModal({
                           {TAG_LABEL[t]}
                         </button>
                       ))}
-                    </div>
-                    <div className="mt-2">
-                      <LabelPicker
-                        value={clientLabels}
-                        onChange={(next) => {
-                          markTouched('client');
-                          setClientLabels(next);
-                        }}
-                      />
                     </div>
                   </div>
 
@@ -1318,10 +1320,16 @@ export function OrderModal({
                       value={discount}
                       onChange={(ev) => {
                         markTouched('discount');
+                        setDiscountFromClient(false);
                         setDiscount(ev.target.value);
                       }}
                       placeholder="0"
                     />
+                    {discountFromClient && (
+                      <p className="mt-1 text-xs text-navy-600">
+                        Постоянная скидка клиента — можно изменить
+                      </p>
+                    )}
 
                     {/*
                       Сколько клиент уже заплатил. Из итога вычитается и

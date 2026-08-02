@@ -86,9 +86,12 @@ export function Hero() {
               Рассчитать стоимость
               <IconArrowDown className="h-5 w-5" />
             </button>
-            <a href={COMPANY.phoneHref} className="btn-outline-light">
-              {COMPANY.phone}
-            </a>
+            {/* Оба рабочих номера — чтобы дозвонились с первого раза */}
+            {COMPANY.phones.map((p) => (
+              <a key={p.href} href={p.href} className="btn-outline-light">
+                {p.display}
+              </a>
+            ))}
           </motion.div>
 
           <motion.ul

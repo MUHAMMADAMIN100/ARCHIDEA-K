@@ -266,7 +266,6 @@ export function Tariffs() {
     <div>
       <PageHeader
         title="Управление тарифами"
-        subtitle="Эти цены автоматически отражаются в калькуляторе на сайте и в карточке заказа"
         action={
           <button className="btn-primary" onClick={() => setTariffModal({ item: null })}>
             <Plus className="h-4 w-4" />

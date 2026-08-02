@@ -1,23 +1,60 @@
-import { Controller, Delete, Get, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Post, UseGuards } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramBot } from './telegram.bot';
 
-/** Личная привязка Telegram сотрудника (chatId вносит директор в карточке пользователя) */
+/** Код привязки живёт сутки: за это время сотрудник успеет открыть Telegram */
+const LINK_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Личная привязка Telegram.
+ *
+ * Подключает себя сам сотрудник: chat_id больше ни у кого не спрашивают.
+ * Кнопка в профиле выдаёт ссылку с одноразовым кодом, «Старт» у бота
+ * завершает привязку (см. telegram.bot.ts).
+ */
 @UseGuards(JwtAuthGuard)
 @Controller('telegram')
 export class TelegramController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private bot: TelegramBot,
+  ) {}
+
+  /** Ссылка для подключения: одноразовый код + адрес бота */
+  @Post('link')
+  async link(@CurrentUser() user: AuthUser) {
+    const username = await this.bot.botUsername();
+    if (!username) {
+      return {
+        ok: false,
+        message:
+          'Бот не настроен: у сервера нет токена Telegram. Обратитесь к администратору.',
+      };
+    }
+    const code = randomBytes(9).toString('base64url');
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        telegramLinkCode: code,
+        telegramLinkExpires: new Date(Date.now() + LINK_TTL_MS),
+      },
+    });
+    return { ok: true, url: `https://t.me/${username}?start=${code}` };
+  }
 
   @Get('status')
   async status(@CurrentUser() user: AuthUser) {
     const me = await this.prisma.user.findUnique({
       where: { id: user.id },
-      select: { telegramChatId: true, telegramEnabled: true },
+      select: { telegramChatId: true, telegramEnabled: true, telegramName: true },
     });
     return {
       linked: Boolean(me?.telegramChatId),
       chatId: me?.telegramChatId ?? null,
+      name: me?.telegramName ?? null,
       enabled: me?.telegramEnabled ?? true,
     };
   }
@@ -27,7 +64,7 @@ export class TelegramController {
   async unlink(@CurrentUser() user: AuthUser) {
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { telegramChatId: null },
+      data: { telegramChatId: null, telegramName: null },
     });
     return { ok: true };
   }

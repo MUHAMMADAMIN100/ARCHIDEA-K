@@ -47,13 +47,6 @@ export function Reports() {
     <div>
       <PageHeader
         title="Отчёты"
-        subtitle={
-          isDirector
-            ? waiting > 0
-              ? `Платёжные ведомости по объектам · ${waiting} ожидает принятия`
-              : 'Платёжные ведомости по объектам'
-            : 'Платёжные ведомости по объектам — отправляются основателю'
-        }
         action={
           <button onClick={() => navigate('/reports/new')} className="btn-primary">
             <Plus className="h-4 w-4" />

@@ -27,7 +27,6 @@ import { formatPhone } from '../lib/contact';
 import { tempId, nowISO, isTempId } from '../lib/util';
 import { isValidPersonName, isValidPhone } from '../lib/contact';
 import { NameInput, PhoneInput } from '../components/ContactFields';
-import { LabelPicker } from '../components/LabelPicker';
 import { userSeesAll } from '../types';
 import type {
   BoardColumn,
@@ -106,7 +105,6 @@ export function Clients() {
       /** постоянная скидка клиента в сомони */
       discount?: number;
       extraPhones?: string[];
-      labels?: string[];
       sourceDetail?: string;
     },
     managerName: string | null,
@@ -119,7 +117,6 @@ export function Clients() {
       phone: payload.phone,
       source: payload.source,
       tags: [],
-      labels: payload.labels ?? [],
       lastContactAt: nowISO(),
       managerId: payload.managerId,
       manager: managerName
@@ -206,21 +203,14 @@ export function Clients() {
       hideOnMobile: true,
       render: (c) => (
         <div className="flex flex-wrap gap-1">
-          {c.tags.length === 0 && !(c.labels ?? []).length ? (
+          {c.tags.length === 0 ? (
             <span className="text-navy-600">—</span>
           ) : (
-            <>
-              {c.tags.map((t) => (
-                <Badge key={t} className={TAG_COLOR[t]}>
-                  {TAG_LABEL[t]}
-                </Badge>
-              ))}
-              {(c.labels ?? []).map((l) => (
-                <Badge key={l} className="bg-navy-100 text-navy-600">
-                  {l}
-                </Badge>
-              ))}
-            </>
+            c.tags.map((t) => (
+              <Badge key={t} className={TAG_COLOR[t]}>
+                {TAG_LABEL[t]}
+              </Badge>
+            ))
           )}
         </div>
       ),
@@ -278,7 +268,6 @@ export function Clients() {
     <div>
       <PageHeader
         title="База клиентов"
-        subtitle="Все обращения фиксируются здесь"
         action={
           <div className="flex gap-2">
             <button onClick={exportCsv} className="btn-ghost">
@@ -358,7 +347,6 @@ export function Clients() {
           onClose={() => setShowAdd(false)}
           onCreate={createClient}
           isDirector={userSeesAll(user)}
-          knownLabels={[...new Set((data ?? []).flatMap((c) => c.labels ?? []))]}
         />
       )}
 
@@ -380,10 +368,8 @@ export function AddClientModal({
   onClose,
   onCreate,
   isDirector,
-  knownLabels = [],
 }: {
   /** уже использованные теги — для подсказки при вводе */
-  knownLabels?: string[];
   onClose: () => void;
   onCreate: (
     payload: {
@@ -394,7 +380,6 @@ export function AddClientModal({
       /** постоянная скидка клиента в сомони */
       discount?: number;
       extraPhones?: string[];
-      labels?: string[];
       sourceDetail?: string;
     },
     managerName: string | null,
@@ -411,7 +396,6 @@ export function AddClientModal({
   */
   const [extraPhones, setExtraPhones] = useState<string[]>(['']);
   // свободные теги (ТЗ 1.2) — в дополнение к единственному статусу
-  const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
   const [source, setSource] = useState<LeadSource>('CALL');
   // «От кого» — рекомендатель или партнёр (ТЗ 1.4)
@@ -540,7 +524,6 @@ export function AddClientModal({
         managerId: managerId || undefined,
         discount: Math.max(0, Math.round(Number(discount) || 0)),
         extraPhones: extraPhones.filter((p) => isValidPhone(p)),
-        labels,
         sourceDetail: sourceDetail.trim() || undefined,
       },
       managerName,
@@ -624,11 +607,6 @@ export function AddClientModal({
           />
         </div>
 
-        {/* Теги выбираются кнопками из общего списка, а не печатаются */}
-        <div>
-          <label className="label">Теги</label>
-          <LabelPicker value={labels} onChange={setLabels} />
-        </div>
         {isDirector && (
           <div>
             <label className="label">Ответственный менеджер</label>

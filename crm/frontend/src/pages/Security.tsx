@@ -104,7 +104,6 @@ export function Security() {
     <div>
       <PageHeader
         title="Безопасность"
-        subtitle="Кто и когда входил в систему, попытки подбора пароля"
       />
 
       {/* Сводка */}

@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { TelegramService } from './telegram.service';
 import { TelegramWorker } from './telegram.worker';
 import { TelegramController } from './telegram.controller';
+import { TelegramBot } from './telegram.bot';
 
 /**
  * Уведомления в Telegram (ТЗ 10.2).
@@ -11,8 +12,8 @@ import { TelegramController } from './telegram.controller';
  */
 @Global()
 @Module({
-  providers: [TelegramService, TelegramWorker],
+  providers: [TelegramService, TelegramWorker, TelegramBot],
   controllers: [TelegramController],
-  exports: [TelegramService],
+  exports: [TelegramService, TelegramBot],
 })
 export class TelegramModule {}

@@ -16,6 +16,7 @@ import {
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
+import { TelegramLink } from '../components/TelegramLink';
 import {
   Spinner,
   PageHeader,
@@ -159,6 +160,9 @@ export function UserDetail() {
       </button>
 
       <PageHeader title="Профиль сотрудника" />
+
+      {/* Подключение бота — только в своём профиле: «Старт» за другого не нажать */}
+      {viewer?.id === data.id && <TelegramLink />}
 
       <div className="card mb-5 p-6">
         <div className="flex flex-wrap items-center gap-4">

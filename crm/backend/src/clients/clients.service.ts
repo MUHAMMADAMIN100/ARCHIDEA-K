@@ -121,7 +121,6 @@ export class ClientsService {
     notes?: string;
     discount?: number;
     extraPhones?: string[];
-    labels?: string[];
     sourceDetail?: string;
   }) {
     const phone = canonicalPhone(data.phone);
@@ -213,7 +212,6 @@ export class ClientsService {
         discount: data.discount ?? 0,
         // запасные номера храним в едином формате — 9 цифр
         extraPhones: incomingExtra,
-        labels: (data.labels ?? []).map((l) => l.trim()).filter(Boolean),
         sourceDetail: data.sourceDetail?.trim() || null,
       },
     });
@@ -376,23 +374,6 @@ export class ClientsService {
   }
 
   /** Экспорт в CSV */
-  /**
-   * Список всех тегов у клиентов, по алфавиту и без повторов.
-   * Область данных та же, что у списка клиентов: менеджер видит теги
-   * своих клиентов, руководитель — всех.
-   */
-  async labels(user: AuthUser): Promise<string[]> {
-    const rows = await this.prisma.client.findMany({
-      where: seesAll(user)
-        ? { ...NOT_DELETED }
-        : { ...NOT_DELETED, managerId: user.id },
-      select: { labels: true },
-    });
-    const all = new Set<string>();
-    for (const r of rows) for (const l of r.labels) all.add(l);
-    return [...all].sort((a, b) => a.localeCompare(b, 'ru'));
-  }
-
   /**
    * Варианты степени заинтересованности.
    *

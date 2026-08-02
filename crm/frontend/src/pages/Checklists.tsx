@@ -208,7 +208,6 @@ export function Checklists() {
     <div>
       <PageHeader
         title="Чек-листы"
-        subtitle="Шаблоны контроля качества уборки. Правка шаблона не меняет уже применённые к заказам чек-листы — изменения касаются только новых"
         action={
           canManage && (
             <button onClick={() => setModalTemplate('new')} className="btn-primary">

@@ -600,7 +600,6 @@ export function Calendar() {
     <div>
       <PageHeader
         title="Календарь"
-        subtitle="Заказы по датам уборки и задачи сотрудников — по этапам воронки"
         action={
           <button
             onClick={() => setModal({ mode: 'create', date: todayKey })}

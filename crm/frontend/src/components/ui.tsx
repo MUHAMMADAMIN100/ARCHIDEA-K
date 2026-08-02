@@ -58,13 +58,21 @@ export function PageHeader({
   subtitle?: string;
   action?: ReactNode;
 }) {
+  /*
+   * Заголовок и действия — в одной строке.
+   *
+   * Подзаголовок остался только там, где он объясняет цифры (дашборд,
+   * аналитика, история изменений). На остальных экранах он отодвигал
+   * кнопки «Добавить» и «Экспорт» на строку ниже, а сам ничего не добавлял
+   * к названию раздела.
+   */
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="min-w-0">
         <h1 className="text-2xl font-bold text-navy-900">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-navy-600">{subtitle}</p>}
       </div>
-      {action}
+      {action && <div className="flex flex-wrap items-center gap-2">{action}</div>}
     </div>
   );
 }

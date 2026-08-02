@@ -90,7 +90,6 @@ export function Shifts() {
     <div>
       <PageHeader
         title="Смены и выезды"
-        subtitle="Куда, когда и с кем выезжала команда — и что за это начислено"
       />
 
       <div className="mb-4">

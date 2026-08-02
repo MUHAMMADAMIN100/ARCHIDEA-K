@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { api } from '../api/client';
@@ -11,6 +12,12 @@ export function NotificationsBell() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   const load = async () => {
     try {
@@ -50,11 +57,49 @@ export function NotificationsBell() {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (popRef.current?.contains(t)) return; // клик по самой панели
+      if (ref.current && !ref.current.contains(t)) setOpen(false);
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  /*
+   * Панель рисуется через портал в body, а положение считается вручную.
+   *
+   * Раньше это был обычный выпадающий блок внутри шапки. Шапка размыта
+   * (backdrop-blur), а значит образует собственный слой: z-index панели
+   * считался ВНУТРИ неё и не мог перебить закреплённую колонку воронки —
+   * уведомления уходили под карточки должников. В портале перекрыть панель
+   * нечем: она вне всех слоёв страницы.
+   */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const bell = ref.current?.getBoundingClientRect();
+      if (!bell) return;
+      const edge = 12;
+      const gap = 8;
+      const vw = window.innerWidth;
+      const wide = vw >= 640;
+      const width = wide ? 320 : vw - edge * 2;
+      // на широком экране прижимаем правый край панели к правому краю кнопки
+      const left = wide
+        ? Math.max(edge, Math.min(bell.right - width, vw - width - edge))
+        : edge;
+      setPos({ top: bell.bottom + gap, left, width });
+    };
+    place();
+    const raf = requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
 
   const openAndRead = () => {
     const willOpen = !open;
@@ -81,19 +126,19 @@ export function NotificationsBell() {
         )}
       </button>
 
-      {/*
-       * Ширина 320 px с привязкой к правому краю вылезала за левую границу
-       * экрана телефона — заголовок и текст обрезались.
-       *
-       * Причина была в привязке: панель прижималась к правому краю самого
-       * колокольчика, а справа от него ещё аватар с меню. На узком экране
-       * её левый край уходил за границу на 74 пикселя, и первые буквы
-       * срезались. На телефоне панель больше не привязана к кнопке — она
-       * растянута между краями экрана с отступом; с sm: и выше остаётся
-       * прежнее выпадающее меню под колокольчиком.
-       */}
-      {open && (
-        <div className="fixed left-3 right-3 top-[4.5rem] z-50 max-h-[70vh] overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white p-2 shadow-card sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[20rem]">
+      {open &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={{
+              top: pos?.top ?? 0,
+              left: pos?.left ?? 0,
+              width: pos?.width,
+              // до первого замера не показываем — иначе кадр мигает в углу
+              visibility: pos ? 'visible' : 'hidden',
+            }}
+            className="fixed z-[70] max-h-[70vh] overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white p-2 shadow-card"
+          >
           <div className="px-3 py-2 text-sm font-bold text-navy-900">
             Уведомления
           </div>
@@ -128,8 +173,9 @@ export function NotificationsBell() {
               </button>
             );
           })}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

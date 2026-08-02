@@ -188,7 +188,6 @@ export function Team() {
     <div>
       <PageHeader
         title="Команда"
-        subtitle="Сотрудники компании, бригады клинеров и работа на сегодня"
         action={
           <button onClick={() => setAddToBrigade('open')} className="btn-primary">
             <Plus className="h-4 w-4" />

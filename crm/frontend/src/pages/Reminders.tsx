@@ -216,11 +216,6 @@ export function Reminders() {
     <div>
       <PageHeader
         title="Напоминания"
-        subtitle={
-          seesAll
-            ? 'Кому и когда перезвонить — по всем сотрудникам'
-            : 'Ваши напоминания перезвонить клиентам'
-        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

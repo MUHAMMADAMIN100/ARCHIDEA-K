@@ -257,6 +257,16 @@ export function PeriodFilter({
   /** Стрелки «предыдущий/следующий месяц» — для смен и выплат */
   showMonthArrows?: boolean;
 }) {
+  /*
+   * Какой пресет сейчас выбран. Сравниваем границы: селект должен показывать
+   * «Месяц», а не «Выберите период», иначе непонятно, за что цифры на экране.
+   */
+  const activePreset =
+    presets.find((pr) => {
+      const r = rangeOf(pr);
+      return r.from === value.from && r.to === value.to;
+    }) ?? '';
+
   const stepMonth = (dir: number) => {
     const base = value.from || todayISO();
     onChange(monthRange(shiftMonth(base, dir)));
@@ -284,45 +294,37 @@ export function PeriodFilter({
       )}
 
       {/*
-        Период. На телефоне — один селект во всю ширину: восемь кнопок
-        занимали там три ряда и мешали добраться до содержимого. С sm: и
-        выше остаётся привычный ряд кнопок — на широком экране так быстрее,
-        всё видно сразу и без лишнего клика.
+        Период — один селект.
+
+        Раньше на компьютере стоял ряд из восьми кнопок, а поля дат шли
+        следом в том же переносимом ряду. Стоило выбрать дату, подпись
+        «с даты» превращалась в «01.08.2026», ширина менялась, ряд
+        перестраивался — и фильтры прыгали по строке. Селект и фиксированная
+        ширина полей держат их на одном месте всегда.
       */}
       <select
-        className="input w-full sm:hidden"
-        value=""
-        onChange={(e) => e.target.value && onChange(rangeOf(e.target.value as PeriodPreset))}
+        className="input input-sm w-full shrink-0 sm:w-[11.5rem]"
+        value={activePreset}
+        onChange={(e) =>
+          e.target.value && onChange(rangeOf(e.target.value as PeriodPreset))
+        }
         aria-label="Период"
       >
-        <option value="">Выберите период</option>
-        {presets.map((p) => (
-          <option key={p} value={p}>
-            {PERIOD_LABEL[p]}
+        {!activePreset && <option value="">Свой период</option>}
+        {presets.map((pr) => (
+          <option key={pr} value={pr}>
+            {PERIOD_LABEL[pr]}
           </option>
         ))}
       </select>
 
-      <div className="hidden flex-wrap gap-1 sm:flex">
-        {presets.map((p) => (
-          <button
-            key={p}
-            onClick={() => onChange(rangeOf(p))}
-            className="rounded-lg border border-navy-100 px-2.5 py-1 text-xs text-navy-600 transition hover:border-brand-300 hover:text-brand-700"
-          >
-            {PERIOD_LABEL[p]}
-          </button>
-        ))}
-      </div>
-
       {/*
         Свой календарь вместо родных полей браузера. Родные рисовались в локали
         системы («mm/dd/yyyy»), не поддавались сжатию и на экране 320–425 px
-        вылезали за границу карточки. min-w-0 обязателен: без него flex-элемент
-        не даёт себя сузить и снова распирает ряд.
+        вылезали за границу карточки.
       */}
-      <div className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
-        <div className="min-w-0 flex-1">
+      <div className="flex w-full min-w-0 shrink-0 items-center gap-1.5 sm:w-auto">
+        <div className="min-w-0 flex-1 sm:w-[7.75rem] sm:flex-none">
           <DatePicker
             compact
             clearable
@@ -333,7 +335,7 @@ export function PeriodFilter({
           />
         </div>
         <span className="shrink-0 text-xs text-navy-600">—</span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 sm:w-[7.75rem] sm:flex-none">
           <DatePicker
             compact
             clearable

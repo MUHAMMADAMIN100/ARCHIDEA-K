@@ -57,14 +57,6 @@ export class CreateClientDto {
   @IsTjPhone({ each: true })
   extraPhones?: string[];
 
-  /** Свободные теги для сегментации — в дополнение к единственному статусу */
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(20)
-  @IsString({ each: true })
-  @MaxLength(40, { each: true })
-  labels?: string[];
-
   /** «От кого» пришёл клиент — рекомендатель или партнёр */
   @IsOptional()
   @IsString()
@@ -113,9 +105,6 @@ export class UpdateClientDto {
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000_000) discount?: number;
   @IsOptional() @IsArray() @ArrayMaxSize(5) @IsTjPhone({ each: true })
   extraPhones?: string[];
-  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true })
-  @MaxLength(40, { each: true })
-  labels?: string[];
   @IsOptional() @IsString() @MaxLength(120) sourceDetail?: string;
   @IsOptional() @IsArray() @IsEnum(ClientTag, { each: true }) tags?: ClientTag[];
   /*

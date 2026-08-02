@@ -111,19 +111,6 @@ function OrderCardBody({
               {TAG_LABEL[t]}
             </span>
           ))}
-          {(o.client?.labels ?? []).slice(0, 2).map((l) => (
-            <span
-              key={l}
-              className="rounded bg-navy-100 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700"
-            >
-              {l}
-            </span>
-          ))}
-          {(o.client?.labels ?? []).length > 2 && (
-            <span className="rounded bg-navy-100 px-1 py-0.5 text-[10px] font-semibold text-navy-700">
-              +{(o.client?.labels ?? []).length - 2}
-            </span>
-          )}
         </div>
       </div>
       {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
@@ -244,7 +231,6 @@ export function Funnel() {
   const [managerFilter, setManagerFilter] = useState<string>('ALL');
   // отбор карточек по клиенту: статус (VIP и т.д.) и свободный тег
   const [tagFilter, setTagFilter] = useState<ClientTag | 'ALL'>('ALL');
-  const [labelFilter, setLabelFilter] = useState<string>('ALL');
   // на тач-устройствах (телефон/планшет) перетаскивание неудобно —
   // отключаем drag и показываем стрелки для смены этапа
   const isTouch = useMemo(
@@ -450,23 +436,6 @@ export function Funnel() {
     void changeStage(draggableId, destination.droppableId as FunnelStage);
   };
 
-  /*
-   * Все теги, встречающиеся на доске, — варианты для фильтра.
-   * Хук стоит ДО раннего выхода ниже: пока данные не пришли, компонент
-   * возвращает Spinner, и хук, объявленный после выхода, вызывался бы не на
-   * каждом рендере — React падал с ошибкой о разном числе хуков.
-   */
-  const labelOptions = useMemo(
-    () =>
-      [
-        ...new Set(
-          (data ?? []).flatMap((c) =>
-            c.orders.flatMap((o) => o.client?.labels ?? []),
-          ),
-        ),
-      ].sort((a, b) => a.localeCompare(b, 'ru')),
-    [data],
-  );
 
   if (!data) {
     if (error && !loading) return <ErrorState text={error ?? undefined} onRetry={reload} />;
@@ -501,12 +470,6 @@ export function Funnel() {
       if (tagFilter !== 'ALL' && !(o.client?.tags ?? []).includes(tagFilter)) {
         return false;
       }
-      if (
-        labelFilter !== 'ALL' &&
-        !(o.client?.labels ?? []).includes(labelFilter)
-      ) {
-        return false;
-      }
       return true;
     }),
   }));
@@ -527,11 +490,6 @@ export function Funnel() {
             <Plus className="h-4 w-4" />
             Добавить клиента
           </button>
-        }
-        subtitle={
-          isTouch
-            ? 'Изменяйте этап стрелками или нажмите на карточку для деталей'
-            : 'Перетаскивайте карточки между этапами или нажмите для деталей'
         }
       />
 
@@ -575,32 +533,11 @@ export function Funnel() {
             ))}
           </select>
 
-          {labelOptions.length > 0 && (
-            <>
-              <label className="ml-1 text-xs font-medium text-navy-600">Тег:</label>
-              <select
-                className="input input-sm w-auto"
-                value={labelFilter}
-                onChange={(e) => setLabelFilter(e.target.value)}
-              >
-                <option value="ALL">Все теги</option>
-                {labelOptions.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-
-          {(managerFilter !== 'ALL' ||
-            tagFilter !== 'ALL' ||
-            labelFilter !== 'ALL') && (
+          {(managerFilter !== 'ALL' || tagFilter !== 'ALL') && (
             <button
               onClick={() => {
                 setManagerFilter('ALL');
                 setTagFilter('ALL');
-                setLabelFilter('ALL');
               }}
               className="text-xs font-medium text-navy-600 underline-offset-2 hover:text-navy-600 hover:underline"
             >

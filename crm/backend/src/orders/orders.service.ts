@@ -60,9 +60,8 @@ const orderInclude = {
       id: true,
       fullName: true,
       phone: true,
-      // статус и свободные теги видны прямо на карточке воронки
+      // статус клиента виден прямо на карточке воронки
       tags: true,
-      labels: true,
     },
   },
   manager: { select: { id: true, fullName: true } },
@@ -81,8 +80,9 @@ const orderDetailInclude = {
       fullName: true,
       phone: true,
       tags: true,
-      labels: true,
       extraPhones: true,
+      // постоянная скидка клиента: подставляется в заказ, если своя не задана
+      discount: true,
       preferences: true,
       isRepeat: true,
       paidOrdersCount: true,

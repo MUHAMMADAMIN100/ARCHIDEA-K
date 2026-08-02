@@ -158,9 +158,6 @@ export function Tasks() {
     <div>
       <PageHeader
         title="Задачи"
-        subtitle={
-          canAssign ? 'Постановка задач сотрудникам' : 'Задачи от руководителя и свои'
-        }
         action={
           <button onClick={() => setShowAdd(true)} className="btn-primary">
             <Plus className="h-4 w-4" />

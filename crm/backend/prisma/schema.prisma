@@ -230,9 +230,17 @@ model User {
   updatedAt    DateTime @updatedAt
 
   // ── Уведомления в Telegram (ТЗ 10) ──
-  /// Личный chat_id: сотрудник один раз пишет боту, директор вносит id в карточке
+  /// Личный chat_id — заполняется сам, когда сотрудник жмёт «Старт» у бота
   telegramChatId  String?
   telegramEnabled Boolean @default(true)
+  /// Как зовут человека в Telegram — показываем в профиле, чтобы было видно,
+  /// к какому именно аккаунту подключён бот
+  telegramName    String?
+  /// Одноразовый код привязки: кнопка «Подключить Telegram» кладёт его сюда
+  /// и даёт ссылку t.me/бот?start=код. Код живёт сутки и сгорает при первом
+  /// использовании — по чужой ссылке подключиться нельзя.
+  telegramLinkCode    String?   @unique
+  telegramLinkExpires DateTime?
 
   // ── Корзина (ТЗ 6) ──
   deletedAt    DateTime?
@@ -410,9 +418,6 @@ model Client {
   phone         String      @unique // защита от дублей по телефону
   /// Запасные номера «на всякий случай» — второй, третий и т.д.
   extraPhones   String[]    @default([])
-  /// Свободные теги для сегментации («офис», «срочные») — в дополнение
-  /// к единственному статусу (tags), который остаётся из фиксированного набора
-  labels        String[]    @default([])
   /// «От кого» — рекомендатель или партнёр («От Анисы», «От Ибодат»)
   sourceDetail  String?
   email         String?

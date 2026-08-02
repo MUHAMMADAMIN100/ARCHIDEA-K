@@ -72,15 +72,18 @@ export function Footer() {
               Контакты
             </h4>
             <ul className="mt-4 space-y-3 text-sm text-white/70">
-              <li>
-                <a
-                  href={COMPANY.phoneHref}
-                  className="flex items-center gap-2.5 transition hover:text-white"
-                >
-                  <IconPhone className="h-4 w-4 text-white" />
-                  {COMPANY.phone}
-                </a>
-              </li>
+              {/* Оба рабочих номера — звонят по любому из них */}
+              {COMPANY.phones.map((p) => (
+                <li key={p.href}>
+                  <a
+                    href={p.href}
+                    className="flex items-center gap-2.5 transition hover:text-white"
+                  >
+                    <IconPhone className="h-4 w-4 text-white" />
+                    {p.display}
+                  </a>
+                </li>
+              ))}
               <li className="flex items-center gap-2.5">
                 <IconMapPin className="h-4 w-4 text-white" />
                 {COMPANY.address}

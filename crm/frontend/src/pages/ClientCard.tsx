@@ -25,7 +25,6 @@ import {
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { OrderModal } from '../components/OrderModal';
-import { LabelPicker } from '../components/LabelPicker';
 import { InterestPicker } from '../components/InterestPicker';
 import { DatePicker } from '../components/DatePicker';
 import { TimePicker } from '../components/TimePicker';
@@ -98,9 +97,6 @@ export function ClientCard() {
   const [editInfo, setEditInfo] = useState(false);
   const [notes, setNotes] = useState<string | null>(null);
   const [tags, setTags] = useState<ClientTag[] | null>(null);
-  // свободные теги (ТЗ 1.2) — редактируются вместе со статусом
-  const [labels, setLabels] = useState<string[] | null>(null);
-  const [labelInput, setLabelInput] = useState('');
   const [preferences, setPreferences] = useState<string | null>(null);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -131,7 +127,6 @@ export function ClientCard() {
 
   const curNotes = notes ?? data.notes ?? '';
   const curTags = tags ?? data.tags;
-  const curLabels = labels ?? data.labels ?? [];
   const curPreferences = preferences ?? data.preferences ?? '';
 
   /*
@@ -252,7 +247,6 @@ export function ClientCard() {
   const saveMeta = async () => {
     const nextNotes = curNotes;
     const nextTags = curTags;
-    const nextLabels = curLabels;
     const nextPrefs = curPreferences.trim() || null;
     // оптимистично применяем изменения сразу
     setData((c) =>
@@ -261,21 +255,18 @@ export function ClientCard() {
             ...c,
             notes: nextNotes,
             tags: nextTags,
-            labels: nextLabels,
             preferences: nextPrefs,
           }
         : c,
     );
     setNotes(null);
     setTags(null);
-    setLabels(null);
     setPreferences(null);
     setSavingMeta(true);
     try {
       await api.patch(`/clients/${id}`, {
         notes: nextNotes,
         tags: nextTags,
-        labels: nextLabels,
         preferences: nextPrefs,
       });
       toast.success('Сохранено');
@@ -351,7 +342,6 @@ export function ClientCard() {
 
       <PageHeader
         title={data.fullName}
-        subtitle={SOURCE_LABEL[data.source] + ' · клиент'}
         /* Позвонить и напомнить — рядом: обе про один и тот же звонок */
         action={
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
@@ -462,11 +452,6 @@ export function ClientCard() {
               ))}
             </div>
 
-            {/* Теги выбираются кнопками из общего списка, а не печатаются */}
-            <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-600">
-              Теги
-            </h4>
-            <LabelPicker value={curLabels} onChange={setLabels} />
             <p className="mt-2 text-xs text-navy-600">
               Сохраняются кнопкой «Сохранить…» ниже.
             </p>

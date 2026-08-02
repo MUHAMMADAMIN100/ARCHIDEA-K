@@ -78,7 +78,6 @@ export function Finance() {
     <div>
       <PageHeader
         title="Финансы"
-        subtitle="Доходы и расходы компании, зарплаты и премии"
       />
 
       <div className="mb-5">
