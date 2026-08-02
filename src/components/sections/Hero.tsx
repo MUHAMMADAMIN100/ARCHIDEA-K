@@ -132,15 +132,15 @@ export function Hero() {
             </button>
           </div>
 
-          {/* Бейдж-«отзыв» */}
-          <motion.div
-            animate={{ y: [0, -12, 0] }}
-            transition={{ duration: 5, repeat: Infinity }}
-            className="absolute -left-6 -top-6 hidden rounded-2xl border border-white/10 bg-navy-500 px-4 py-3 text-white shadow-card sm:block"
-          >
-            <div className="text-xs text-white/60">Рейтинг клиентов</div>
-            <div className="text-lg font-bold text-white">★ 4.9 / 5.0</div>
-          </motion.div>
+          {/*
+            Рейтинг — строкой под карточкой, а не плавающим бейджем поверх
+            её угла: на светлой карточке такой бейдж наезжал на содержимое
+            и выглядел приклеенным.
+          */}
+          <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-3 text-sm text-white/70">
+            <span>Рейтинг клиентов</span>
+            <span className="font-semibold text-white">4.9 / 5.0</span>
+          </div>
         </motion.div>
       </div>
     </section>
