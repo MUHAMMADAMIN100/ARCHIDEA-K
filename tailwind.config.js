@@ -42,16 +42,20 @@ export default {
           light: '#2f9bd6',
         },
       },
-      /* Скругления мелкие: круглые кнопки-«таблетки» — примета рекламной вёрстки */
+      /*
+       * Скругления 8–10 px: мягче прямого угла, но далеко от кнопок-«таблеток»,
+       * которые были приметой прежней рекламной вёрстки. Шкала та же, что в
+       * CRM, — сайт и система должны выглядеть одной вещью.
+       */
       borderRadius: {
         none: '0',
-        sm: '2px',
-        DEFAULT: '3px',
-        md: '4px',
-        lg: '4px',
-        xl: '5px',
-        '2xl': '6px',
-        '3xl': '8px',
+        sm: '4px',
+        DEFAULT: '6px',
+        md: '8px',
+        lg: '8px',
+        xl: '10px',
+        '2xl': '10px',
+        '3xl': '12px',
         full: '9999px',
       },
       fontFamily: {
@@ -82,11 +86,11 @@ export default {
        */
       boxShadow: {
         glow: 'none',
-        card: '0 1px 2px -1px rgba(23, 27, 33, 0.08), 0 1px 3px 0 rgba(23, 27, 33, 0.05)',
-        lift: '0 2px 4px -2px rgba(23, 27, 33, 0.10), 0 8px 16px -6px rgba(23, 27, 33, 0.12)',
-        pop: '0 4px 10px -4px rgba(23, 27, 33, 0.12), 0 12px 32px -12px rgba(23, 27, 33, 0.30)',
+        card: '0 1px 3px 0 rgba(23, 27, 33, 0.10), 0 4px 12px -2px rgba(23, 27, 33, 0.10)',
+        lift: '0 2px 6px -1px rgba(23, 27, 33, 0.12), 0 8px 24px -6px rgba(23, 27, 33, 0.18)',
+        pop: '0 4px 12px -4px rgba(23, 27, 33, 0.14), 0 16px 40px -12px rgba(23, 27, 33, 0.34)',
         modal:
-          '0 6px 16px -8px rgba(23, 27, 33, 0.16), 0 28px 64px -24px rgba(23, 27, 33, 0.38)',
+          '0 8px 20px -8px rgba(23, 27, 33, 0.20), 0 32px 72px -24px rgba(23, 27, 33, 0.42)',
       },
       transitionDuration: {
         120: '120ms',

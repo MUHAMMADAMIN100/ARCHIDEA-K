@@ -713,6 +713,12 @@ export function Funnel() {
         <div
           ref={boardWrapRef}
           className="scroll-edge scroll-edge-x"
+          /*
+           * Доска лежит прямо на фоне страницы, а он светло-серый. По
+           * умолчанию край растворяется в белый — на сером это читалось
+           * бы светлой полосой поперёк колонок.
+           */
+          style={{ ['--fade-bg' as string]: '#f6f7f9' } as React.CSSProperties}
           data-at-start="true"
           data-at-end="true"
         >
@@ -885,7 +891,7 @@ export function Funnel() {
                                 перекрашивает рамку целиком и погасил бы цветную
                                 полосу этапа слева.
                               */
-                              className={`card cursor-pointer border-l-4 p-3.5 text-left transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift ${
+                              className={`card cursor-pointer border-l-4 p-3.5 text-left transition-[box-shadow,transform] duration-160 ease-out hover:-translate-y-[3px] hover:shadow-lift ${
                                 orderDebt(o) > 0
                                   ? 'border-l-red-500 bg-red-50/70'
                                   : STAGE_BORDER[o.stage]
