@@ -27,13 +27,19 @@ export default async function handler(req, res) {
     }
     const data = await upstream.json();
     /*
-     * Кэш на минуту: цены меняются редко, а калькулятор открывают часто.
-     * stale-while-revalidate отдаёт старое значение мгновенно и обновляет фоном.
+     * Не кэшируем.
+     *
+     * Раньше здесь стояло max-age=60 и stale-while-revalidate=600. Из-за
+     * второго Vercel отдавал устаревший ответ ещё десять минут после того,
+     * как срок вышел: руководитель скрывал услугу в CRM, а на сайте она
+     * оставалась. Проверено на проде — ответ приходил с заголовком
+     * x-vercel-cache: STALE и содержал скрытые услуги.
+     *
+     * Список услуг — управляющая настройка, а не тяжёлые данные: запрос
+     * лёгкий, и точность здесь важнее экономии на кэше.
      */
-    res.setHeader(
-      'Cache-Control',
-      'public, max-age=60, stale-while-revalidate=600',
-    );
+    res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+    res.setHeader('CDN-Cache-Control', 'no-store');
     return res.status(200).json(data);
   } catch (e) {
     console.error('[tariffs] CRM недоступна:', e?.message || e);
