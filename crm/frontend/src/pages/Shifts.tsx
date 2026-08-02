@@ -283,10 +283,24 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
 
   return (
     <div>
-      <div className="card mb-4 flex flex-wrap items-center gap-3 p-3">
+      {/*
+        Порядок на телефоне: сначала главная кнопка «Новый выезд» — за ней
+        приходят чаще всего, — затем период, статус и поиск. Раньше кнопка
+        стояла последней, под тремя рядами фильтров.
+      */}
+      <div className="card mb-4 space-y-2 p-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:space-y-0">
+        {canManage && (
+          <button
+            onClick={() => setCreating(true)}
+            className="btn-primary w-full justify-center sm:order-last sm:ml-auto sm:w-auto"
+          >
+            <Plus className="h-4 w-4" />
+            Новый выезд
+          </button>
+        )}
         <PeriodFilter value={period} onChange={setPeriod} showMonthArrows />
         <select
-          className="input max-w-[180px]"
+          className="input w-full sm:max-w-[180px]"
           value={status}
           onChange={(e) => setStatus(e.target.value as ShiftGroupStatus | '')}
         >
@@ -296,17 +310,11 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
           <option value="CLOSED">{SHIFT_GROUP_STATUS_LABEL.CLOSED}</option>
         </select>
         <input
-          className="input max-w-[220px]"
+          className="input w-full sm:max-w-[220px]"
           placeholder="Поиск: адрес, бригада, ФИО"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {canManage && (
-          <button onClick={() => setCreating(true)} className="btn-primary ml-auto">
-            <Plus className="h-4 w-4" />
-            Новый выезд
-          </button>
-        )}
       </div>
 
       {error ? (

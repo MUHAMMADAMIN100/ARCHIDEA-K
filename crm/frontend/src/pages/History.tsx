@@ -115,10 +115,16 @@ export function History() {
         subtitle="Журнал хранится 45 дней, старые записи удаляются автоматически. Кто и что менял в CRM: заказы, клиенты, сотрудники, тарифы, финансы"
       />
 
+      {/*
+        Порядок фильтров на телефоне: сначала период (с него начинают
+        поиск чаще всего), затем три селекта одинаковой ширины, поиск —
+        последним. Раньше поиск стоял в середине, а даты в самом низу.
+      */}
       <div className="card mb-4 space-y-3 p-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <PeriodFilter value={period} onChange={setPeriod} />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           <select
-            className="input max-w-[200px]"
+            className="input w-full sm:max-w-[200px]"
             value={entity}
             onChange={(e) => setEntity(e.target.value)}
           >
@@ -130,7 +136,7 @@ export function History() {
             ))}
           </select>
           <select
-            className="input max-w-[200px]"
+            className="input w-full sm:max-w-[200px]"
             value={action}
             onChange={(e) => setAction(e.target.value)}
           >
@@ -141,7 +147,7 @@ export function History() {
               </option>
             ))}
           </select>
-          <div className="min-w-[200px] max-w-[260px] flex-1">
+          <div className="w-full sm:min-w-[200px] sm:max-w-[260px] sm:flex-1">
             {/* Список сотрудников (только активные — так же, как везде в CRM,
                 где выбирают исполнителя); уволенных сотрудников можно найти
                 поиском по имени ниже. */}
@@ -151,7 +157,7 @@ export function History() {
               placeholder="Все сотрудники"
             />
           </div>
-          <div className="min-w-[220px] flex-1">
+          <div className="col-span-2 sm:min-w-[220px] sm:flex-1">
             <SearchInput
               value={search}
               onChange={setSearch}
@@ -159,7 +165,6 @@ export function History() {
             />
           </div>
         </div>
-        <PeriodFilter value={period} onChange={setPeriod} />
       </div>
 
       {error && items.length === 0 ? (

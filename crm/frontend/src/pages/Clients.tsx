@@ -294,28 +294,33 @@ export function Clients() {
       />
 
       {/* Фильтры */}
-      <div className="card mb-4 flex flex-wrap items-center gap-3 p-3">
-        <div className="min-w-[200px] flex-1">
+      {/*
+        Фильтры. На телефоне четыре селекта встают сеткой два на два —
+        одинаковой ширины, в два ряда; поиск занимает строку целиком.
+        Раньше они шли колонкой разной длины и занимали пол-экрана.
+      */}
+      <div className="card mb-4 grid grid-cols-2 gap-2 p-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="col-span-2 sm:min-w-[200px] sm:flex-1">
           <SearchInput value={search} onChange={setSearch} placeholder="Поиск по имени или телефону" />
         </div>
-        <select className="input max-w-[180px]" value={tag} onChange={(e) => setTag(e.target.value)}>
+        <select className="input w-full sm:max-w-[180px]" value={tag} onChange={(e) => setTag(e.target.value)}>
           <option value="">Все теги</option>
           {TAGS.map((t) => (
             <option key={t} value={t}>{TAG_LABEL[t]}</option>
           ))}
         </select>
-        <select className="input max-w-[180px]" value={source} onChange={(e) => setSource(e.target.value)}>
+        <select className="input w-full sm:max-w-[180px]" value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="">Все источники</option>
           {SOURCES.map((s) => (
             <option key={s} value={s}>{SOURCE_LABEL[s]}</option>
           ))}
         </select>
-        <select className="input max-w-[180px]" value={sort} onChange={(e) => setSort(e.target.value as any)}>
+        <select className="input w-full sm:max-w-[180px]" value={sort} onChange={(e) => setSort(e.target.value as any)}>
           <option value="recent">Сначала недавние</option>
           <option value="name">По имени</option>
         </select>
         <select
-          className="input max-w-[200px]"
+          className="input w-full sm:max-w-[180px]"
           value={ordersFilter}
           onChange={(e) => setOrdersFilter(e.target.value as OrdersFilter)}
         >
