@@ -44,6 +44,48 @@ export function prefetch(url: string) {
  * при добавлении клиента из другого раздела. Если кэша ещё нет — раздел
  * подтянет свежие данные сам при заходе.
  */
+/**
+ * Оптимистичное действие: экран меняется сразу, запрос уходит фоном.
+ *
+ * Правило простое: пользователь не должен ждать сеть, чтобы увидеть
+ * результат своего нажатия. Если сервер откажет — возвращаем прежнее
+ * состояние и говорим, почему.
+ *
+ * Возвращает промис на случай, когда вызывающему нужно дождаться конца
+ * (например, чтобы перейти на страницу созданной записи). Ждать его
+ * необязательно — интерфейс уже обновлён.
+ */
+export async function optimistic<T>(opts: {
+  /** setData из useFetch того списка, который меняем */
+  setData: (updater: Updater<T>) => void;
+  /** как изменить данные локально, прямо сейчас */
+  apply: (prev: T | null) => T | null;
+  /** сам запрос к серверу */
+  request: () => Promise<unknown>;
+  /** сообщить об отказе — обычно toast.error */
+  onError?: (message: string) => void;
+  /** обновить данные после успеха (подтянуть настоящие id и суммы) */
+  onSettled?: () => void;
+}): Promise<boolean> {
+  let previous: T | null = null;
+  opts.setData((prev) => {
+    previous = prev as T | null;
+    return opts.apply(prev as T | null);
+  });
+  try {
+    await opts.request();
+    opts.onSettled?.();
+    return true;
+  } catch (e: any) {
+    // откат: возвращаем ровно то, что было до нажатия
+    opts.setData(previous);
+    opts.onError?.(
+      e?.response?.data?.message || 'Не удалось сохранить. Попробуйте ещё раз',
+    );
+    return false;
+  }
+}
+
 export function mutateCache<T>(url: string, updater: (prev: T) => T) {
   if (!cache.has(url)) return;
   cache.set(url, updater(cache.get(url) as T));

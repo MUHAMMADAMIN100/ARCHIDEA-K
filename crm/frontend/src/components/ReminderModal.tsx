@@ -104,10 +104,18 @@ export function ReminderModal({
     else payload.remindAt = customAt;
     if (canAssign && assigneeId) payload.assigneeId = assigneeId;
 
+    /*
+     * Окно закрывается сразу, запрос уходит фоном: ждать сеть, чтобы
+     * увидеть закрытое окно, незачем. Если сервер откажет — скажем об этом
+     * сообщением, напоминание просто не появится в списке.
+     */
+    onClose();
+    toast.success(isEdit ? 'Напоминание поставлено' : 'Напоминание поставлено');
     try {
       let saved: Reminder;
       if (isEdit && reminder) {
-        saved = (await api.patch<Reminder>(`/reminders/${reminder.id}`, payload)).data;
+        saved = (await api.patch<Reminder>(`/reminders/${reminder.id}`, payload))
+          .data;
       } else {
         if (!clientId) throw new Error('Не выбран клиент для напоминания');
         saved = (
@@ -118,11 +126,11 @@ export function ReminderModal({
           })
         ).data;
       }
-      toast.success(isEdit ? 'Напоминание обновлено' : 'Напоминание поставлено');
       onSaved?.(saved);
-      onClose();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить напоминание');
+      toast.error(
+        e?.response?.data?.message || 'Не удалось сохранить напоминание',
+      );
     } finally {
       setSaving(false);
     }

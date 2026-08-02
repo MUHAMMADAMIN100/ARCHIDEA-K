@@ -198,6 +198,22 @@ export class AuthService {
   }
 
   /** «Выйти со всех устройств» — гасит все ранее выданные токены */
+  /**
+   * Билет для живого канала: живёт минуту, помечен признаком ws — обычным
+   * токеном доступа его не подменить и наоборот.
+   */
+  async issueWsTicket(userId: string): Promise<{ ticket: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { sessionEpoch: true },
+    });
+    const ticket = await this.jwt.signAsync(
+      { sub: userId, ep: user?.sessionEpoch ?? 0, ws: true },
+      { secret: JWT_SECRET, expiresIn: '60s' },
+    );
+    return { ticket };
+  }
+
   async revokeAllSessions(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },

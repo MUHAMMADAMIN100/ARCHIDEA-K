@@ -972,13 +972,17 @@ function EditClientModal({
       sourceDetail: sourceDetail.trim() || null,
       discount: Math.max(0, Math.round(Number(discount) || 0)),
     };
+    /*
+     * Карточка обновляется сразу и окно закрывается — запрос идёт фоном.
+     * При отказе сервера карточка перезагрузится с прежними данными, а
+     * сообщение объяснит причину.
+     */
+    onSaved(patch as Partial<Client>);
+    toast.success('Данные клиента обновлены');
     try {
       await api.patch(`/clients/${client.id}`, patch);
-      toast.success('Данные клиента обновлены');
-      onSaved(patch as Partial<Client>);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Не удалось сохранить');
-      setSaving(false);
     }
   };
 

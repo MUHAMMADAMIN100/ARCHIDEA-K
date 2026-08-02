@@ -90,6 +90,20 @@ export class AuthController {
     return { ok: true };
   }
 
+  /**
+   * Одноразовый билет для живого канала.
+   *
+   * Сокет открывается напрямую к серверу приложения, а кука выдана на
+   * домен CRM и на чужой домен не отправляется. Поэтому вкладка берёт
+   * билет обычным запросом — здесь кука работает — и предъявляет его
+   * сокету. Билет живёт минуту и годится только для этого.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('ws-ticket')
+  wsTicket(@CurrentUser() user: AuthUser) {
+    return this.auth.issueWsTicket(user.id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@CurrentUser() user: AuthUser) {

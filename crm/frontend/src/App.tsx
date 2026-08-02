@@ -74,7 +74,7 @@ export default function App() {
    * для вошедшего сотрудника: до входа обновлять нечего, а соединение
    * без авторизации сервер всё равно не примет.
    */
-  useLiveUpdates(!!user);
+  useLiveUpdates(!!user, user?.id);
 
   return (
     <ErrorBoundary>
