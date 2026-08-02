@@ -117,6 +117,13 @@ export function Reports() {
               </div>
 
               {/*
+                Стрелка идёт в разметке перед суммами, чтобы в сетке попасть
+                в первую строку рядом с именем. В ряду на компьютере порядок
+                прежний — order-last возвращает её в конец.
+              */}
+              <ChevronRight className="h-4 w-4 shrink-0 text-navy-600 sm:order-last" />
+
+              {/*
                * Карточка целиком — ссылка на отчёт, поэтому суммы открывают
                * расшифровку через stopPropagation + preventDefault: клик по
                * цифре показывает разбивку, не уводя со списка.
@@ -162,9 +169,6 @@ export function Reports() {
                   )}
                 </div>
               </div>
-
-              {/* sm:order-last: в ряду стрелка идёт после сумм, в сетке — в первой строке */}
-              <ChevronRight className="h-4 w-4 shrink-0 text-navy-600 sm:order-last" />
             </Link>
           ))}
         </div>
