@@ -11,6 +11,8 @@ export interface AuthUser {
   /** полный доступ к модулю задач: все задачи компании, а не только свои (ТЗ 1.2) */
   canManageTasks: boolean;
   canSeeTrash: boolean;
+  /** персональный запрет на финансы — сильнее роли (см. permissions.ts) */
+  noFinance: boolean;
 }
 
 /** Видит ли пользователь данные всей компании (директор или ops-менеджер) */

@@ -58,6 +58,8 @@ export interface AuthUser {
   canManageTasks?: boolean;
   /** личный доступ к корзине (не следует из роли) */
   canSeeTrash?: boolean;
+  /** персональный запрет на финансы — сильнее роли */
+  noFinance?: boolean;
 }
 
 /**
@@ -99,6 +101,12 @@ export function userManagesTasks(u?: AuthUser | null): boolean {
  * Это деньги компании целиком, а не «свои» операции сотрудника.
  */
 export function userSeesFinance(u?: AuthUser | null): boolean {
+  /*
+   * Персональный запрет сильнее роли: у руководителя с галочкой «без доступа
+   * к финансам» деньги закрыты так же, как у менеджера. Проверка стоит первой,
+   * чтобы никакая роль её не перебила.
+   */
+  if (u?.noFinance) return false;
   return u?.role === 'DIRECTOR';
 }
 

@@ -49,6 +49,7 @@ interface UserDetailData {
   canManageOps?: boolean;
   canManageTasks?: boolean;
   canSeeTrash?: boolean;
+  noFinance?: boolean;
   isActive: boolean;
   createdAt: string;
   stats: {
@@ -88,6 +89,7 @@ export function UserDetail() {
     canManageOps: boolean;
     canManageTasks: boolean;
     canSeeTrash: boolean;
+    noFinance: boolean;
     isActive: boolean;
     password?: string;
   }) => {
@@ -106,6 +108,7 @@ export function UserDetail() {
             canManageOps: payload.canManageOps,
             canManageTasks: payload.canManageTasks,
             canSeeTrash: payload.canSeeTrash,
+            noFinance: payload.noFinance,
             isActive: payload.isActive,
           }
         : d,
@@ -384,6 +387,7 @@ function EditUserModal({
     canManageOps: boolean;
     canManageTasks: boolean;
     canSeeTrash: boolean;
+    noFinance: boolean;
     isActive: boolean;
     password?: string;
   }) => void;
@@ -400,6 +404,7 @@ function EditUserModal({
   // ТЗ 1.2 — личный доступ к модулю задач (у Ироды)
   const [canManageTasks, setCanManageTasks] = useState(!!user.canManageTasks);
   const [canSeeTrash, setCanSeeTrash] = useState(!!user.canSeeTrash);
+  const [noFinance, setNoFinance] = useState(!!user.noFinance);
   const [isActive, setIsActive] = useState(user.isActive);
   const [password, setPassword] = useState('');
 
@@ -416,6 +421,9 @@ function EditUserModal({
       canManageOps,
       canManageTasks,
       canSeeTrash,
+      // запрет на финансы имеет смысл только у руководителя: у менеджера
+      // денег и так нет, и хранить у него взведённый флаг незачем
+      noFinance: role === 'DIRECTOR' ? noFinance : false,
       isActive,
       ...(password ? { password } : {}),
     });
@@ -540,6 +548,28 @@ function EditUserModal({
               <span className="mt-0.5 block text-xs text-navy-600">
                 Видит удалённые записи, возвращает их и очищает безвозвратно.
                 Раздел доступен только руководителям.
+              </span>
+            </span>
+          </label>
+        )}
+
+        {/* Персональный запрет на финансы — сильнее роли. Показываем только
+            руководителю: у менеджера денег и так нет, галочка ничего не
+            изменит и только запутает. */}
+        {role === 'DIRECTOR' && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={noFinance}
+              onChange={(e) => setNoFinance(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-amber-600"
+            />
+            <span className="text-sm text-navy-800">
+              <span className="font-medium">Без доступа к финансам</span>
+              <span className="mt-0.5 block text-xs text-navy-600">
+                Сохраняет управление людьми, услугами и операциями, но не видит
+                доходов и расходов, выплат, премий и выручки — ни в меню, ни по
+                прямой ссылке. Активные сессии сотрудника при этом сбрасываются.
               </span>
             </span>
           </label>

@@ -104,6 +104,19 @@ export function permissionsOf(user: AuthUser | null | undefined): Permission[] {
     list.add('trash:purge');
   }
 
+  /*
+   * Персональный запрет на финансы — СИЛЬНЕЕ роли.
+   *
+   * Стоит последним и именно поэтому работает: что бы ни дала роль выше,
+   * деньги здесь отбираются. Руководителей в компании несколько, но доходы
+   * и расходы владелец открывает не каждому. Сотрудник сохраняет управление
+   * людьми и операциями — теряет только деньги.
+   */
+  if (user.noFinance) {
+    list.delete('finance:view');
+    list.delete('finance:manage');
+  }
+
   return [...list];
 }
 

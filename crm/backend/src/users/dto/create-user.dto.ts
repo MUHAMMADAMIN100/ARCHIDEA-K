@@ -52,6 +52,14 @@ export class UpdateUserDto {
   /** ТЗ 1.2 — полный доступ к модулю задач */
   @IsOptional() @IsBoolean() canManageTasks?: boolean;
   @IsOptional() @IsBoolean() canSeeTrash?: boolean;
+  /**
+   * Персональный запрет на финансы — сильнее роли.
+   *
+   * Обязан быть описан здесь: ValidationPipe запущен с whitelist, и поле,
+   * которого нет в DTO, молча вырезается из запроса. Галочку ставили,
+   * интерфейс её показывал, а до сервера она не доходила вовсе.
+   */
+  @IsOptional() @IsBoolean() noFinance?: boolean;
   @IsOptional() @IsBoolean() acceptsLeads?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
 

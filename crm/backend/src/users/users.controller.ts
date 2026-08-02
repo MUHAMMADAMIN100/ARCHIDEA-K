@@ -37,6 +37,16 @@ export class UsersController {
     return this.service.assignable(user);
   }
 
+  /*
+   * Весь действующий штат — для выбора ОТВЕТСТВЕННОГО за клиента и заказ.
+   * Открыт каждому сотруднику: передать заявку коллеге должен уметь любой,
+   * а имя и должность коллеги секретом не являются.
+   */
+  @Get('staff')
+  staff() {
+    return this.service.staff();
+  }
+
   @Roles(Role.DIRECTOR)
   @Get()
   findAll() {

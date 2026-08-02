@@ -32,7 +32,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
 import { StuckSentinel, useStuck } from './ScrollArea';
-import { userSeesTrash } from '../types';
+import { userSeesFinance, userSeesTrash } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -41,6 +41,7 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   roles?: Role[]; // если не указано — доступно всем сотрудникам
   trash?: boolean; // корзина — руководитель с личным правом
+  finance?: boolean; // деньги компании — скрыто по галочке «без доступа к финансам»
 }
 
 /**
@@ -86,7 +87,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Финансы',
     items: [
-      { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'] },
+      { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
       { to: '/reports', label: 'Ведомости', icon: FileText },
       { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
     ],
@@ -113,7 +114,7 @@ const NAV_GROUPS: NavGroup[] = [
  */
 const DIRECTOR_NAV: NavItem[] = [
   { to: '/', label: 'Дашборд', icon: LayoutDashboard },
-  { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'] },
+  { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
   { to: '/funnel', label: 'Воронка', icon: Filter },
   { to: '/clients', label: 'Клиенты', icon: Users },
@@ -211,6 +212,9 @@ export function Layout() {
   const visible = (i: NavItem) => {
     if (i.roles && !(user && i.roles.includes(user.role))) return false;
     if (i.trash && !userSeesTrash(user)) return false;
+    // персональный запрет на финансы сильнее роли: галочка в карточке
+    // сотрудника убирает денежные разделы даже у руководителя
+    if (i.finance && !userSeesFinance(user)) return false;
     return true;
   };
   const groups = NAV_GROUPS.map((g) => ({
@@ -402,6 +406,19 @@ export function Layout() {
             <LogOut className="h-[18px] w-[18px]" />
             Выйти
           </button>
+
+          {/*
+            Отметка сборки. Мелко и ненавязчиво, но по ней сразу видно, какая
+            версия открыта. Нужна после случая, когда правки лежали в
+            репозитории, а на сайте работала старая сборка — и выяснить это
+            можно было только запросом к файлам сайта.
+          */}
+          <div
+            className="mt-2 select-text px-3 text-center text-[10px] leading-tight text-white/35"
+            title="Версия сборки — назовите её, если что-то работает не так"
+          >
+            {__BUILD_DATE__} · {__BUILD_COMMIT__}
+          </div>
         </div>
       </aside>
 

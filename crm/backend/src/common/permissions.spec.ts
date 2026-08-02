@@ -27,6 +27,7 @@ function user(overrides: Partial<AuthUser> = {}): AuthUser {
     canManageOps: false,
     canManageTasks: false,
     canSeeTrash: false,
+    noFinance: false,
     ...overrides,
   };
 }
@@ -145,6 +146,40 @@ describe('Финансы закрыты от менеджера при любы�
 
   it('у руководителя финансы открыты', () => {
     expect(seesFinance(director())).toBe(true);
+  });
+});
+
+describe('Персональный запрет на финансы сильнее роли', () => {
+  it('руководитель с галочкой теряет доступ к деньгам', () => {
+    const u = director({ noFinance: true });
+    expect(seesFinance(u)).toBe(false);
+    expect(can(u, 'finance:view')).toBe(false);
+    expect(can(u, 'finance:manage')).toBe(false);
+  });
+
+  it('но сохраняет всё остальное: людей, услуги, задачи, журнал', () => {
+    const u = director({ noFinance: true });
+    expect(can(u, 'users:manage')).toBe(true);
+    expect(can(u, 'services:manage')).toBe(true);
+    expect(can(u, 'tasks:all')).toBe(true);
+    expect(can(u, 'audit:view')).toBe(true);
+    expect(can(u, 'ops:manage')).toBe(true);
+  });
+
+  it('и корзину, если она была выдана', () => {
+    const u = director({ noFinance: true, canSeeTrash: true });
+    expect(can(u, 'trash:view')).toBe(true);
+    expect(can(u, 'trash:purge')).toBe(true);
+  });
+
+  it('галочка у менеджера ничего не ломает — у него денег и так не было', () => {
+    const u = manager({ noFinance: true });
+    expect(can(u, 'finance:view')).toBe(false);
+    expect(can(u, 'ops:manage')).toBe(true);
+  });
+
+  it('снятая галочка возвращает деньги руководителю', () => {
+    expect(seesFinance(director({ noFinance: false }))).toBe(true);
   });
 });
 

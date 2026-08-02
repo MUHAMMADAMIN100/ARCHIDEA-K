@@ -10,6 +10,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { seesFinance } from '../common/permissions';
 import {
   OrderForReport,
   orderForReportInclude,
@@ -99,7 +100,7 @@ export class ReportsService {
   ) {}
 
   private scope(user: AuthUser): Prisma.ReportWhereInput {
-    return user.role === Role.DIRECTOR
+    return seesFinance(user)
       ? { ...NOT_DELETED }
       : { ...NOT_DELETED, managerId: user.id };
   }
@@ -119,7 +120,7 @@ export class ReportsService {
       include: reportInclude,
     });
     if (!report) throw new NotFoundException('Отчёт не найден');
-    if (user.role !== Role.DIRECTOR && report.managerId !== user.id) {
+    if (!seesFinance(user) && report.managerId !== user.id) {
       throw new NotFoundException('Отчёт не найден');
     }
     return report;
@@ -331,7 +332,7 @@ export class ReportsService {
    * Уже существующие смены на те же даты не дублируются.
    */
   async accept(user: AuthUser, id: string) {
-    if (user.role !== Role.DIRECTOR) {
+    if (!seesFinance(user)) {
       throw new ForbiddenException('Принимать отчёты может только основатель');
     }
     const report = await this.getOne(user, id);
@@ -416,7 +417,7 @@ export class ReportsService {
    */
   async remove(user: AuthUser, id: string, reason?: string) {
     const report = await this.getOne(user, id);
-    if (report.status === ReportStatus.ACCEPTED && user.role !== Role.DIRECTOR) {
+    if (report.status === ReportStatus.ACCEPTED && !seesFinance(user)) {
       throw new BadRequestException('Принятый отчёт может удалить только основатель');
     }
 

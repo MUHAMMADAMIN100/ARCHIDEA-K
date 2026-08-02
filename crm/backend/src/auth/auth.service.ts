@@ -170,6 +170,9 @@ export class AuthService {
         // логина рисуется без «Задач компании» и «Корзины», пока не обновится /me
         canManageTasks: user.canManageTasks,
         canSeeTrash: user.canSeeTrash,
+        // галочка «без доступа к финансам» нужна сразу при входе:
+        // иначе меню на миг покажет разделы, которых у человека нет
+        noFinance: user.noFinance,
       },
     };
   }

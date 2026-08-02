@@ -12,6 +12,7 @@ import {
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { resolveManager } from '../common/resolve-manager';
 import { normalizePhone as canonicalPhone } from '../common/validation/contact';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto';
 
@@ -233,7 +234,18 @@ export class ClientsService {
   }
 
   async create(user: AuthUser, dto: CreateClientDto) {
-    const managerId = seesAll(user) ? dto.managerId ?? null : user.id;
+    /*
+     * Ответственного назначает любой сотрудник, а не только руководитель.
+     *
+     * Раньше здесь стояло `seesAll(user) ? dto.managerId : user.id`: менеджер
+     * не мог передать клиента коллеге вообще — сервер молча ставил создателя,
+     * даже если в форме выбрали другого. Теперь выбор уважается, а если его
+     * не сделали, ответственным становится тот, кто заводит клиента.
+     *
+     * Назначить можно только действующего сотрудника: иначе клиент повисал бы
+     * на уволенном, и его заявки никто бы не вёл.
+     */
+    const managerId = await resolveManager(this.prisma, user, dto.managerId);
 
     // Защита от IDOR через дедупликацию по телефону: если клиент с таким
     // номером уже закреплён за ДРУГИМ сотрудником, обычный менеджер не должен

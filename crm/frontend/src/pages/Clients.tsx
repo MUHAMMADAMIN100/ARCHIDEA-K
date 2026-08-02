@@ -450,9 +450,28 @@ export function AddClientModal({
   const [pricePerUnit, setPricePerUnit] = useState('');
   const [manualPrice, setManualPrice] = useState(false);
   const { data: tariffs } = useFetch<Tariffs>('/tariffs');
-  const { data: managers } = useFetch<Manager[]>(
-    isDirector ? '/users/managers' : null,
-  );
+  /*
+   * Список ответственных — ВЕСЬ действующий штат, включая руководителей.
+   *
+   * Именно /users/staff, а не /users/assignable: второй отдаёт рядовому
+   * сотруднику только его самого, потому что задачи он ставит лишь себе.
+   * Для ответственного правило другое — передать заявку коллеге должен
+   * уметь каждый, иначе менеджер заводит клиента на себя и идёт просить
+   * руководителя переназначить.
+   */
+  const { data: managers } = useFetch<Manager[]>('/users/staff');
+  const { user: me } = useAuth();
+  const currentUserId = me?.id;
+
+  /*
+   * По умолчанию ответственный — тот, кто заводит клиента. Так было и раньше
+   * (сервер молча ставил создателя), только теперь это видно в поле и
+   * поддаётся изменению.
+   */
+  useEffect(() => {
+    if (currentUserId && !managerId) setManagerId(currentUserId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
   /*
    * Список услуг — из справочника, а не из зашитой тройки: услуга,
    * заведённая директором, должна быть доступна при оформлении клиента.
@@ -654,17 +673,25 @@ export function AddClientModal({
           />
         </div>
 
-        {isDirector && (
-          <div>
-            <label className="label">Ответственный менеджер</label>
-            <select className="input" value={managerId} onChange={(e) => setManagerId(e.target.value)}>
-              <option value="">— не назначен —</option>
-              {(managers ?? []).map((m) => (
-                <option key={m.id} value={m.id}>{m.fullName}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/*
+          Ответственного выбирает ЛЮБОЙ сотрудник, не только руководитель.
+          Раньше поле показывалось лишь директору, а сервер молча назначал
+          менеджером того, кто создаёт клиента: передать заявку коллеге было
+          нельзя вовсе. По умолчанию подставлен сам создатель — так чаще
+          всего и нужно, — но список открыт.
+        */}
+        <div>
+          <label className="label">Ответственный менеджер</label>
+          <select className="input" value={managerId} onChange={(e) => setManagerId(e.target.value)}>
+            <option value="">— не назначен —</option>
+            {(managers ?? []).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.fullName}
+                {m.id === currentUserId ? ' — я' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Заявка в воронке */}
         <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">

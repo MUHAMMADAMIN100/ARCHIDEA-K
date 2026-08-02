@@ -24,6 +24,7 @@ import {
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { resolveManager } from '../common/resolve-manager';
 import { formatDate, parseDate } from '../common/time/dushanbe';
 import {
   calculatePrice,
@@ -334,7 +335,12 @@ export class OrdersService {
     }
 
     const cleanerIds = await this.resolveCleaners(dto.cleanerIds);
-    const managerId = seesAll(user) ? dto.managerId ?? null : user.id;
+    /*
+     * Ответственного за заказ назначает любой сотрудник — то же правило, что
+     * и для клиента. Раньше выбор менеджера сервер игнорировал и подставлял
+     * создателя, из-за чего передать заказ коллеге было нельзя.
+     */
+    const managerId = await resolveManager(this.prisma, user, dto.managerId);
     const cleaningType = dto.cleaningType ?? 'GENERAL';
     const serviceKey = dto.serviceKey?.trim() || cleaningType;
     const dirtLevel = cleaningType === 'FURNITURE' ? null : dto.dirtLevel ?? null;

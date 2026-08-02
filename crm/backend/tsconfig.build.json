@@ -1,4 +1,17 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /*
+     * Кэш инкрементальной сборки кладём ВНУТРЬ dist.
+     *
+     * nest-cli.json перед сборкой стирает dist (deleteOutDir), а кэш лежал
+     * рядом с конфигом и переживал удаление. TypeScript сверялся с ним,
+     * решал, что всё уже собрано, и не выдавал ни одного файла: сборка
+     * «проходила» с нулевым выводом, а сервер падал с «Cannot find module
+     * dist/main». Теперь кэш удаляется вместе с dist, и такого расхождения
+     * не возникает.
+     */
+    "tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"
+  },
   "exclude": ["node_modules", "test", "dist", "prisma", "**/*.spec.ts"]
 }

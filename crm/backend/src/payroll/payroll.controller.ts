@@ -16,7 +16,7 @@ import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
-import { managesOps } from '../common/permissions';
+import { can, managesOps } from '../common/permissions';
 import { CreateFineDto, MarkDayDto } from './dto/payroll.dto';
 
 /**
@@ -39,8 +39,14 @@ export class PayrollController {
   constructor(private service: PayrollService) {}
 
   /** Деньги: ставки, начисления, штрафы — только руководитель */
+  /*
+   * Проверяем ПРАВО, а не роль: у руководителя может стоять персональная
+   * галочка «без доступа к финансам», и она сильнее роли. Пока здесь стояло
+   * `role !== DIRECTOR`, такой руководитель терял книгу доходов, но выплаты
+   * и штрафы по-прежнему видел — запрет получался дырявым.
+   */
   private assertMoney(user: AuthUser) {
-    if (user.role !== Role.DIRECTOR) {
+    if (!can(user, 'finance:view')) {
       throw new ForbiddenException(
         'Выплаты и штрафы доступны только руководителю',
       );

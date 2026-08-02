@@ -45,6 +45,7 @@ const SAFE_SELECT = {
   /** ТЗ 1.2 — полный доступ к модулю задач */
   canManageTasks: true,
   canSeeTrash: true,
+  noFinance: true,
   /** ТЗ 10 — личные уведомления в Telegram */
   telegramChatId: true,
   telegramEnabled: true,
@@ -84,6 +85,24 @@ export class UsersService {
    * возвращается ровно одна строка — они сами. Отвечать 403 нельзя: форма
    * задачи в календаре открыта всем, и без списка она бы просто не работала.
    */
+  /**
+   * Все действующие сотрудники — для выбора ОТВЕТСТВЕННОГО за клиента и заказ.
+   *
+   * Отличается от assignable() тем, что открыт каждому и всегда возвращает
+   * весь штат. Списки разные по смыслу: задачу рядовой сотрудник ставит
+   * только себе, а вот передать заявку коллеге он должен уметь — иначе
+   * приходится заводить клиента на себя и просить руководителя переназначить.
+   *
+   * Отдаём только имя, должность и роль: ни телефонов, ни логинов, ни прав.
+   */
+  staff() {
+    return this.prisma.user.findMany({
+      where: { ...NOT_DELETED, isActive: true },
+      select: { id: true, fullName: true, position: true, role: true, isActive: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }
+
   assignable(user: AuthUser) {
     if (!seesAll(user) && !seesAllTasks(user)) {
       return this.prisma.user.findMany({
@@ -337,6 +356,7 @@ export class UsersService {
       canManageOps?: boolean;
       canManageTasks?: boolean;
       canSeeTrash?: boolean;
+      noFinance?: boolean;
       acceptsLeads?: boolean;
       isActive?: boolean;
       password?: string;
@@ -359,6 +379,15 @@ export class UsersService {
     if (dto.canManageOps !== undefined) data.canManageOps = dto.canManageOps;
     if (dto.canSeeTrash !== undefined) {
       data.canSeeTrash = dto.canSeeTrash;
+    }
+    /*
+     * Персональный запрет на финансы. Гасит и активные сессии: иначе
+     * сотрудник с открытой вкладкой продолжал бы видеть деньги до
+     * следующего входа, а флаг ставят именно чтобы закрыть доступ СЕЙЧАС.
+     */
+    if (dto.noFinance !== undefined && dto.noFinance !== exists.noFinance) {
+      data.noFinance = dto.noFinance;
+      data.sessionEpoch = { increment: 1 };
     }
     if (dto.canManageTasks !== undefined) {
       data.canManageTasks = dto.canManageTasks;
@@ -413,6 +442,7 @@ export class UsersService {
         'canManageOps',
         'canManageTasks',
         'canSeeTrash',
+        'noFinance',
         'acceptsLeads',
         'isActive',
         'passwordHash',

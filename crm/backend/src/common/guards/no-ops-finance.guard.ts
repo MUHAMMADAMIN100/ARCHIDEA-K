@@ -4,19 +4,18 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { AuthUser } from '../decorators/current-user.decorator';
+import { can } from '../permissions';
 
 /**
- * Запрет финансовых разделов для ops-менеджера.
+ * Запрет финансовых разделов на стороне API.
  *
- * Уровень доступа canManageOps даёт видимость всей компании (клиенты, заказы,
- * команда, задачи, аналитика), но БЕЗ денег: смены и выплаты, отчёты, тарифы,
- * выручка. В интерфейсе эти разделы скрыты — этот guard закрывает их и на
- * стороне API, иначе запрет обходится прямым запросом к серверу.
+ * В интерфейсе они и так скрыты, но без этого guard'а запрет обходится
+ * прямым запросом к серверу.
  *
- * Директор проходит всегда; обычный менеджер — тоже (он видит только свои
- * данные, это отдельный слой проверок внутри сервисов).
+ * Кого закрывает: сотрудника без права `finance:view` — то есть менеджера,
+ * а также руководителя с персональной галочкой «без доступа к финансам»
+ * (она сильнее роли, см. permissions.ts).
  */
 @Injectable()
 export class NoOpsFinanceGuard implements CanActivate {
@@ -25,8 +24,13 @@ export class NoOpsFinanceGuard implements CanActivate {
     const user = req.user;
     if (!user) return true; // авторизацию проверяет JwtAuthGuard
 
-    const isOps = user.role !== Role.DIRECTOR && user.canManageOps === true;
-    if (isOps) {
+    /*
+     * Единственный источник правды — permissionsOf(): она уже учитывает и
+     * роль, и персональный запрет noFinance. Повторять её условия здесь
+     * значило бы завести второе правило, которое рано или поздно разойдётся
+     * с первым — и один раздел закроется, а соседний останется открытым.
+     */
+    if (!can(user, 'finance:view')) {
       throw new ForbiddenException('Нет доступа к финансовым разделам');
     }
     return true;

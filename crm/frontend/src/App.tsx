@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { userSeesTrash } from './types';
+import { userSeesFinance, userSeesTrash } from './types';
 import type { Role } from './types';
 
 // Разделы грузятся по требованию (code-splitting) — тяжёлые библиотеки
@@ -42,6 +42,19 @@ function Protected({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/**
+ * Деньги компании: доходы и расходы.
+ *
+ * Не просто «роль DIRECTOR»: персональная галочка «без доступа к финансам»
+ * сильнее роли, и руководитель с ней сюда тоже не попадёт — ни по ссылке
+ * из меню, ни по прямому адресу. Ту же проверку делает сервер.
+ */
+function FinanceOnly({ children }: { children: JSX.Element }) {
+  const { user } = useAuth();
+  if (user && !userSeesFinance(user)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -154,9 +167,9 @@ export default function App() {
           <Route
             path="/finance"
             element={
-              <RoleOnly roles={['DIRECTOR']}>
+              <FinanceOnly>
                 <Finance />
-              </RoleOnly>
+              </FinanceOnly>
             }
           />
           {/* История изменений: сотруднику показываются его собственные

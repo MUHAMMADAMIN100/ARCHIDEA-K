@@ -46,6 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       canManageOps: user.canManageOps,
       canManageTasks: user.canManageTasks,
       canSeeTrash: user.canSeeTrash,
+      noFinance: user.noFinance,
     };
   }
 }

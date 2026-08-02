@@ -13,6 +13,7 @@ import {
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
+import { seesFinance } from '../common/permissions';
 import {
   dayKey,
   momentRange,
@@ -121,7 +122,7 @@ export class AnalyticsService {
     const result: any = { newLeads, inProgress, doneThisMonth, totalClients };
 
     // выручка — только руководителю
-    if (user.role === Role.DIRECTOR) {
+    if (seesFinance(user)) {
       const r = await this.revenueInRange(scope, month);
       result.revenueMonth = r.revenue;
     }
@@ -230,7 +231,7 @@ export class AnalyticsService {
     };
 
     // Выручка — только руководителю
-    if (user.role === Role.DIRECTOR) {
+    if (seesFinance(user)) {
       const [day, week, month, quarter, current, revenueSeries] =
         await Promise.all([
           this.revenueInRange(scope, this.rangeOf('day')),
@@ -297,7 +298,7 @@ export class AnalyticsService {
        * Менеджеру со своей областью данных по-прежнему не видно ни того,
        * ни другого: он и так смотрит только на собственные заказы.
        */
-      const seesMoney = user.role === Role.DIRECTOR;
+      const seesMoney = seesFinance(user);
       const seesSales = seesAll(user);
       result.breakdowns = seesMoney
         ? rows
@@ -601,7 +602,7 @@ export class AnalyticsService {
       'managerOrders',
       'managerPaidOrders',
     ];
-    if (MONEY.includes(metric) && user.role !== Role.DIRECTOR) {
+    if (MONEY.includes(metric) && !seesFinance(user)) {
       throw new ForbiddenException('Финансовые данные доступны только руководителю');
     }
     if (ALL_STAFF.includes(metric) && !seesAll(user)) {
@@ -653,7 +654,7 @@ export class AnalyticsService {
         orderBy: { date: 'desc' },
         take: 300,
       });
-      const showMoney = user.role === Role.DIRECTOR;
+      const showMoney = seesFinance(user);
       if (metric === 'brigadeVisits') {
         return {
           metric,

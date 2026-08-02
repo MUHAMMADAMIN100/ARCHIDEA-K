@@ -17,7 +17,7 @@ import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator';
-import { managesOps } from '../common/permissions';
+import { managesOps, seesFinance } from '../common/permissions';
 import {
   CreateBrigadeDto,
   CreateCleanerDto,
