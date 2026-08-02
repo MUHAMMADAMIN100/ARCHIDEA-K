@@ -144,8 +144,17 @@ export function QuizForm() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-      {/* Левая часть — шаги формы (светлая карточка) */}
-      <div className="card-light p-6 text-navy-900 sm:p-8">
+      {/*
+        Левая часть — шаги формы (светлая карточка).
+
+        min-w-0 обязателен. Ячейка сетки по умолчанию не даёт содержимому
+        сжаться уже своей «естественной» ширины, и карточка раздувалась до
+        361 пикселя из-за длинных названий доп. услуг. На экране 320 px она
+        вылезала за правый край: обрезались подсказки под полями, текст
+        согласия и сумма. Ноль разрешает ячейке сузиться, а длинные названия
+        и без того укорачиваются многоточием.
+      */}
+      <div className="card-light min-w-0 p-6 text-navy-900 sm:p-8">
         {/* Honeypot — невидимая ловушка для ботов.
             Имя поля НЕ должно совпадать с реальным (company/email/name),
             иначе браузер автозаполнит его и заявка ошибочно уйдёт в спам. */}
@@ -193,8 +202,13 @@ export function QuizForm() {
           </AnimatePresence>
         </div>
 
-        {/* Навигация */}
-        <div className="mt-8 flex items-center gap-3">
+        {/*
+          Навигация.
+          flex-wrap: на экране 320 px «Назад» и «Отправить заявку» в одну
+          строку не помещались, и кнопка отправки на треть вылезала за край
+          карточки. При нехватке места она уходит на свою строку.
+        */}
+        <div className="mt-8 flex flex-wrap items-center gap-3">
           {step > 0 && (
             <button type="button" onClick={goBack} className="btn-outline-dark">
               <IconArrowLeft className="h-4 w-4" />
@@ -225,7 +239,7 @@ export function QuizForm() {
       </div>
 
       {/* Правая часть — «Итого» (тёмная панель, sticky) */}
-      <div className="lg:sticky lg:top-24 lg:self-start">
+      <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
         <div className="overflow-hidden rounded-3xl bg-navy-gradient text-white shadow-card">
           <div className="border-b border-white/10 bg-white/5 px-6 py-4">
             <h3 className="font-bold">Ваш расчёт</h3>
@@ -250,14 +264,19 @@ export function QuizForm() {
           </div>
 
           <div className="border-t border-white/10 px-6 py-5">
-            <div className="flex items-end justify-between">
+            {/*
+              На узком экране «Итого» и крупная сумма в одну строку не
+              помещались: сумма переносилась и наезжала на подпись. Теперь
+              при нехватке места сумма уходит на свою строку целиком.
+            */}
+            <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
               <span className="text-white/60">Итого</span>
               <motion.span
                 key={breakdown.total}
                 initial={{ scale: 0.9, opacity: 0.6 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.25 }}
-                className="text-3xl font-extrabold text-white"
+                className="ml-auto whitespace-nowrap text-2xl font-extrabold text-white sm:text-3xl"
               >
                 {formatPrice(breakdown.total)}
               </motion.span>

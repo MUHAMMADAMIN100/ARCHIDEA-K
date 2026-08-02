@@ -1,5 +1,6 @@
-import { FieldLabel, OptionCard, TextArea, TextInput } from './fields';
+import { FieldLabel, OptionCard, TextArea } from './fields';
 import { DatePickerField } from './DatePickerField';
+import { TimePickerField } from './TimePickerField';
 import type { QuizState } from '../../types';
 
 interface Props {
@@ -26,11 +27,9 @@ export function SpecificsStep({ state, onChange, minDate }: Props) {
         </div>
         <div>
           <FieldLabel required>Удобное время</FieldLabel>
-          <TextInput
-            type="time"
+          <TimePickerField
             value={state.time}
-            onChange={(e) => set('time', e.target.value)}
-            className="[color-scheme:light]"
+            onChange={(v) => set('time', v)}
           />
         </div>
       </div>

@@ -187,7 +187,9 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                         toggleExtra(s.id, !active);
                       }
                     }}
-                    className={`flex h-[70px] cursor-pointer items-center gap-2.5 rounded-2xl border px-3 transition-all duration-200 ${
+                    /* min-w-0: без него ячейка сетки держит ширину по самому
+                       длинному названию услуги и распирает всю форму */
+                    className={`flex h-[70px] min-w-0 cursor-pointer items-center gap-2.5 rounded-2xl border px-3 transition-all duration-200 ${
                       active
                         ? 'border-navy-500 bg-navy-50 ring-1 ring-navy-300'
                         : 'border-navy-200 bg-white hover:border-navy-400 hover:bg-navy-50'
