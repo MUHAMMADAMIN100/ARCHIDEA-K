@@ -1,11 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DragDropContext,
   Droppable,
   Draggable,
   type DropResult,
 } from '@hello-pangea/dnd';
-import { ChevronLeft, ChevronRight, Plus, Inbox } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Inbox,
+} from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
@@ -94,6 +100,16 @@ function addDays(d: Date, n: number): Date {
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** «7 августа 2026 г.» из ключа дня — заголовок списка выбранного дня */
+function humanDay(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 /** Задача ещё не сохранена на сервере (оптимистичная) — действия с ней недоступны */
 const isTemp = (id: string) => id.startsWith('temp_');
 
@@ -177,6 +193,77 @@ function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
   );
 }
 
+/**
+ * Строка заказа в списке дня.
+ *
+ * В отличие от карточки в клетке здесь есть вся ширина экрана: имя клиента,
+ * этап, адрес и сумма читаются целиком, без обрезки.
+ */
+function DayOrderRow({
+  order,
+  onOpen,
+}: {
+  order: Order;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2.5 rounded-xl border border-navy-100 bg-white p-2.5 text-left transition hover:bg-navy-50"
+    >
+      <span
+        className={`h-9 w-1 shrink-0 rounded-full ${STAGE_DOT[order.stage]}`}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-navy-900">
+          {order.client?.fullName ?? 'Клиент'}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-navy-600">
+          {STAGE_LABEL[order.stage]}
+          {order.address ? ` · ${order.address}` : ''}
+        </span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block whitespace-nowrap text-sm font-bold tabular-nums text-navy-800">
+          {formatPrice(orderTotal(order))}
+        </span>
+        {(order.paidAmount ?? 0) > 0 && orderDue(order) > 0 && (
+          <span className="block whitespace-nowrap text-[11px] font-bold tabular-nums text-red-700">
+            долг {orderDue(order).toLocaleString('ru-RU')}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** Строка задачи в списке дня */
+function DayTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
+  const done = task.status === 'DONE';
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2.5 rounded-xl border border-navy-100 bg-white p-2.5 text-left transition hover:bg-navy-50"
+    >
+      <span
+        className={`h-9 w-1 shrink-0 rounded-full ${TASK_TYPE_DOT[task.type]}`}
+      />
+      <span
+        className={`min-w-0 flex-1 truncate text-sm font-medium text-navy-900 ${
+          done ? 'line-through opacity-60' : ''
+        }`}
+      >
+        {task.title}
+      </span>
+      <span className="shrink-0 whitespace-nowrap text-xs text-navy-600">
+        {TASK_STATUS_LABEL[task.status]}
+      </span>
+    </button>
+  );
+}
+
 export function Calendar() {
   const toast = useToast();
   const { user } = useAuth();
@@ -202,6 +289,36 @@ export function Calendar() {
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
   // какой день раскрыт списком: клик по клетке показывает все дела этого дня
   const [dayOpen, setDayOpen] = useState<string | null>(null);
+
+  /*
+   * Узкий экран — телефон.
+   *
+   * Проверяем именно ширину, а не «палец вместо мыши»: на планшете места
+   * хватает, и там остаётся обычная сетка с карточками. Слушаем изменения,
+   * чтобы поворот экрана переключал вид без перезагрузки страницы.
+   */
+  const [isNarrow, setIsNarrow] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      !!window.matchMedia?.('(max-width: 639.98px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 639.98px)');
+    if (!mq) return;
+    const onChange = () => setIsNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  /*
+   * Выбранный день. На телефоне тап по клетке не открывает окно поверх
+   * календаря, а обновляет список под сеткой — месяц при этом остаётся на
+   * месте. При входе выбран сегодняшний день: свои дела видно сразу.
+   */
+  const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()));
+  const dayListRef = useRef<HTMLDivElement>(null);
+  // «Без даты» на телефоне свёрнут в строку со счётчиком
+  const [undatedOpen, setUndatedOpen] = useState(false);
 
   /*
    * Заказы берём из той же доски, что и воронка: один запрос, общий кэш —
@@ -293,6 +410,23 @@ export function Calendar() {
         ? addDays(c, dir * 7)
         : new Date(c.getFullYear(), c.getMonth() + dir, 1),
     );
+
+  /**
+   * Тап по дню на телефоне: месяц остаётся на месте, обновляется список.
+   *
+   * Если список ушёл под нижний край экрана, подводим его в поле зрения —
+   * иначе тап выглядит так, будто ничего не произошло.
+   */
+  const pickDay = (key: string) => {
+    setSelectedDay(key);
+    requestAnimationFrame(() => {
+      const el = dayListRef.current;
+      if (!el) return;
+      if (el.getBoundingClientRect().top > window.innerHeight - 140) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  };
 
   /** Оптимистичное изменение задачи в списке */
   const patchTask = (id: string, patch: Partial<Task>) =>
@@ -504,16 +638,145 @@ export function Calendar() {
         }}
         onDragEnd={onDragEnd}
       >
-        {/* Шапка дней недели */}
-        <div className="mb-2 grid grid-cols-7 gap-1 sm:gap-2">
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="text-xs font-semibold text-navy-600">
-              {w}
-            </div>
-          ))}
-        </div>
+        {/* Шапка дней недели — в мобильной неделе не нужна, там строки */}
+        {(!isNarrow || view === 'month') && (
+          <div className="mb-2 grid grid-cols-7 gap-1 sm:gap-2">
+            {WEEKDAYS.map((w) => (
+              <div
+                key={w}
+                className="text-center text-xs font-semibold text-navy-600 sm:text-left"
+              >
+                {w}
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Сетка дней */}
+        {isNarrow && view === 'month' && (
+          /*
+           * Сетка месяца на телефоне.
+           *
+           * Карточек с текстом здесь нет намеренно: в колонке шириной около
+           * сорока пикселей обрезалось и имя клиента, и сумма — читать было
+           * нечего. Остаётся число дня и счётчики: синий — уборки, серый —
+           * задачи. Подробности показывает список под сеткой.
+           */
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((d) => {
+              const key = dayKey(d);
+              const inMonth = d.getMonth() === cursor.getMonth();
+              const isToday = key === todayKey;
+              const picked = key === selectedDay;
+              const nOrders = ordersByDay.get(key)?.length ?? 0;
+              const nTasks = byDay.get(key)?.length ?? 0;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => pickDay(key)}
+                  aria-label={`${humanDay(key)}: уборок ${nOrders}, задач ${nTasks}`}
+                  className={`flex aspect-square flex-col items-center justify-center rounded-xl border transition-colors ${
+                    picked
+                      ? 'border-brand-400 bg-brand-50'
+                      : 'border-navy-100 bg-white'
+                  } ${inMonth ? '' : 'opacity-40'}`}
+                >
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums ${
+                      isToday ? 'bg-brand-500 text-white' : 'text-navy-800'
+                    }`}
+                  >
+                    {d.getDate()}
+                  </span>
+                  {/* счётчики: рисуем только то, что на день действительно есть */}
+                  <span className="mt-0.5 flex h-3 items-center gap-1.5 text-[10px] font-bold leading-none tabular-nums">
+                    {nOrders > 0 && (
+                      <span className="text-brand-500">{nOrders}</span>
+                    )}
+                    {nTasks > 0 && (
+                      <span className="text-navy-600">{nTasks}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {isNarrow && view === 'week' && (
+          /*
+           * Неделя на телефоне — семь строк сверху вниз.
+           *
+           * Семь колонок на узком экране давали ту же кашу из обрезанного
+           * текста, что и месяц. В строке ширины хватает на имя клиента,
+           * этап и сумму целиком.
+           */
+          <div className="space-y-2">
+            {days.map((d) => {
+              const key = dayKey(d);
+              const isToday = key === todayKey;
+              const orders = ordersByDay.get(key) ?? [];
+              const tasks = byDay.get(key) ?? [];
+              return (
+                <div
+                  key={key}
+                  className={`rounded-2xl border p-2 ${
+                    isToday
+                      ? 'border-brand-300 bg-brand-50/50'
+                      : 'border-navy-100 bg-white'
+                  }`}
+                >
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-xs font-semibold text-navy-700">
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full tabular-nums ${
+                          isToday ? 'bg-brand-500 text-white' : 'bg-navy-100'
+                        }`}
+                      >
+                        {d.getDate()}
+                      </span>
+                      {WEEKDAYS[(d.getDay() + 6) % 7]}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setModal({ mode: 'create', date: key })}
+                      className="inline-flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[11px] font-medium text-navy-600"
+                    >
+                      <Plus className="h-3 w-3" />
+                      задача
+                    </button>
+                  </div>
+                  {orders.length === 0 && tasks.length === 0 ? (
+                    <p className="px-1 pb-1 text-xs text-navy-600">Дел нет</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {orders.map((o) => (
+                        <DayOrderRow
+                          key={o.id}
+                          order={o}
+                          onOpen={() => setOpenOrder(o)}
+                        />
+                      ))}
+                      {tasks.map((t) => (
+                        <DayTaskRow
+                          key={t.id}
+                          task={t}
+                          onOpen={() => {
+                            if (!isTemp(t.id))
+                              setModal({ mode: 'edit', id: t.id });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Сетка дней — планшет и компьютер */}
+        {!isNarrow && (
         <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {days.map((d) => {
             const key = dayKey(d);
@@ -617,6 +880,63 @@ export function Calendar() {
             );
           })}
         </div>
+        )}
+
+        {/*
+          Список выбранного дня — только на телефоне и только в виде месяца.
+          Раньше день раскрывался окном поверх календаря: сетка исчезала, и
+          чтобы посмотреть соседний день, окно приходилось закрывать. Теперь
+          месяц остаётся на месте, а меняется только список под ним.
+        */}
+        {isNarrow && view === 'month' && (
+          <div ref={dayListRef} className="mt-4 scroll-mt-4">
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-bold text-navy-900">
+                {humanDay(selectedDay)}
+              </h3>
+              {selectedDay === todayKey && (
+                <span className="shrink-0 text-xs font-semibold text-brand-500">
+                  сегодня
+                </span>
+              )}
+            </div>
+
+            {(ordersByDay.get(selectedDay) ?? []).length === 0 &&
+            (byDay.get(selectedDay) ?? []).length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-navy-200 bg-white px-4 py-6 text-center text-sm text-navy-600">
+                На этот день дел нет
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {(ordersByDay.get(selectedDay) ?? []).map((o) => (
+                  <DayOrderRow
+                    key={o.id}
+                    order={o}
+                    onOpen={() => setOpenOrder(o)}
+                  />
+                ))}
+                {(byDay.get(selectedDay) ?? []).map((t) => (
+                  <DayTaskRow
+                    key={t.id}
+                    task={t}
+                    onOpen={() => {
+                      if (!isTemp(t.id)) setModal({ mode: 'edit', id: t.id });
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setModal({ mode: 'create', date: selectedDay })}
+              className="btn-ghost mt-2 w-full"
+            >
+              <Plus className="h-4 w-4" />
+              Новая задача на этот день
+            </button>
+          </div>
+        )}
 
         {/* Задачи без срока */}
         <Droppable droppableId={NO_DATE} direction="horizontal" isDropDisabled={isTouch}>
@@ -630,57 +950,87 @@ export function Calendar() {
                   : 'border-navy-200 bg-white'
               }`}
             >
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-navy-600">
-                <Inbox className="h-3.5 w-3.5" />
+              {/*
+                На телефоне блок свёрнут в одну строку со счётчиком: раскрытым
+                он занимал полэкрана карточками, до которых почти не доходят.
+                На компьютере он как был — там это ещё и место, куда бросают
+                задачу, чтобы снять срок.
+              */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isNarrow) setUndatedOpen((o) => !o);
+                }}
+                className="mb-2 flex w-full items-center gap-1.5 text-left text-xs font-semibold text-navy-600"
+              >
+                <Inbox className="h-3.5 w-3.5 shrink-0" />
                 Без даты
                 {ordersUndated.length + undated.length > 0 && (
-                  <span className="text-navy-600">
-                    · {ordersUndated.length + undated.length}
-                  </span>
+                  <span>· {ordersUndated.length + undated.length}</span>
                 )}
-              </div>
+                {isNarrow && (
+                  <ChevronDown
+                    className={`ml-auto h-4 w-4 shrink-0 transition-transform ${
+                      undatedOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                )}
+              </button>
               <div className="flex flex-wrap gap-2">
-                {ordersUndated.length === 0 && undated.length === 0 && (
-                  <span className="text-xs text-navy-600">
-                    {isTouch
-                      ? 'Заказы и задачи без даты появятся здесь'
-                      : 'Перетащите задачу сюда, чтобы снять срок'}
-                  </span>
-                )}
-                {ordersUndated.map((o) => (
-                    <div
-                      key={o.id}
-                      onClick={() => setOpenOrder(o)}
-                      className="w-44 cursor-pointer"
-                    >
-                      <OrderCard order={o} compact />
-                    </div>
-                  ))}
-                {undated.map((t, index) => (
-                  <Draggable
-                    key={t.id}
-                    draggableId={t.id}
-                    index={index}
-                    isDragDisabled={isTouch}
-                  >
-                    {(p, snap) => (
-                      <div
-                        ref={p.innerRef}
-                        {...p.draggableProps}
-                        {...p.dragHandleProps}
-                        onClick={() => {
-                          if (draggingRef.current || isTemp(t.id)) return;
-                          setModal({ mode: 'edit', id: t.id });
-                        }}
-                        className={`w-52 cursor-pointer ${
-                          snap.isDragging ? 'shadow-lg' : ''
-                        }`}
-                      >
-                        <TaskCard task={t} compact={false} />
-                      </div>
+                {(!isNarrow || undatedOpen) && (
+                  <>
+                    {ordersUndated.length === 0 && undated.length === 0 && (
+                      <span className="text-xs text-navy-600">
+                        {isTouch
+                          ? 'Заказы и задачи без даты появятся здесь'
+                          : 'Перетащите задачу сюда, чтобы снять срок'}
+                      </span>
                     )}
-                  </Draggable>
-                ))}
+                    {ordersUndated.map((o) =>
+                      isNarrow ? (
+                        <div key={o.id} className="w-full">
+                          <DayOrderRow
+                            order={o}
+                            onOpen={() => setOpenOrder(o)}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          key={o.id}
+                          onClick={() => setOpenOrder(o)}
+                          className="w-44 cursor-pointer"
+                        >
+                          <OrderCard order={o} compact />
+                        </div>
+                      ),
+                    )}
+                    {undated.map((t, index) => (
+                      <Draggable
+                        key={t.id}
+                        draggableId={t.id}
+                        index={index}
+                        isDragDisabled={isTouch}
+                      >
+                        {(p, snap) => (
+                          <div
+                            ref={p.innerRef}
+                            {...p.draggableProps}
+                            {...p.dragHandleProps}
+                            onClick={() => {
+                              if (draggingRef.current || isTemp(t.id)) return;
+                              setModal({ mode: 'edit', id: t.id });
+                            }}
+                            className={`cursor-pointer ${
+                              isNarrow ? 'w-full' : 'w-52'
+                            } ${snap.isDragging ? 'shadow-lg' : ''}`}
+                          >
+                            <TaskCard task={t} compact={false} />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                  </>
+                )}
                 {provided.placeholder}
               </div>
             </div>
@@ -688,8 +1038,12 @@ export function Calendar() {
         </Droppable>
       </DragDropContext>
 
-      {/* Легенда */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3">
+      {/*
+        Легенда — только на планшете и компьютере. На телефоне девять этапов
+        занимали три ряда внизу экрана и ничего не добавляли: в списке дня
+        этап и так написан словами.
+      */}
+      <div className="mt-4 hidden flex-wrap items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3 sm:flex">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold text-navy-600">Легенда:</span>
           {STAGE_ORDER.map((st) => (
