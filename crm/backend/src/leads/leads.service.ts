@@ -18,7 +18,7 @@ import { TelegramService } from '../telegram/telegram.service';
 import { escapeHtml } from '../telegram/telegram.util';
 import { NOT_DELETED } from '../common/soft-delete';
 import { parseDate } from '../common/time/dushanbe';
-import { normalizePhone } from '../common/validation/contact';
+import { formatPhone, normalizePhone } from '../common/validation/contact';
 import { unitPrice } from '../orders/order-pricing';
 import { LeadIntakeDto } from './dto/intake.dto';
 
@@ -64,6 +64,7 @@ export class LeadsService {
     const missing: string[] = [];
     if (!dto.contact?.name?.trim()) missing.push('имя');
     if (!dto.contact?.phone?.trim()) missing.push('телефон');
+    if (!dto.contact?.phone2?.trim()) missing.push('запасной телефон');
     if (!dto.contact?.address?.trim()) missing.push('адрес');
     if (!dto.quiz?.date?.trim()) missing.push('дату уборки');
     if (missing.length) {
@@ -73,8 +74,23 @@ export class LeadsService {
     const contact = {
       name: dto.contact!.name!.trim(),
       phone: dto.contact!.phone!.trim(),
+      phone2: dto.contact!.phone2!.trim(),
       address: dto.contact!.address!.trim(),
     };
+
+    /*
+     * Запасной номер должен отличаться от основного. Иначе поле в форме
+     * бессмысленно: достаточно скопировать первый номер, и в карточке
+     * клиента окажется один и тот же телефон дважды.
+     */
+    if (
+      normalizePhone(contact.phone) &&
+      normalizePhone(contact.phone) === normalizePhone(contact.phone2)
+    ) {
+      throw new BadRequestException(
+        'Запасной номер должен отличаться от основного',
+      );
+    }
 
     // 2. Rate-limit: не чаще раза в 20 сек с одного телефона
     // ключ по каноническому номеру: «+992 90…» и «90…» — один и тот же человек
@@ -99,6 +115,7 @@ export class LeadsService {
     const { client } = await this.clients.findOrCreateByPhone({
       fullName: contact.name,
       phone: contact.phone,
+      extraPhones: [contact.phone2],
       source: LeadSource.SITE,
       managerId: managerId ?? undefined,
     });
@@ -231,6 +248,8 @@ export class LeadsService {
       '<b>Новая заявка с сайта</b>',
       `Клиент: ${escapeHtml(client.fullName)}`,
       `Телефон: ${escapeHtml(client.phone)}`,
+      // запасной номер нужен прямо в уведомлении: по нему звонят вторым
+      `Запасной: ${escapeHtml(formatPhone(contact.phone2))}`,
       `Адрес: ${escapeHtml(contact.address)}`,
       `Объём: ${volume}`,
       `Расчёт: ${clamp(dto.total)} сомони`,

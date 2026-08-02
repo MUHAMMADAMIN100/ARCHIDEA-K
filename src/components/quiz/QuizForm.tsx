@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalculatorStep } from './CalculatorStep';
 import { SpecificsStep } from './SpecificsStep';
-import { ContactsStep } from './ContactsStep';
+import { ContactsStep, samePhones } from './ContactsStep';
 import { SuccessScreen } from './SuccessScreen';
 import { Stepper } from './Stepper';
 import { IconArrowLeft, IconArrowRight, IconCheck } from '../ui/icons';
@@ -55,6 +55,7 @@ export function QuizForm() {
   const [contact, setContact] = useState<ContactState>({
     name: '',
     phone: '+992 ',
+    phone2: '+992 ',
     address: '',
   });
   const [contactErrors, setContactErrors] = useState<
@@ -88,6 +89,14 @@ export function QuizForm() {
       // имя — только буквы: раньше в заявку проходило «Тест клиент1й21»
       name: !PERSON_NAME_RE.test(contact.name.trim()),
       phone: contact.phone.replace(/\D/g, '').length < 12, // 992 + 9 цифр
+      /*
+       * Запасной номер обязателен и обязан отличаться от основного.
+       * Без проверки на совпадение поле теряет смысл: люди копируют
+       * первый номер, лишь бы форма пропустила дальше.
+       */
+      phone2:
+        contact.phone2.replace(/\D/g, '').length < 12 ||
+        samePhones(contact.phone, contact.phone2),
       address: contact.address.trim().length < 4,
     };
     setContactErrors(errs);

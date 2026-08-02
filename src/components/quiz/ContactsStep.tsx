@@ -21,9 +21,25 @@ export function formatTjPhone(raw: string): string {
   return out;
 }
 
+/** Девять цифр номера без кода страны — для сравнения двух полей между собой */
+function phoneDigits(raw: string): string {
+  const d = raw.replace(/\D/g, '');
+  return d.startsWith('992') ? d.slice(3) : d;
+}
+
+/** Оба поля заполнены и это один и тот же номер */
+export function samePhones(a: string, b: string): boolean {
+  const x = phoneDigits(a);
+  const y = phoneDigits(b);
+  return x.length === 9 && x === y;
+}
+
 export function ContactsStep({ state, onChange, errors }: Props) {
   const set = <K extends keyof ContactState>(key: K, value: ContactState[K]) =>
     onChange({ ...state, [key]: value });
+
+  // один и тот же номер в обоих полях — подсказка объясняет, что не так
+  const sameNumbers = samePhones(state.phone, state.phone2);
 
   return (
     <div className="space-y-5">
@@ -62,6 +78,44 @@ export function ContactsStep({ state, onChange, errors }: Props) {
         {errors.phone && (
           <p className="mt-1.5 text-xs text-red-500">
             Введите корректный номер телефона
+          </p>
+        )}
+      </div>
+
+      {/*
+        Запасной номер обязателен наравне с основным: по одному телефону
+        клиент нередко недоступен, и заявка зависает. Поле показываем сразу,
+        а не прячем за «добавить ещё» — иначе его почти никто не заполняет.
+      */}
+      <div>
+        <FieldLabel required>Запасной номер</FieldLabel>
+        <TextInput
+          type="tel"
+          inputMode="numeric"
+          value={state.phone2 || '+992 '}
+          invalid={errors.phone2}
+          onChange={(e) => set('phone2', formatTjPhone(e.target.value))}
+          onFocus={(e) => {
+            if (!state.phone2) set('phone2', '+992 ');
+            requestAnimationFrame(() =>
+              e.target.setSelectionRange(
+                e.target.value.length,
+                e.target.value.length,
+              ),
+            );
+          }}
+          placeholder="+992 __ ___ __ __"
+          autoComplete="tel"
+        />
+        {errors.phone2 ? (
+          <p className="mt-1.5 text-xs text-red-500">
+            {sameNumbers
+              ? 'Укажите другой номер — этот уже вписан выше'
+              : 'Введите корректный номер телефона'}
+          </p>
+        ) : (
+          <p className="mt-1.5 text-xs text-navy-400">
+            Позвоним на него, если по первому не дозвонимся
           </p>
         )}
       </div>

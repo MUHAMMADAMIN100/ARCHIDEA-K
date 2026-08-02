@@ -125,12 +125,42 @@ export class ClientsService {
       );
     }
     const fullName = (data.fullName || '').trim().slice(0, 120); // ограничение длины
+
+    /*
+     * Запасные номера из обращения — в едином виде и без основного:
+     * один и тот же телефон не должен лежать в карточке дважды.
+     */
+    const incomingExtra = (data.extraPhones ?? [])
+      .map((p) => canonicalPhone(p))
+      .filter((p): p is string => !!p && p !== phone);
+
+    /**
+     * Добавляет новые запасные номера к уже сохранённым.
+     *
+     * Нужно именно дополнение, а не замена: у постоянного клиента в карточке
+     * уже могут быть номера, вписанные менеджером руками, и обращение с сайта
+     * не должно их стирать.
+     */
+    const mergeExtra = (saved: string[]): string[] => {
+      const out = [...saved];
+      for (const p of incomingExtra) if (!out.includes(p)) out.push(p);
+      return out;
+    };
+
     const existing = await this.prisma.client.findUnique({ where: { phone } });
     if (existing) {
       if (!existing.deletedAt) {
+        /*
+         * Клиент обратился повторно и назвал новый запасной номер — раньше
+         * он терялся: у существующего клиента обновлялась только дата
+         * последнего контакта. Теперь номер дописывается в карточку.
+         */
         const touched = await this.prisma.client.update({
           where: { id: existing.id },
-          data: { lastContactAt: new Date() },
+          data: {
+            lastContactAt: new Date(),
+            extraPhones: mergeExtra(existing.extraPhones),
+          },
         });
         return { client: touched, created: false };
       }
@@ -152,7 +182,11 @@ export class ClientsService {
       const restored = await this.prisma.$transaction(async (tx) => {
         const client = await tx.client.update({
           where: { id: existing.id },
-          data: { ...restore, lastContactAt: new Date() },
+          data: {
+            ...restore,
+            lastContactAt: new Date(),
+            extraPhones: mergeExtra(existing.extraPhones),
+          },
         });
         await tx.order.updateMany({ where: { clientId: existing.id, deletedAt }, data: restore });
         await tx.proposal.updateMany({ where: { clientId: existing.id, deletedAt }, data: restore });
@@ -172,9 +206,7 @@ export class ClientsService {
         notes: data.notes,
         discount: data.discount ?? 0,
         // запасные номера храним в едином формате — 9 цифр
-        extraPhones: (data.extraPhones ?? [])
-          .map((p) => normalizePhone(p))
-          .filter((p): p is string => !!p),
+        extraPhones: incomingExtra,
         labels: (data.labels ?? []).map((l) => l.trim()).filter(Boolean),
         sourceDetail: data.sourceDetail?.trim() || null,
       },

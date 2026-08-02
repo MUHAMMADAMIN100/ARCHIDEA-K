@@ -84,6 +84,12 @@ class ContactDto {
   @IsTjPhone()
   phone?: string;
 
+  /** Запасной номер с сайта — попадает в запасные телефоны карточки клиента */
+  @IsOptional()
+  @IsString()
+  @IsTjPhone()
+  phone2?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(300)

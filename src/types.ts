@@ -25,6 +25,12 @@ export interface QuizState {
 export interface ContactState {
   name: string;
   phone: string;
+  /**
+   * Запасной номер — обязателен наравне с основным.
+   * По нему звонят, когда по первому не дозвонились: без второго контакта
+   * заявка нередко «зависала» на несколько дней.
+   */
+  phone2: string;
   address: string;
 }
 
