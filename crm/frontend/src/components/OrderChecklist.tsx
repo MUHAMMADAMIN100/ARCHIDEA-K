@@ -39,7 +39,7 @@ const LEVELS: { value: DirtAssessment; label: string; on: string; off: string }[
   {
     value: 'HEAVY',
     label: 'Сильное',
-    on: 'border-red-500 bg-red-500 text-white',
+    on: 'border-red-600 bg-red-600 text-white',
     off: 'border-red-200 text-red-700 hover:bg-red-50',
   },
 ];
