@@ -22,9 +22,17 @@ const RELATED: Partial<Record<ChangedResource, ChangedResource[]>> = {
   reports: ['finance'],
 };
 
-/** Первый сегмент пути запроса → раздел данных */
+/**
+ * Первый значащий сегмент пути → раздел данных.
+ *
+ * У приложения глобальный префикс «api», и в пути он присутствует:
+ * /api/clients. Его надо снять, иначе разделом всегда оказывается «api»
+ * и о событии никто не узнаёт.
+ */
 function resourceOf(path: string): ChangedResource | null {
-  const seg = path.replace(/^\/+/, '').split('/')[0]?.split('?')[0];
+  const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
+  if (parts[0] === 'api') parts.shift();
+  const seg = parts[0]?.split('?')[0];
   const known: ChangedResource[] = [
     'orders',
     'clients',
