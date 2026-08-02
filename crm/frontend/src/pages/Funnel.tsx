@@ -264,6 +264,34 @@ export function Funnel() {
     },
   );
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
+
+  /*
+   * Доска занимает весь остаток экрана под шапкой и фильтрами: страница
+   * целиком больше не прокручивается, листаются только карточки внутри
+   * колонки. Высоту считаем от реального положения доски, а не формулой
+   * с «примерно такой-то шапкой»: фильтры переносятся на вторую строку на
+   * узком экране, и любая константа врала бы.
+   */
+  const [boardHeight, setBoardHeight] = useState<number>();
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const measure = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      // запас снизу — под горизонтальную полосу прокрутки доски
+      setBoardHeight(Math.max(320, window.innerHeight - top - 16));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    // фильтры могут перенестись на другую строку и сдвинуть доску
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro.disconnect();
+    };
+  }, []);
   // «Добавить клиента» прямо из воронки — та же форма, что в «Клиентах»
   const [showAddClient, setShowAddClient] = useState(false);
   // счётчик над колонкой — не просто число: по клику показываем сам список
@@ -551,6 +579,7 @@ export function Funnel() {
         */}
         <div
           ref={boardRef}
+          style={boardHeight ? { height: boardHeight } : undefined}
           className="board-scroll flex snap-x snap-mandatory gap-3 pr-4 sm:snap-none sm:gap-4 sm:pr-0"
         >
           {board.map((col) => {
@@ -589,7 +618,7 @@ export function Funnel() {
                 сколько из этих денег ещё не получено.
               */}
               <div
-                className={`mb-3 rounded-xl border bg-white px-3 py-2 ${
+                className={`mb-3 shrink-0 rounded-xl border bg-white px-3 py-2 ${
                   isDue ? 'border-red-300 ring-1 ring-red-200' : 'border-navy-100'
                 }`}
               >
@@ -634,7 +663,13 @@ export function Funnel() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`flex-1 space-y-2.5 rounded-2xl p-1 transition-colors ${
+                    /*
+                     * Карточки листаются внутри колонки. Библиотека
+                     * перетаскивания сама прокручивает этот блок, когда
+                     * тянешь карточку к его краю, — переносить заказ между
+                     * этапами по-прежнему можно.
+                     */
+                    className={`min-h-0 flex-1 space-y-2.5 overflow-y-auto rounded-2xl p-1 transition-colors ${
                       snapshot.isDraggingOver ? 'bg-navy-100/60' : ''
                     }`}
                   >
