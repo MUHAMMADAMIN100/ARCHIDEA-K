@@ -1066,8 +1066,14 @@ export function OrderModal({
                 </div>
                 <div>
                   <label className="label">Дата и время уборки</label>
-                  {/* узкая колонка: короткая подпись, чтобы дата и время встали в один ряд */}
-                  <div className="flex gap-2">
+                  {/*
+                    С sm: и выше это треть ряда — около двухсот пикселей. Дата
+                    и время рядом там не помещались: на поле даты оставалось
+                    семьдесят пикселей и вместо «07.08.2026» было видно «2…».
+                    Поэтому в узкой колонке они идут друг под другом, а на
+                    телефоне, где колонка во всю ширину, — в один ряд.
+                  */}
+                  <div className="flex gap-2 sm:flex-col">
                     <div className="min-w-0 flex-1">
                       <DatePicker
                         placeholder="дд.мм.гггг"
@@ -1079,7 +1085,7 @@ export function OrderModal({
                       />
                     </div>
                     <TimePicker
-                      className="w-[7.5rem] shrink-0"
+                      className="w-[7.5rem] shrink-0 sm:w-full"
                       value={scheduledTime}
                       onChange={(v) => {
                         markTouched('scheduledDate');
