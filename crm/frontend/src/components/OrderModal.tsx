@@ -1523,22 +1523,27 @@ export function OrderModal({
 
           {tab === 'history' && <HistoryPanel entity="ORDER" entityId={order.id} />}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-100 pt-4">
+          {/*
+            Низ карточки. На телефоне «Отмена» и «Сохранить» — двумя равными
+            кнопками во всю ширину, удаление отдельной строкой ниже: раньше
+            все три стояли вперемешку и промахнуться по «Удалить» было легко.
+          */}
+          <div className="space-y-2 border-t border-navy-100 pt-4 sm:flex sm:flex-row-reverse sm:items-center sm:justify-between sm:space-y-0">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <button onClick={onClose} className="btn-ghost justify-center">
+                Отмена
+              </button>
+              <button onClick={save} className="btn-primary justify-center">
+                Сохранить
+              </button>
+            </div>
             <button
               onClick={remove}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 sm:w-auto"
             >
               <Trash2 className="h-4 w-4" />
               Удалить заказ
             </button>
-            <div className="flex gap-2">
-              <button onClick={onClose} className="btn-ghost">
-                Отмена
-              </button>
-              <button onClick={save} className="btn-primary">
-                Сохранить
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -496,7 +496,8 @@ function TemplateModal({
           </button>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-navy-100 pt-3">
+        {/* пара равных кнопок: на телефоне во всю ширину, на десктопе справа */}
+        <div className="grid grid-cols-2 gap-2 border-t border-navy-100 pt-3 sm:flex sm:justify-end">
           <button onClick={onClose} className="btn-ghost">
             Отмена
           </button>

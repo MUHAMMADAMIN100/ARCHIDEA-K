@@ -119,31 +119,36 @@ export function ReportView() {
   return (
     <div className="mx-auto max-w-4xl">
       {/* ── Панель действий (не печатается) ── */}
-      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/*
+        Панель действий. На телефоне: возврат и удаление по краям верхней
+        строки, рабочие кнопки — сеткой ниже, все одного размера. Раньше они
+        шли одной лентой и «Удалить» оказывалась под большим пальцем.
+      */}
+      <div className="no-print mb-4 space-y-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
         <button
           onClick={() => navigate('/reports')}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
         >
           <ArrowLeft className="h-4 w-4" /> К списку
         </button>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {canEdit && (
             <button
               onClick={() => navigate(`/reports/${r.id}/edit`)}
-              className="btn-ghost"
+              className="btn-ghost justify-center"
             >
               <Pencil className="h-4 w-4" />
               Редактировать
             </button>
           )}
           {r.status === 'DRAFT' && (
-            <button onClick={sendReport} className="btn-primary">
+            <button onClick={sendReport} className="btn-primary justify-center">
               <Send className="h-4 w-4" />
               Отправить основателю
             </button>
           )}
           {r.status === 'SENT' && isDirector && (
-            <button onClick={acceptReport} className="btn-primary">
+            <button onClick={acceptReport} className="btn-primary justify-center">
               <CheckCircle2 className="h-4 w-4" />
               Принять
             </button>
@@ -156,7 +161,7 @@ export function ReportView() {
           {(isDirector || r.status !== 'ACCEPTED') && (
             <button
               onClick={removeReport}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
             >
               <Trash2 className="h-4 w-4" />
             </button>

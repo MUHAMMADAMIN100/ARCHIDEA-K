@@ -159,7 +159,7 @@ export function Modal({
   return createPortal(
     <div
       // items-center: окно всегда в центре экрана, как бы страница ни была прокручена
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/10 p-4 backdrop-blur-md sm:p-8"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/10 p-3 backdrop-blur-md sm:p-8"
       onClick={onClose}
     >
       {/*
@@ -167,7 +167,12 @@ export function Modal({
        * — иначе центрирование теряется, как только содержимое выше экрана.
        */}
       <div
-        className={`card flex max-h-[90vh] w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} p-6`}
+        /*
+         * На телефоне отступы окна меньше: при 24px с каждой стороны плюс
+         * поля оверлея содержимому оставалось меньше 300px, и подписи
+         * («Услуга», «Площадь, м²») срезались краем карточки.
+         */
+        className={`card flex max-h-[92vh] w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} p-4 sm:max-h-[90vh] sm:p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between">
@@ -179,7 +184,12 @@ export function Modal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+        {/*
+         * Содержимое прокручивается внутри окна. Небольшой отступ сверху
+         * нужен, чтобы прокрученная строка не прилипала к заголовку и не
+         * выглядела срезанной по верхней кромке.
+         */}
+        <div className="min-h-0 flex-1 overflow-y-auto pt-1">
           {children}
         </div>
       </div>

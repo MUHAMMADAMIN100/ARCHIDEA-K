@@ -480,7 +480,10 @@ export function ClientCard() {
                         <span className="font-semibold text-navy-900">
                           {TYPE_LABEL[o.cleaningType]}
                         </span>
-                        <Badge className={STAGE_COLOR[o.stage]}>
+                        {/* этап в одну строку: «В работе» разрывалось пополам */}
+                        <Badge
+                          className={`${STAGE_COLOR[o.stage]} whitespace-nowrap`}
+                        >
                           {STAGE_LABEL[o.stage]}
                         </Badge>
                       </div>

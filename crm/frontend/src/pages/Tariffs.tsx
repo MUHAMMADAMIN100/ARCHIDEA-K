@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Save,
   Check,
-  Sparkles,
+  SprayCan,
+  Package,
   Hammer,
   Armchair,
   LayoutGrid,
@@ -34,7 +35,7 @@ import type { ExtraService, Tariff, Tariffs as TariffsData } from '../types';
  */
 const TYPE_META: Record<string, { icon: LucideIcon; desc: string }> = {
   GENERAL: {
-    icon: Sparkles,
+    icon: SprayCan,
     desc: 'Глубокая уборка всей площади до блеска, даже в труднодоступных местах',
   },
   POST_RENOVATION: {
@@ -46,7 +47,7 @@ const TYPE_META: Record<string, { icon: LucideIcon; desc: string }> = {
     desc: 'Чистка мягкой мебели от пятен и запахов — цена за посадочное место',
   },
 };
-const DEFAULT_TYPE_META = { icon: Sparkles, desc: '' };
+const DEFAULT_TYPE_META = { icon: Package, desc: '' };
 
 const EXTRA_META: Record<string, { icon: LucideIcon }> = {
   windows: { icon: LayoutGrid },
