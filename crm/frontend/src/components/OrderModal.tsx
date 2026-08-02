@@ -1487,15 +1487,17 @@ export function OrderModal({
                       </button>
                     </div>
                   ))}
+                  {/* кнопка, а не ссылка: рядом с полями её было не отличить */}
                   <button
                     type="button"
                     onClick={() => {
                       markTouched('guests');
                       setGuests((prev) => [...prev, { fullName: '', rate: '' }]);
                     }}
-                    className="text-sm font-medium text-brand-600 hover:underline"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-navy-300 py-2 text-sm font-semibold text-brand-600 transition hover:border-brand-500 hover:bg-navy-50"
                   >
-                    + разовый сотрудник
+                    <span className="text-lg leading-none">+</span>
+                    разовый сотрудник
                   </button>
                 </div>
               </div>

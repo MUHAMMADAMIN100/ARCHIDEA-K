@@ -199,6 +199,10 @@ select.input {
  */
 @media (max-width: 639.98px) {
   .card {
-    background-color: #f7fafc;
+    /*
+     * Заметный серый, а не «почти белый»: прежний #f7fafc отличался от
+     * белого на глаз неразличимо, и карточки сливались с фоном страницы.
+     */
+    background-color: #eceff4;
   }
 }

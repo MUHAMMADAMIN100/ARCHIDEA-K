@@ -405,7 +405,11 @@ export function AddClientModal({
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   // запасные номера «на всякий случай» (ТЗ 1.1)
-  const [extraPhones, setExtraPhones] = useState<string[]>([]);
+  /*
+    Два номера сразу: второй показывается пустым и обязателен к заполнению —
+    так просил заказчик, чтобы база не оставалась с одним контактом.
+  */
+  const [extraPhones, setExtraPhones] = useState<string[]>(['']);
   // свободные теги (ТЗ 1.2) — в дополнение к единственному статусу
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
@@ -497,7 +501,11 @@ export function AddClientModal({
   }, [computed, manualPrice]);
 
   // кнопку не даём нажать, пока данные некорректны — сервер их всё равно отклонит
-  const canSubmit = isValidPersonName(fullName) && isValidPhone(phone);
+  const canSubmit =
+    isValidPersonName(fullName) &&
+    isValidPhone(phone) &&
+    // второй номер обязателен: пустым его оставить нельзя
+    isValidPhone(extraPhones[0] ?? '');
 
   const submit = () => {
     if (!canSubmit) return;
@@ -547,12 +555,14 @@ export function AddClientModal({
         <NameInput value={fullName} onChange={setFullName} autoFocus />
         <PhoneInput value={phone} onChange={setPhone} required />
 
-        {/* Запасные номера (ТЗ 1.1): необязательные, «на всякий случай» */}
+        {/* Второй номер обязателен, третий и далее — по желанию */}
+        <label className="label !mb-0 mt-2">Второй номер *</label>
         {extraPhones.map((p, i) => (
           <div key={i} className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <PhoneInput
                 value={p}
+                required={i === 0}
                 onChange={(v) =>
                   setExtraPhones((prev) =>
                     prev.map((x, j) => (j === i ? v : x)),
@@ -560,16 +570,18 @@ export function AddClientModal({
                 }
               />
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                setExtraPhones((prev) => prev.filter((_, j) => j !== i))
-              }
-              className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
-              aria-label="Убрать номер"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            {i > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setExtraPhones((prev) => prev.filter((_, j) => j !== i))
+                }
+                className="mt-2 shrink-0 rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
+                aria-label="Убрать номер"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         ))}
         <button
@@ -857,7 +869,11 @@ export function AddClientModal({
             onClick={submit}
             disabled={!canSubmit}
             className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-            title={canSubmit ? undefined : 'Заполните ФИО и телефон правильно'}
+            title={
+              canSubmit
+                ? undefined
+                : 'Заполните ФИО и оба номера телефона правильно'
+            }
           >
             Создать
           </button>

@@ -549,6 +549,22 @@ export function ClientCard() {
           onCreate={createOrder}
         />
       )}
+      {/*
+        Правка данных клиента. Кнопка «Изменить» состояние взводила, а самого
+        окна в разметке не было — нажатие ничем не отвечало.
+      */}
+      {editInfo && (
+        <EditClientModal
+          client={data}
+          onClose={() => setEditInfo(false)}
+          onSaved={(patch) => {
+            setData((c) => (c ? { ...c, ...patch } : c));
+            setEditInfo(false);
+            reload();
+          }}
+        />
+      )}
+
       <ReminderModal
         open={showReminder}
         onClose={() => setShowReminder(false)}
