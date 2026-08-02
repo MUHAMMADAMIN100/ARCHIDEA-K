@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ProxyThrottlerGuard } from './common/guards/proxy-throttler.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
 
@@ -28,6 +28,8 @@ import { FinanceModule } from './finance/finance.module'; // доходы, ра�
 import { ChecklistsModule } from './checklists/checklists.module'; // чек-листы (ТЗ 8)
 import { ProposalsModule } from './proposals/proposals.module'; // КП (ТЗ 9)
 import { RemindersModule } from './reminders/reminders.module'; // напоминания (ТЗ 10.1)
+import { EventsModule } from './events/events.module';
+import { ChangeBroadcastInterceptor } from './events/change-broadcast.interceptor';
 import { TelegramModule } from './telegram/telegram.module'; // уведомления в Telegram (ТЗ 10.2)
 import { AppController } from './app.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -63,6 +65,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ProposalsModule,
     RemindersModule,
     TelegramModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -72,6 +75,12 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     { provide: APP_GUARD, useClass: CsrfGuard },
     // Глобальная JWT-защита: все роуты требуют авторизации, кроме @Public
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    /*
+     * Живой канал: после каждого успешного изменяющего запроса перехватчик
+     * объявляет, какой раздел данных поменялся, и открытые экраны
+     * обновляются сразу — без опроса сервера по таймеру.
+     */
+    { provide: APP_INTERCEPTOR, useClass: ChangeBroadcastInterceptor },
   ],
 })
 export class AppModule {}

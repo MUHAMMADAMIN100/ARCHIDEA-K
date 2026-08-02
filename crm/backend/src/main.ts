@@ -38,7 +38,19 @@ async function bootstrap() {
       hsts: { maxAge: 63072000, includeSubDomains: true, preload: true },
     }),
   );
-  app.use(compression()); // сжатие ответов
+  /*
+   * Сжатие ответов. Поток событий из него исключён: compression копит
+   * данные в буфере перед отправкой, и живой канал молчал бы, пока буфер
+   * не наберётся, — то есть фактически никогда.
+   */
+  app.use(
+    compression({
+      filter: (req: any, res: any) =>
+        String(req.path || '').startsWith('/api/events')
+          ? false
+          : compression.filter(req, res),
+    }),
+  );
 
   // только JSON и с ограничением размера — защита от «раздутых» тел
   app.use(json({ limit: '256kb' }));

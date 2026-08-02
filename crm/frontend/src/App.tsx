@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
+import { useLiveUpdates } from './api/live';
 import { Spinner } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
@@ -68,6 +69,12 @@ function TrashOnly({ children }: { children: JSX.Element }) {
 
 export default function App() {
   const { user, loading } = useAuth();
+  /*
+   * Живой канал изменений держим одним соединением на вкладку и только
+   * для вошедшего сотрудника: до входа обновлять нечего, а соединение
+   * без авторизации сервер всё равно не примет.
+   */
+  useLiveUpdates(!!user);
 
   return (
     <ErrorBoundary>

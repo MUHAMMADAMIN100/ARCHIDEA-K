@@ -81,6 +81,62 @@ export function invalidateOrderRelated(): void {
   }
 }
 
+/*
+ * Живой канал изменений.
+ *
+ * Сервер сообщает, какой раздел данных поменялся, — и все открытые экраны,
+ * которые его показывают, обновляются сразу. Опрос по таймеру после этого
+ * нужен только как страховка на случай обрыва соединения.
+ *
+ * Ключ подписки — префикс адреса: экран со списком заказов подписан на
+ * «/orders» и реагирует на любое изменение заказов, кем бы оно ни было
+ * сделано.
+ */
+type LiveListener = () => void;
+const liveListeners = new Map<string, Set<LiveListener>>();
+
+/** Разделы сервера → префиксы адресов, которые надо перезапросить */
+const RESOURCE_URLS: Record<string, string[]> = {
+  orders: ['/orders', '/analytics', '/clients'],
+  clients: ['/clients', '/orders'],
+  tasks: ['/tasks'],
+  'shift-groups': ['/shift-groups', '/payroll', '/orders'],
+  payroll: ['/payroll', '/finance'],
+  finance: ['/finance', '/analytics'],
+  reports: ['/reports', '/finance'],
+  proposals: ['/proposals'],
+  reminders: ['/reminders'],
+  checklists: ['/checklists', '/orders'],
+  tariffs: ['/tariffs'],
+  users: ['/users'],
+  cleaners: ['/cleaners', '/brigades'],
+  brigades: ['/brigades', '/cleaners'],
+  notifications: ['/notifications'],
+  trash: ['/trash'],
+};
+
+export function subscribeLive(prefix: string, fn: LiveListener): () => void {
+  const set = liveListeners.get(prefix) ?? new Set<LiveListener>();
+  set.add(fn);
+  liveListeners.set(prefix, set);
+  return () => {
+    set.delete(fn);
+    if (set.size === 0) liveListeners.delete(prefix);
+  };
+}
+
+/** Пришло событие от сервера: чистим кэш и просим экраны перезапроситься */
+export function applyLiveChange(resource: string): void {
+  for (const prefix of RESOURCE_URLS[resource] ?? ['/' + resource]) {
+    invalidate(prefix);
+    for (const [key, set] of liveListeners) {
+      if (key.startsWith(prefix) || prefix.startsWith(key)) {
+        for (const fn of set) fn();
+      }
+    }
+  }
+}
+
 export function invalidate(prefix: string) {
   for (const key of [...cache.keys()]) {
     if (key.startsWith(prefix)) cache.delete(key);
@@ -187,6 +243,19 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
     }, pollMs);
     return () => clearInterval(id);
   }, [pollMs, url, load]);
+
+  /*
+   * Живое обновление: сервер сказал, что раздел поменялся — перезапрашиваем
+   * молча. Это и делает интерфейс мгновенным для чужих действий: раньше
+   * изменение коллеги ждало следующего тика опроса, до пятнадцати секунд.
+   */
+  useEffect(() => {
+    if (!url) return;
+    const prefix = '/' + (url.replace(/^\//, '').split(/[?/]/)[0] ?? '');
+    return subscribeLive(prefix, () => {
+      if (!pausedRef.current?.()) load(true);
+    });
+  }, [url, load]);
 
   // обновление при возврате на вкладку (тихо) — тоже уважает паузу
   useEffect(() => {
