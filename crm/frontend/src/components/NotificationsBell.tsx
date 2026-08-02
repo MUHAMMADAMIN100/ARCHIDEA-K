@@ -83,11 +83,17 @@ export function NotificationsBell() {
 
       {/*
        * Ширина 320 px с привязкой к правому краю вылезала за левую границу
-       * экрана телефона — заголовок и текст обрезались. Считаем ширину от
-       * экрана и не даём быть шире 320 px.
+       * экрана телефона — заголовок и текст обрезались.
+       *
+       * Причина была в привязке: панель прижималась к правому краю самого
+       * колокольчика, а справа от него ещё аватар с меню. На узком экране
+       * её левый край уходил за границу на 74 пикселя, и первые буквы
+       * срезались. На телефоне панель больше не привязана к кнопке — она
+       * растянута между краями экрана с отступом; с sm: и выше остаётся
+       * прежнее выпадающее меню под колокольчиком.
        */}
       {open && (
-        <div className="absolute right-0 z-50 mt-2 max-h-[70vh] w-[calc(100vw-1.5rem)] max-w-[20rem] overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white p-2 shadow-card">
+        <div className="fixed left-3 right-3 top-[4.5rem] z-50 max-h-[70vh] overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white p-2 shadow-card sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[20rem]">
           <div className="px-3 py-2 text-sm font-bold text-navy-900">
             Уведомления
           </div>
