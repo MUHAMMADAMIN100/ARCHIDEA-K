@@ -7,7 +7,15 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    /*
+     * vite.config.ts исполняется в Node — ему нужны process и child_process.
+     * Пока этой строки не было, сборка падала ТОЛЬКО на сервере: локально
+     * @types/node лежал в node_modules от соседнего пакета и подхватывался
+     * сам собой, а при чистой установке его там нет. Ошибку не видно до
+     * деплоя — поэтому пакет объявлен в package.json, а типы включены явно.
+     */
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }

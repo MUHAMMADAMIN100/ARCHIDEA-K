@@ -15,6 +15,13 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    /*
+     * Код кабинета работает в браузере, поэтому серверные типы сюда не
+     * пускаем: иначе setTimeout начинает возвращать NodeJS.Timeout вместо
+     * числа и код ломается на ровном месте. Нужные типы приходят из явных
+     * импортов и из src/vite-env.d.ts.
+     */
+    "types": [],
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
