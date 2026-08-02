@@ -278,15 +278,29 @@ export function Funnel() {
     const el = boardRef.current;
     if (!el) return;
     const measure = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      // запас снизу — под горизонтальную полосу прокрутки доски
-      setBoardHeight(Math.max(320, window.innerHeight - top - 16));
+      /*
+       * top берём относительно окна, без прибавки прокрутки: высота считается
+       * от места доски на экране до нижнего края окна. Раньше здесь
+       * складывались две системы координат — документная и оконная, — и
+       * доска получалась вдвое выше экрана.
+       */
+      const top = el.getBoundingClientRect().top;
+      const next = Math.max(320, Math.round(window.innerHeight - top - 16));
+      // порог в 2px: без него наблюдатель размеров зациклился бы сам на себе
+      setBoardHeight((prev) =>
+        prev !== undefined && Math.abs(prev - next) < 2 ? prev : next,
+      );
     };
     measure();
     window.addEventListener('resize', measure);
-    // фильтры могут перенестись на другую строку и сдвинуть доску
+    /*
+     * Фильтры переносятся на вторую строку и сдвигают доску вниз. Следим за
+     * блоком фильтров, а не за body: body меняет высоту вслед за доской, и
+     * наблюдение за ним давало бесконечный пересчёт.
+     */
     const ro = new ResizeObserver(measure);
-    ro.observe(document.body);
+    const above = el.parentElement?.previousElementSibling;
+    if (above) ro.observe(above);
     return () => {
       window.removeEventListener('resize', measure);
       ro.disconnect();
