@@ -696,10 +696,10 @@ function AddOrderModal({
                 }
                 aria-label="Объём"
               />
-              <span className="shrink-0 text-xs font-medium text-navy-700">
+              <span className="shrink-0 whitespace-nowrap text-xs font-medium text-navy-700">
                 {r.unit} × {r.pricePerUnit.toLocaleString('ru-RU')}
               </span>
-              <span className="min-w-0 flex-1 text-right text-xs font-semibold tabular-nums text-navy-800">
+              <span className="ml-auto shrink-0 whitespace-nowrap text-xs font-semibold tabular-nums text-navy-800">
                 {r.total > 0 ? formatPrice(r.total) : '—'}
               </span>
               <button

@@ -104,10 +104,16 @@ export function DataTable<T>({
                   key={c.key}
                   className="flex items-start justify-between gap-3 border-b border-navy-50 py-1.5 last:border-0"
                 >
-                  <span className="shrink-0 text-[11px] uppercase tracking-wide text-navy-600">
+                  {/*
+                    Подпись не занимает больше половины строки, значение
+                    получает гарантированную ширину: раньше значение
+                    сжималось почти до нуля и текст вставал в столбик
+                    по одной букве.
+                  */}
+                  <span className="max-w-[45%] shrink-0 text-[11px] uppercase leading-tight tracking-wide text-navy-600">
                     {c.title}
                   </span>
-                  <span className="min-w-0 break-words text-right text-sm text-navy-800">
+                  <span className="no-vertical-text flex-1 text-right text-sm text-navy-800">
                     {c.render(row)}
                   </span>
                 </div>

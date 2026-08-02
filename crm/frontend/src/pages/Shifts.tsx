@@ -369,8 +369,8 @@ function ShiftGroupCard({
   const closed = group.status === 'CLOSED';
   return (
     <div className="card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-navy-900">{formatDateTz(group.date)}</span>
             <Badge className={SHIFT_GROUP_STATUS_COLOR[group.status]}>
@@ -394,7 +394,12 @@ function ShiftGroupCard({
           )}
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        {/*
+          Действия. На телефоне — отдельной строкой во всю ширину: раньше
+          они стояли справа от адреса, не сжимались и вылезали за край
+          карточки вместе с корзиной.
+        */}
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0 sm:justify-end">
           <button
             onClick={onHistory}
             className="rounded-lg px-2 py-1.5 text-xs font-medium text-navy-600 hover:bg-navy-50 hover:text-navy-700"
