@@ -667,35 +667,44 @@ export function Calendar() {
               const inMonth = d.getMonth() === cursor.getMonth();
               const isToday = key === todayKey;
               const picked = key === selectedDay;
-              const nOrders = ordersByDay.get(key)?.length ?? 0;
-              const nTasks = byDay.get(key)?.length ?? 0;
+              /*
+               * Одно число на день: уборки и задачи вместе, статус не важен.
+               * Два числа рядом в клетке шириной сорок пикселей читались как
+               * одно — «1 1» выглядело как одиннадцать.
+               */
+              const count =
+                (ordersByDay.get(key)?.length ?? 0) +
+                (byDay.get(key)?.length ?? 0);
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => pickDay(key)}
-                  aria-label={`${humanDay(key)}: уборок ${nOrders}, задач ${nTasks}`}
-                  className={`flex aspect-square flex-col items-center justify-center rounded-xl border transition-colors ${
+                  aria-label={`${humanDay(key)}: дел ${count}`}
+                  className={`flex aspect-square flex-col items-center justify-center rounded-xl border-2 transition-colors ${
+                    /* сегодня — заливка цветом логотипа во всю клетку */
+                    isToday
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-white text-navy-800'
+                  } ${
+                    /* выбранный день — тёмная рамка: видна и на белой клетке, и на залитой */
                     picked
-                      ? 'border-brand-400 bg-brand-50'
-                      : 'border-navy-100 bg-white'
+                      ? 'border-navy-900'
+                      : isToday
+                        ? 'border-brand-500'
+                        : 'border-navy-100'
                   } ${inMonth ? '' : 'opacity-40'}`}
                 >
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums ${
-                      isToday ? 'bg-brand-500 text-white' : 'text-navy-800'
-                    }`}
-                  >
+                  <span className="text-sm font-semibold tabular-nums">
                     {d.getDate()}
                   </span>
-                  {/* счётчики: рисуем только то, что на день действительно есть */}
-                  <span className="mt-0.5 flex h-3 items-center gap-1.5 text-[10px] font-bold leading-none tabular-nums">
-                    {nOrders > 0 && (
-                      <span className="text-brand-500">{nOrders}</span>
-                    )}
-                    {nTasks > 0 && (
-                      <span className="text-navy-600">{nTasks}</span>
-                    )}
+                  {/* счётчик рисуем, только если на день что-то назначено */}
+                  <span
+                    className={`mt-0.5 flex h-3 items-center text-[10px] font-bold leading-none tabular-nums ${
+                      isToday ? 'text-white' : 'text-brand-600'
+                    }`}
+                  >
+                    {count > 0 ? count : ''}
                   </span>
                 </button>
               );

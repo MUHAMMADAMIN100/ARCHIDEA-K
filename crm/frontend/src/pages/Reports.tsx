@@ -70,7 +70,17 @@ export function Reports() {
             <Link
               key={r.id}
               to={`/reports/${r.id}`}
-              className="card flex flex-wrap items-center gap-4 p-4 transition-shadow hover:shadow-lg"
+              /*
+               * На телефоне карточка раскладывается по строкам, на компьютере
+               * остаётся одним рядом.
+               *
+               * Одним рядом на узком экране блоку с именем оставалось около
+               * девяноста пикселей: «Сабрина» разрывалась на «Сабрин / а», а
+               * строка «выплаты … · расходы …» была шире своей колонки и
+               * наезжала на соседей. Сетка даёт имени всю ширину, а суммам —
+               * отдельную строку.
+               */
+              className="card grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 p-4 transition-shadow hover:shadow-lg sm:flex sm:flex-nowrap sm:gap-4"
             >
               <span
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
@@ -90,7 +100,7 @@ export function Reports() {
                 )}
               </span>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 sm:flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="no-vertical-text font-semibold text-navy-900">
                     {r.clientName}
@@ -112,7 +122,7 @@ export function Reports() {
                * цифре показывает разбивку, не уводя со списка.
                */}
               <div
-                className="text-right text-sm"
+                className="col-span-3 text-right text-sm sm:ml-auto"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -153,7 +163,8 @@ export function Reports() {
                 </div>
               </div>
 
-              <ChevronRight className="h-4 w-4 shrink-0 text-navy-600" />
+              {/* sm:order-last: в ряду стрелка идёт после сумм, в сетке — в первой строке */}
+              <ChevronRight className="h-4 w-4 shrink-0 text-navy-600 sm:order-last" />
             </Link>
           ))}
         </div>
