@@ -45,6 +45,15 @@ function cardDate(iso: string): string {
 
 const NO_MANAGER = '__none__';
 
+/**
+ * Долг по заказу — то, что не получено, когда работа уже сдана.
+ * До этапа «К оплате» заявка в работе, и денег ещё не ждут: красить всю
+ * воронку в красный бессмысленно, выделение перестанет что-либо значить.
+ */
+function orderDebt(o: Order): number {
+  return o.stage === 'DONE' ? orderDue(o) : 0;
+}
+
 /** Статусы клиента для фильтра воронки */
 const CLIENT_TAGS: ClientTag[] = ['VIP', 'REGULAR', 'POTENTIAL', 'REFUSED'];
 
@@ -142,19 +151,18 @@ function OrderCardBody({
               {formatPrice(orderTotal(o))}
             </span>
           </span>
-        ) : (
-          <span
-            className={`text-sm font-bold ${
-              (o.paidAmount ?? 0) > 0 ? 'text-red-700' : 'text-navy-700'
-            }`}
-          >
-            {(o.paidAmount ?? 0) > 0 && 'Долг '}
-            {formatPrice(orderDue(o))}
+        ) : orderDebt(o) > 0 ? (
+          <span className="text-sm font-bold text-red-700">
+            Долг {formatPrice(orderDebt(o))}
             {(o.paidAmount ?? 0) > 0 && (
               <span className="ml-1 text-xs font-medium text-navy-600">
                 из {orderTotal(o).toLocaleString('ru-RU')}
               </span>
             )}
+          </span>
+        ) : (
+          <span className="text-sm font-bold text-navy-700">
+            {formatPrice(orderTotal(o))}
           </span>
         )}
         {o.cleaners && o.cleaners.length > 0 && (
@@ -374,6 +382,26 @@ export function Funnel() {
    * доску не перезапрашиваем; откат только при ошибке.
    */
   const changeStage = async (orderId: string, newStage: FunnelStage) => {
+    /*
+     * «Оплачено / Закрыто» — только после полного расчёта. Иначе заказ
+     * уходит из воронки вместе с недоплатой, и деньги теряются из виду.
+     * Тот же запрет стоит на сервере: обойти его через прямой запрос нельзя.
+     */
+    if (newStage === 'PAID') {
+      const order = (data ?? [])
+        .flatMap((c) => c.orders)
+        .find((o) => o.id === orderId);
+      const due = order ? orderDue(order) : 0;
+      if (due > 0) {
+        toast.error(
+          `Нельзя закрыть: клиент должен ${formatPrice(due)} из ${formatPrice(
+            orderTotal(order!),
+          )}. Внесите оплату в карточке заказа.`,
+        );
+        return;
+      }
+    }
+
     let rejectionReason: string | undefined;
     if (newStage === 'REJECTED') {
       const reason = await dialog.prompt({
@@ -624,10 +652,7 @@ export function Funnel() {
              */
             const total = col.orders.reduce((sum, o) => sum + orderTotal(o), 0);
             // долг по этапу: сумма остатков заказов, где оплата ещё не полная
-            const debt = col.orders.reduce(
-              (sum, o) => sum + ((o.paidAmount ?? 0) > 0 ? orderDue(o) : 0),
-              0,
-            );
+            const debt = col.orders.reduce((sum, o) => sum + orderDebt(o), 0);
             const isDue = col.stage === 'DONE';
             return (
             <div
@@ -691,7 +716,37 @@ export function Funnel() {
                 )}
               </div>
 
-              <Droppable droppableId={col.stage} isDropDisabled={isTouch}>
+              {/*
+                renderClone обязателен: колонка прокручивается, и поднятая
+                карточка обрезалась её краем — на экране оставалось пустое
+                место, пока держишь. Клон рисуется поверх доски и виден
+                целиком на всём пути переноса.
+              */}
+              <Droppable
+                droppableId={col.stage}
+                isDropDisabled={isTouch}
+                renderClone={(p, _snap, rubric) => {
+                  const o = col.orders[rubric.source.index];
+                  return (
+                    <div
+                      ref={p.innerRef}
+                      {...p.draggableProps}
+                      {...p.dragHandleProps}
+                      className={`card w-72 cursor-pointer border-l-4 p-3.5 text-left shadow-xl ring-2 ring-navy-300 ${
+                        orderDebt(o) > 0
+                          ? 'border-l-red-500 bg-red-50/70'
+                          : STAGE_BORDER[o.stage]
+                      }`}
+                    >
+                      <OrderCardBody
+                        o={o}
+                        isTouch={isTouch}
+                        onChange={changeStage}
+                      />
+                    </div>
+                  );
+                }}
+              >
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
@@ -733,7 +788,7 @@ export function Funnel() {
                               открывая карточку.
                             */
                             className={`card cursor-pointer border-l-4 p-3.5 text-left transition-shadow hover:shadow-lg ${
-                              (o.paidAmount ?? 0) > 0 && orderDue(o) > 0
+                              orderDebt(o) > 0
                                 ? 'border-l-red-500 bg-red-50/70'
                                 : STAGE_BORDER[o.stage]
                             } ${

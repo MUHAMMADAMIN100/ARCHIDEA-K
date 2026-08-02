@@ -700,6 +700,24 @@ export class OrdersService {
       throw new BadRequestException('Укажите причину отказа');
     }
 
+    /*
+     * «Оплачено / Закрыто» — только после полного расчёта с клиентом.
+     * Проверка стоит именно здесь, а не только в браузере: закрытый заказ
+     * уходит из воронки, попадает в выручку и порождает ведомость, поэтому
+     * недоплата не должна проскакивать ни перетаскиванием, ни прямым
+     * запросом к серверу.
+     */
+    if (dto.stage === FunnelStage.PAID) {
+      const total = order.finalPrice ?? order.estimatedPrice ?? 0;
+      const due = Math.max(0, total - (order.paidAmount ?? 0));
+      if (due > 0) {
+        throw new BadRequestException(
+          `Нельзя закрыть заказ: клиент должен ${due} из ${total} сомони. ` +
+            'Внесите оплату в карточке заказа.',
+        );
+      }
+    }
+
     const data: Prisma.OrderUncheckedUpdateInput = { stage: dto.stage };
     if (dto.stage === FunnelStage.REJECTED) {
       data.rejectionReason = dto.rejectionReason;

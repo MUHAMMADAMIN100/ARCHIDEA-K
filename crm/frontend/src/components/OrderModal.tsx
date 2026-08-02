@@ -972,22 +972,38 @@ export function OrderModal({
               <div>
                 <label className="label">Этап воронки</label>
                 <div className="flex flex-wrap gap-2">
-                  {STAGE_ORDER.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        markTouched('stage');
-                        setStage(s);
-                      }}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        stage === s
-                          ? STAGE_COLOR[s] + ' ring-2 ring-navy-300'
-                          : 'bg-white text-navy-600 border border-navy-200 hover:bg-navy-50'
-                      }`}
-                    >
-                      {STAGE_LABEL[s]}
-                    </button>
-                  ))}
+                  {STAGE_ORDER.map((s) => {
+                    /*
+                     * «Оплачено / Закрыто» недоступно, пока есть недоплата:
+                     * закрытый заказ уходит из воронки и попадает в выручку,
+                     * и долг после этого теряется из виду.
+                     */
+                    const blocked = s === 'PAID' && dueSum > 0;
+                    return (
+                      <button
+                        key={s}
+                        disabled={blocked}
+                        title={
+                          blocked
+                            ? `Клиент должен ${formatPrice(
+                                dueSum,
+                              )} — внесите оплату выше`
+                            : undefined
+                        }
+                        onClick={() => {
+                          markTouched('stage');
+                          setStage(s);
+                        }}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                          stage === s
+                            ? STAGE_COLOR[s] + ' ring-2 ring-navy-300'
+                            : 'bg-white text-navy-600 border border-navy-200 hover:bg-navy-50'
+                        } ${blocked ? 'cursor-not-allowed opacity-40' : ''}`}
+                      >
+                        {STAGE_LABEL[s]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
