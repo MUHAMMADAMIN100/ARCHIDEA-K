@@ -21,18 +21,15 @@ function toISO(d: Date): string {
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 }
+/**
+ * «07.08.2026» — месяц числом.
+ *
+ * Раньше в широких полях месяц писался словом: «07 августа 2026 г.». В узкой
+ * колонке заказа такая подпись не помещалась и обрезалась, а по системе
+ * получалось два разных написания даты — короткое в фильтрах периода и
+ * длинное во всех остальных местах. Формат теперь один.
+ */
 function fmt(d?: Date): string {
-  return d
-    ? d.toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })
-    : '';
-}
-
-/** «12.08.2026» — там, где на месяц словом нет места (фильтры периода) */
-function fmtShort(d?: Date): string {
   return d
     ? d.toLocaleDateString('ru-RU', {
         day: '2-digit',
@@ -144,11 +141,7 @@ export function DatePicker({
     };
   }, [open]);
 
-  const label = selected
-    ? compact
-      ? fmtShort(selected)
-      : fmt(selected)
-    : placeholder;
+  const label = selected ? fmt(selected) : placeholder;
 
   return (
     <div className="relative min-w-0" ref={ref}>

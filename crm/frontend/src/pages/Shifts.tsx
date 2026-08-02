@@ -18,6 +18,7 @@ import { Spinner, PageHeader, Modal, EmptyState, ErrorState, Badge } from '../co
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { DatePicker } from '../components/DatePicker';
+import { TimePicker } from '../components/TimePicker';
 import { HistoryPanel } from '../components/HistoryPanel';
 import {
   DrillValue,
@@ -583,20 +584,18 @@ function ShiftGroupModal({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">Начало</label>
-              <input
-                type="time"
-                className="input"
+              <TimePicker
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={setStartTime}
+                ariaLabel="Начало смены"
               />
             </div>
             <div>
               <label className="label">Окончание</label>
-              <input
-                type="time"
-                className="input"
+              <TimePicker
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={setEndTime}
+                ariaLabel="Окончание смены"
               />
             </div>
           </div>

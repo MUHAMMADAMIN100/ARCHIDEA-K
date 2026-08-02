@@ -6,6 +6,7 @@ import { Modal, Badge, Spinner, ErrorState, EmptyState } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
+import { TimePicker } from './TimePicker';
 import { CleanerPicker, Tabs, UserPicker } from './common';
 import { LabelPicker } from './LabelPicker';
 import { NameInput, PhoneInput } from './ContactFields';
@@ -862,12 +863,10 @@ export function OrderModal({
                   </div>
                   <div>
                     <label className="label">Клиент просил — время</label>
-                    <input
-                      type="time"
-                      className="input h-11"
+                    <TimePicker
                       value={editPreferredTime}
-                      onChange={(e) => setEditPreferredTime(e.target.value)}
-                      aria-label="Желаемое время клиента"
+                      onChange={setEditPreferredTime}
+                      ariaLabel="Желаемое время клиента"
                     />
                   </div>
                 </div>
@@ -1079,15 +1078,14 @@ export function OrderModal({
                         }}
                       />
                     </div>
-                    <input
-                      type="time"
-                      className="input h-11 w-[7.5rem] shrink-0"
+                    <TimePicker
+                      className="w-[7.5rem] shrink-0"
                       value={scheduledTime}
-                      onChange={(e) => {
+                      onChange={(v) => {
                         markTouched('scheduledDate');
-                        setScheduledTime(e.target.value);
+                        setScheduledTime(v);
                       }}
-                      aria-label="Время уборки"
+                      ariaLabel="Время уборки"
                     />
                   </div>
                   {order.preferredDate && (

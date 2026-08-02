@@ -5,6 +5,8 @@ import { useAuth } from '../auth/AuthContext';
 import { Modal } from './ui';
 import { useToast } from './Toast';
 import { UserPicker } from './common';
+import { DatePicker } from './DatePicker';
+import { TimePicker } from './TimePicker';
 import { toDateTimeInput } from '../lib/date';
 import { userSeesAll } from '../types';
 import type { Client, Reminder } from '../types';
@@ -14,6 +16,17 @@ import type { Client, Reminder } from '../types';
  * через который система сама напомнит перезвонить клиенту.
  * Значения — целые дни, как их ждёт CreateReminderDto.intervalDays.
  */
+/** Время, которое подставляется, если человек выбрал только дату */
+const DEFAULT_TIME = '09:00';
+
+/** Сегодняшний день «ГГГГ-ММ-ДД» — на случай, если выбрали только время */
+const todayKey = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`;
+};
+
 const QUICK_INTERVALS: { label: string; days: number }[] = [
   { label: 'через неделю', days: 7 },
   { label: 'через 2 недели', days: 14 },
@@ -82,6 +95,10 @@ export function ReminderModal({
     open && !clientName && targetClientId ? `/clients/${targetClientId}` : null,
   );
   const displayName = clientName ?? fetchedClient?.fullName ?? '…';
+
+  // «2026-08-07T09:00» → части для календаря и списка времени
+  const customDate = customAt.slice(0, 10);
+  const customTime = customAt.slice(11, 16);
 
   const canSubmit =
     title.trim().length > 0 &&
@@ -189,15 +206,32 @@ export function ReminderModal({
               </button>
             ))}
           </div>
+          {/*
+            Дата и время раздельно.
+            Одно системное поле datetime-local показывало время в формате
+            языка браузера — у части сотрудников с «AM/PM». Теперь дата
+            выбирается нашим календарём, время — нашим списком, и выглядит
+            это одинаково на любом устройстве.
+          */}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input
-              type="datetime-local"
-              className="input max-w-[220px]"
-              value={customAt}
-              onChange={(e) => {
-                setCustomAt(e.target.value);
+            <div className="w-[9.5rem]">
+              <DatePicker
+                value={customDate}
+                onChange={(v) => {
+                  setCustomAt(v ? `${v}T${customTime || DEFAULT_TIME}` : '');
+                  setMode('custom');
+                }}
+                placeholder="дд.мм.гггг"
+              />
+            </div>
+            <TimePicker
+              className="w-[7.5rem]"
+              value={customTime}
+              onChange={(v) => {
+                setCustomAt(`${customDate || todayKey()}T${v || DEFAULT_TIME}`);
                 setMode('custom');
               }}
+              ariaLabel="Время напоминания"
             />
             <span className="text-xs text-navy-600">своя дата и время</span>
           </div>
