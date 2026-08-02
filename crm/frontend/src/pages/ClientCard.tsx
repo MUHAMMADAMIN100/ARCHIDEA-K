@@ -5,7 +5,14 @@ import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesAll } from '../types';
-import { Spinner, PageHeader, Badge, Modal, ErrorState } from '../components/ui';
+import {
+  Spinner,
+  PageHeader,
+  Badge,
+  Modal,
+  ErrorState,
+  EmptyState,
+} from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { OrderModal } from '../components/OrderModal';
@@ -31,7 +38,7 @@ import {
   formatVolume,
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
-import { tempId, nowISO, withRetry } from '../lib/util';
+import { isTempId, nowISO, tempId, withRetry } from '../lib/util';
 import type {
   Cleaner,
   CleaningType,
@@ -53,8 +60,14 @@ export function ClientCard() {
   const { user } = useAuth();
   const toast = useToast();
   const dialog = useDialog();
+  /*
+   * Клиент, только что созданный, до ответа сервера живёт под временным
+   * номером вида temp_1. Запрос по нему обречён на ошибку, поэтому не
+   * отправляем его вовсе, а показываем понятное объяснение ниже.
+   */
+  const isPending = !!id && isTempId(id);
   const { data, loading, error, reload, setData } = useFetch<Client>(
-    `/clients/${id}`,
+    isPending ? null : `/clients/${id}`,
     { deps: [id] },
   );
   const { data: cleaners } = useFetch<Cleaner[]>('/cleaners?activeOnly=true');
@@ -72,6 +85,11 @@ export function ClientCard() {
   const [showReminder, setShowReminder] = useState(false);
   const [tab, setTab] = useState<CardTab>('orders');
 
+  if (isPending) {
+    return (
+      <EmptyState text="Клиент ещё сохраняется. Вернитесь к списку и откройте карточку через секунду." />
+    );
+  }
   if (error && !data) return <ErrorState onRetry={reload} />;
   if (loading || !data) return <Spinner />;
 

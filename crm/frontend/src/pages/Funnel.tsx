@@ -353,6 +353,24 @@ export function Funnel() {
     void changeStage(draggableId, destination.droppableId as FunnelStage);
   };
 
+  /*
+   * Все теги, встречающиеся на доске, — варианты для фильтра.
+   * Хук стоит ДО раннего выхода ниже: пока данные не пришли, компонент
+   * возвращает Spinner, и хук, объявленный после выхода, вызывался бы не на
+   * каждом рендере — React падал с ошибкой о разном числе хуков.
+   */
+  const labelOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          (data ?? []).flatMap((c) =>
+            c.orders.flatMap((o) => o.client?.labels ?? []),
+          ),
+        ),
+      ].sort((a, b) => a.localeCompare(b, 'ru')),
+    [data],
+  );
+
   if (!data) {
     if (error && !loading) return <ErrorState onRetry={reload} />;
     return <Spinner />;
@@ -373,17 +391,6 @@ export function Funnel() {
   })();
 
   // доска с учётом фильтра по менеджеру
-  // все теги, встречающиеся на доске, — для выпадающего списка фильтра
-  const labelOptions = useMemo(
-    () =>
-      [
-        ...new Set(
-          data.flatMap((c) => c.orders.flatMap((o) => o.client?.labels ?? [])),
-        ),
-      ].sort((a, b) => a.localeCompare(b, 'ru')),
-    [data],
-  );
-
   const filtered = data.map((col) => ({
     ...col,
     orders: col.orders.filter((o) => {
