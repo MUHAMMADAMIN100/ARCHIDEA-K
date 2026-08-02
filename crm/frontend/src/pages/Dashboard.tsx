@@ -44,7 +44,7 @@ export function Dashboard() {
   // нет данных: показываем ошибку с повтором (а не вечный спиннер),
   // если запрос завершился ошибкой; иначе — спиннер загрузки
   if (!data) {
-    if (error && !loading) return <ErrorState onRetry={reload} />;
+    if (error && !loading) return <ErrorState text={error ?? undefined} onRetry={reload} />;
     return <Spinner />;
   }
 

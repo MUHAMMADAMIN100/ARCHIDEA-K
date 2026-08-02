@@ -512,6 +512,12 @@ export class TasksService {
       data: softDeleteData(user, reason),
     });
 
+    /*
+     * Уведомления по задаче убираем: переходить по ним больше некуда, а
+     * экран на месте удалённой задачи показывал «Проверьте интернет».
+     */
+    await this.prisma.notification.deleteMany({ where: { taskId: id } });
+
     await this.audit.log(this.prisma, {
       user,
       entity: 'TASK',

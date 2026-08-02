@@ -614,7 +614,7 @@ function PeriodAnalytics({
       </div>
 
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !data ? (
         <Spinner />
       ) : data ? (

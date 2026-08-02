@@ -912,7 +912,7 @@ function TemplatesTab() {
     }
   };
 
-  if (error && !data) return <ErrorState onRetry={reload} />;
+  if (error && !data) return <ErrorState text={error ?? undefined} onRetry={reload} />;
   if (loading && !data) return <Spinner />;
 
   return (

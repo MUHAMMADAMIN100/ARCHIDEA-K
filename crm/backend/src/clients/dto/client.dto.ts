@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsDateString,
   IsEnum,
   IsInt,
   IsOptional,
@@ -10,7 +11,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ClientTag, LeadSource } from '@prisma/client';
+import { CallType, ClientTag, LeadSource } from '@prisma/client';
 import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
 
 export class CreateClientDto {
@@ -75,6 +76,22 @@ export class CreateClientDto {
   @IsEnum(ClientTag, { each: true })
   tags?: ClientTag[];
 
+  /** Каким вышел разговор: холодный, нейтральный, горячий */
+  @IsOptional()
+  @IsEnum(CallType)
+  callType?: CallType;
+
+  /** Когда перезвонить — в календаре появится отметка «позвонить» */
+  @IsOptional()
+  @IsDateString()
+  callbackAt?: string;
+
+  /** Степень заинтересованности: «Перезвоню», «Подумаю» и свои варианты */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  interestLevel?: string;
+
   @IsOptional()
   @IsString()
   managerId?: string;
@@ -101,5 +118,13 @@ export class UpdateClientDto {
   labels?: string[];
   @IsOptional() @IsString() @MaxLength(120) sourceDetail?: string;
   @IsOptional() @IsArray() @IsEnum(ClientTag, { each: true }) tags?: ClientTag[];
+  /*
+   * Холодные звонки. Пустая строка и null означают «снять значение» —
+   * менеджер должен иметь возможность стереть ошибочно выбранный тип
+   * разговора или отменить перезвон, а не только заменить его другим.
+   */
+  @IsOptional() @IsEnum(CallType) callType?: CallType | null;
+  @IsOptional() @IsDateString() callbackAt?: string | null;
+  @IsOptional() @IsString() @MaxLength(40) interestLevel?: string | null;
   @IsOptional() @IsString() managerId?: string;
 }

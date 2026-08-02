@@ -1,5 +1,6 @@
 import type {
   AuditAction,
+  CallType,
   CleaningType,
   ClientTag,
   DirtLevel,
@@ -107,6 +108,7 @@ export const SOURCE_LABEL: Record<LeadSource, string> = {
   SITE: 'Сайт',
   INSTAGRAM: 'Instagram',
   CALL: 'Звонок',
+  COLD_CALL: 'Холодный обзвон',
   RECOMMENDATION: 'Рекомендация',
   ANISA: 'От Анисы',
 };
@@ -116,9 +118,29 @@ export const SOURCE_ORDER: LeadSource[] = [
   'SITE',
   'INSTAGRAM',
   'CALL',
+  'COLD_CALL',
   'RECOMMENDATION',
   'ANISA',
 ];
+
+/** Каким вышел разговор с клиентом */
+export const CALL_TYPE_LABEL: Record<CallType, string> = {
+  COLD: 'Холодный',
+  NEUTRAL: 'Нейтральный',
+  HOT: 'Горячий',
+};
+
+export const CALL_TYPE_ORDER: CallType[] = ['COLD', 'NEUTRAL', 'HOT'];
+
+/**
+ * Цвет типа звонка — привычная шкала «холодно/тепло/горячо»: синий, янтарный,
+ * красный. По ней тип читается, даже когда подпись не помещается.
+ */
+export const CALL_TYPE_COLOR: Record<CallType, string> = {
+  COLD: 'bg-sky-100 text-sky-800 border-sky-300',
+  NEUTRAL: 'bg-amber-100 text-amber-800 border-amber-300',
+  HOT: 'bg-red-100 text-red-800 border-red-300',
+};
 
 export const TAG_LABEL: Record<ClientTag, string> = {
   VIP: 'VIP',

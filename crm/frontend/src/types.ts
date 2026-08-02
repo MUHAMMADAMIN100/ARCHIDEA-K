@@ -3,8 +3,23 @@ export type LeadSource =
   | 'SITE'
   | 'INSTAGRAM'
   | 'CALL'
+  | 'COLD_CALL'
   | 'RECOMMENDATION'
   | 'ANISA';
+
+/** Каким вышел разговор с клиентом — по нему считают работу менеджеров */
+export type CallType = 'COLD' | 'NEUTRAL' | 'HOT';
+
+/** Назначенный перезвон — отметка «позвонить» в календаре */
+export interface Callback {
+  id: string;
+  fullName: string;
+  phone: string;
+  callbackAt: string | null;
+  callType?: CallType | null;
+  interestLevel?: string | null;
+  manager?: { id: string; fullName: string } | null;
+}
 export type FunnelStage =
   | 'NEW'
   | 'PROCESSING'
@@ -238,6 +253,13 @@ export interface Client {
   labels?: string[];
   /** «От кого» пришёл клиент — рекомендатель или партнёр */
   sourceDetail?: string | null;
+  // ── Холодные звонки ──
+  /** Каким вышел последний разговор */
+  callType?: CallType | null;
+  /** Когда перезвонить — в календаре встаёт отметка «позвонить» */
+  callbackAt?: string | null;
+  /** Степень заинтересованности: «Перезвоню», «Подумаю» и свои варианты */
+  interestLevel?: string | null;
   lastContactAt: string;
   managerId?: string;
   manager?: { id: string; fullName: string } | null;
@@ -442,6 +464,21 @@ export interface Analytics {
   /** date — подпись оси («07-28»), day — полная дата для расшифровки столбика */
   revenueSeries?: { date: string; day: string; revenue: number }[];
   managerWorkload?: { id: string; name: string; active: number; paid: number }[];
+  /** KPI по каждому менеджеру за выбранный период */
+  managerKpi?: {
+    id: string | null;
+    name: string;
+    calls: number;
+    cold: number;
+    neutral: number;
+    hot: number;
+    newClients: number;
+    orders: number;
+    paid: number;
+    rejected: number;
+    amount: number;
+    conversion: number;
+  }[];
 }
 
 export interface Tariff {

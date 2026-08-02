@@ -5,10 +5,12 @@ import {
   Draggable,
   type DropResult,
 } from '@hello-pangea/dnd';
+import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Phone,
   Plus,
   Inbox,
 } from 'lucide-react';
@@ -31,7 +33,15 @@ import {
 } from '../lib/labels';
 import { tempId, nowISO } from '../lib/util';
 import { useAuth } from '../auth/AuthContext';
-import type { BoardColumn, FunnelStage, Order, Task, TaskType } from '../types';
+import { formatPhone } from '../lib/contact';
+import type {
+  BoardColumn,
+  Callback,
+  FunnelStage,
+  Order,
+  Task,
+  TaskType,
+} from '../types';
 
 type View = 'month' | 'week';
 
@@ -238,6 +248,48 @@ function DayOrderRow({
   );
 }
 
+/**
+ * Отметка «позвонить» в списке дня.
+ *
+ * Оранжевая — чтобы перезвон не терялся среди уборок и задач: это дело на
+ * конкретный час, а не работа на весь день.
+ */
+function CallbackRow({
+  item,
+  onOpen,
+}: {
+  item: Callback;
+  onOpen: () => void;
+}) {
+  const at = item.callbackAt ? new Date(item.callbackAt) : null;
+  const time = at
+    ? `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+    : '';
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-2.5 text-left transition hover:bg-orange-100"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+        <Phone className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-navy-900">
+          Позвонить · {item.fullName}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-navy-600">
+          {formatPhone(item.phone)}
+          {item.interestLevel ? ` · ${item.interestLevel}` : ''}
+        </span>
+      </span>
+      <span className="shrink-0 whitespace-nowrap text-sm font-bold tabular-nums text-orange-700">
+        {time}
+      </span>
+    </button>
+  );
+}
+
 /** Строка задачи в списке дня */
 function DayTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
   const done = task.status === 'DONE';
@@ -266,6 +318,7 @@ function DayTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
 
 export function Calendar() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isTouch = useMemo(
     () =>
@@ -327,6 +380,16 @@ export function Calendar() {
   const boardQuery = useFetch<BoardColumn[]>('/orders/board', {
     pollMs: 20000,
   });
+
+  /*
+   * Перезвоны клиентов — оранжевые отметки «позвонить».
+   *
+   * Берём весь список без диапазона: перезвонов в работе десятки, а не
+   * тысячи, зато при листании месяцев не нужен новый запрос на каждый шаг.
+   */
+  const callbacksQuery = useFetch<Callback[]>('/clients/callbacks', {
+    pollMs: 60000,
+  });
   // в модалке храним ТОЛЬКО id — саму задачу берём из свежих данных,
   // иначе статусы, изменённые внутри модалки, не были бы видны
   const [modal, setModal] = useState<
@@ -365,6 +428,19 @@ export function Calendar() {
     }
     return { byDay: map, undated: none };
   }, [data]);
+
+  // перезвоны по дням — из карточек клиентов
+  const callbacksByDay = useMemo(() => {
+    const map = new Map<string, Callback[]>();
+    for (const c of callbacksQuery.data ?? []) {
+      if (!c.callbackAt) continue;
+      const key = dayKey(new Date(c.callbackAt));
+      const list = map.get(key);
+      if (list) list.push(c);
+      else map.set(key, [c]);
+    }
+    return map;
+  }, [callbacksQuery.data]);
 
   // заказы по дням уборки (с учётом фильтра этапа)
   const { ordersByDay, ordersUndated } = useMemo(() => {
@@ -510,7 +586,7 @@ export function Calendar() {
   };
 
   if (!data) {
-    if (error && !loading) return <ErrorState onRetry={reload} />;
+    if (error && !loading) return <ErrorState text={error ?? undefined} onRetry={reload} />;
     return <Spinner />;
   }
 
@@ -672,9 +748,11 @@ export function Calendar() {
                * Два числа рядом в клетке шириной сорок пикселей читались как
                * одно — «1 1» выглядело как одиннадцать.
                */
+              const calls = callbacksByDay.get(key)?.length ?? 0;
               const count =
                 (ordersByDay.get(key)?.length ?? 0) +
-                (byDay.get(key)?.length ?? 0);
+                (byDay.get(key)?.length ?? 0) +
+                calls;
               return (
                 <button
                   key={key}
@@ -700,11 +778,19 @@ export function Calendar() {
                   </span>
                   {/* счётчик рисуем, только если на день что-то назначено */}
                   <span
-                    className={`mt-0.5 flex h-3 items-center text-[10px] font-bold leading-none tabular-nums ${
+                    className={`mt-0.5 flex h-3 items-center gap-1 text-[10px] font-bold leading-none tabular-nums ${
                       isToday ? 'text-white' : 'text-brand-600'
                     }`}
                   >
                     {count > 0 ? count : ''}
+                    {/* оранжевая точка — на этот день назначен перезвон */}
+                    {calls > 0 && (
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          isToday ? 'bg-white' : 'bg-orange-500'
+                        }`}
+                      />
+                    )}
                   </span>
                 </button>
               );
@@ -726,6 +812,7 @@ export function Calendar() {
               const isToday = key === todayKey;
               const orders = ordersByDay.get(key) ?? [];
               const tasks = byDay.get(key) ?? [];
+              const calls = callbacksByDay.get(key) ?? [];
               return (
                 <div
                   key={key}
@@ -755,10 +842,19 @@ export function Calendar() {
                       задача
                     </button>
                   </div>
-                  {orders.length === 0 && tasks.length === 0 ? (
+                  {orders.length === 0 &&
+                  tasks.length === 0 &&
+                  calls.length === 0 ? (
                     <p className="px-1 pb-1 text-xs text-navy-600">Дел нет</p>
                   ) : (
                     <div className="space-y-1.5">
+                      {calls.map((c) => (
+                        <CallbackRow
+                          key={c.id}
+                          item={c}
+                          onOpen={() => navigate(`/clients/${c.id}`)}
+                        />
+                      ))}
                       {orders.map((o) => (
                         <DayOrderRow
                           key={o.id}
@@ -847,6 +943,20 @@ export function Calendar() {
                     </div>
 
                     <div className="flex-1 space-y-1.5">
+                      {/* перезвоны первыми: у них назначен час, а не весь день */}
+                      {(callbacksByDay.get(key) ?? []).map((c) => (
+                        <div
+                          key={c.id}
+                          onClick={() => navigate(`/clients/${c.id}`)}
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1.5 text-left"
+                          title={`Позвонить ${c.fullName}`}
+                        >
+                          <Phone className="h-3 w-3 shrink-0 text-orange-600" />
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-orange-800">
+                            {c.fullName}
+                          </span>
+                        </div>
+                      ))}
                       {(ordersByDay.get(key) ?? []).map((o) => (
                           <div
                             key={o.id}
@@ -911,12 +1021,20 @@ export function Calendar() {
             </div>
 
             {(ordersByDay.get(selectedDay) ?? []).length === 0 &&
-            (byDay.get(selectedDay) ?? []).length === 0 ? (
+            (byDay.get(selectedDay) ?? []).length === 0 &&
+            (callbacksByDay.get(selectedDay) ?? []).length === 0 ? (
               <p className="rounded-2xl border border-dashed border-navy-200 bg-white px-4 py-6 text-center text-sm text-navy-600">
                 На этот день дел нет
               </p>
             ) : (
               <div className="space-y-1.5">
+                {(callbacksByDay.get(selectedDay) ?? []).map((c) => (
+                  <CallbackRow
+                    key={c.id}
+                    item={c}
+                    onOpen={() => navigate(`/clients/${c.id}`)}
+                  />
+                ))}
                 {(ordersByDay.get(selectedDay) ?? []).map((o) => (
                   <DayOrderRow
                     key={o.id}
@@ -1088,6 +1206,26 @@ export function Calendar() {
           })}
         >
           <div className="space-y-4">
+            {(callbacksByDay.get(dayOpen) ?? []).length > 0 && (
+              <div>
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
+                  Перезвонить ({(callbacksByDay.get(dayOpen) ?? []).length})
+                </h4>
+                <div className="space-y-2">
+                  {(callbacksByDay.get(dayOpen) ?? []).map((c) => (
+                    <CallbackRow
+                      key={c.id}
+                      item={c}
+                      onOpen={() => {
+                        setDayOpen(null);
+                        navigate(`/clients/${c.id}`);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
                 Заказы ({(ordersByDay.get(dayOpen) ?? []).length})

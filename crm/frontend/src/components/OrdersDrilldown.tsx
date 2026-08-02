@@ -52,7 +52,7 @@ export function OrdersDrilldownModal({
   return (
     <DetailModal title={title} subtitle={subtitle} onClose={onClose}>
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : (
         <>
           <DetailStats

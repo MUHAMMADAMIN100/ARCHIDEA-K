@@ -319,7 +319,7 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
       </div>
 
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !data ? (
         <Spinner />
       ) : !data || data.length === 0 ? (
@@ -1533,7 +1533,7 @@ function FinesSection() {
       </div>
 
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !fines ? (
         <Spinner />
       ) : !fines || fines.length === 0 ? (

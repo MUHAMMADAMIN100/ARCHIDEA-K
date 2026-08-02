@@ -170,7 +170,7 @@ export function Analytics() {
       />
 
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : loading && !data ? (
         <Spinner />
       ) : !data ? null : (
@@ -844,6 +844,118 @@ export function Analytics() {
               </>
             )}
 
+            {/*
+              KPI менеджеров за период.
+              Загруженность ниже показывает «сейчас», а это — работу за
+              выбранный промежуток: сколько звонил, сколько принял, сколько
+              довёл до оплаты. На телефоне таблица не влезает, поэтому там
+              каждая строка становится карточкой.
+            */}
+            {data.managerKpi && (
+              <div className="card min-w-0 p-5 lg:col-span-2">
+                <h3 className="mb-1 font-bold text-navy-900">KPI менеджеров</h3>
+                <p className="mb-3 text-xs text-navy-600">
+                  За выбранный период. Заявки, оплаты и конверсия считаются по
+                  обращениям, созданным в этом периоде, — иначе конверсия
+                  сравнивала бы заявки одного месяца с оплатами другого.
+                </p>
+                {data.managerKpi.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-navy-600">
+                    За этот период у сотрудников нет ни заявок, ни звонков
+                  </p>
+                ) : (
+                  <>
+                    {/* Телефон: карточка на сотрудника */}
+                    <div className="space-y-2 sm:hidden">
+                      {data.managerKpi.map((m) => (
+                        <div
+                          key={m.id ?? 'none'}
+                          className="rounded-xl border border-navy-100 p-3"
+                        >
+                          <div className="mb-2 flex items-baseline justify-between gap-2">
+                            <span className="min-w-0 truncate font-semibold text-navy-900">
+                              {m.name}
+                            </span>
+                            <span className="shrink-0 whitespace-nowrap text-sm font-bold tabular-nums text-brand-600">
+                              {m.conversion}%
+                            </span>
+                          </div>
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                            <KpiCell label="Звонки" value={m.calls} />
+                            <KpiCell
+                              label="Хол · Нейтр · Гор"
+                              value={`${m.cold} · ${m.neutral} · ${m.hot}`}
+                            />
+                            <KpiCell label="Новых клиентов" value={m.newClients} />
+                            <KpiCell label="Заявок" value={m.orders} />
+                            <KpiCell label="Оплачено" value={m.paid} />
+                            <KpiCell label="Отказов" value={m.rejected} />
+                            {seesAll && (
+                              <KpiCell
+                                label="Продано"
+                                value={formatPrice(m.amount)}
+                              />
+                            )}
+                          </dl>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Компьютер: обычная таблица */}
+                    <div className="hidden overflow-x-auto sm:block">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-600">
+                            <th className="py-2 pr-3 font-semibold">Сотрудник</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Звонки</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Хол</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Нейтр</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Гор</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Клиентов</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Заявок</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Оплачено</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Отказов</th>
+                            <th className="py-2 pr-3 text-right font-semibold">Конверсия</th>
+                            {seesAll && (
+                              <th className="py-2 text-right font-semibold">Продано</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.managerKpi.map((m) => (
+                            <tr
+                              key={m.id ?? 'none'}
+                              className="border-b border-navy-50 last:border-0"
+                            >
+                              <td className="py-2 pr-3 font-medium text-navy-900">
+                                {m.name}
+                              </td>
+                              <td className="py-2 pr-3 text-right tabular-nums">{m.calls}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums text-sky-700">{m.cold}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums text-amber-700">{m.neutral}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums text-red-700">{m.hot}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums">{m.newClients}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums">{m.orders}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums font-semibold">{m.paid}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums">{m.rejected}</td>
+                              <td className="py-2 pr-3 text-right font-bold tabular-nums text-brand-600">
+                                {m.conversion}%
+                              </td>
+                              {seesAll && (
+                                <td className="py-2 text-right font-semibold tabular-nums">
+                                  {formatPrice(m.amount)}
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {data.managerWorkload && (
               <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
                 <h3 className="mb-1 font-bold text-navy-900">Загруженность сотрудников</h3>
@@ -930,6 +1042,18 @@ export function Analytics() {
 }
 
 
+/** Показатель в карточке KPI на телефоне: подпись слева, число справа */
+function KpiCell({ label, value }: { label: string; value: string | number }) {
+  return (
+    <>
+      <dt className="truncate text-navy-600">{label}</dt>
+      <dd className="text-right font-semibold tabular-nums text-navy-900">
+        {value}
+      </dd>
+    </>
+  );
+}
+
 /** Строка расшифровки выезда или смены (metric brigadeVisits / cleanerShifts) */
 interface WorkDrillRow {
   id: string;
@@ -988,7 +1112,7 @@ function WorkDrillModal({
   return (
     <DetailModal title={drill.title} subtitle={drill.subtitle} onClose={onClose}>
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : (
         <>
           <DetailStats

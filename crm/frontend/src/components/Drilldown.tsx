@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Modal, Spinner, EmptyState } from './ui';
 
 /*
@@ -158,7 +158,50 @@ export function DetailTable<T>({
   if (!rows || rows.length === 0) return <EmptyState text={emptyText} />;
 
   return (
-    <div className="max-h-[52vh] overflow-auto rounded-xl border border-navy-100">
+    <>
+      {/*
+        Телефон: строка таблицы становится карточкой.
+
+        Четыре-пять колонок на узкий экран не помещались: последняя
+        («Ответственный») обрезалась, внутри окна появлялась горизонтальная
+        прокрутка, а текст рвался посреди слова. В карточке первая колонка
+        становится заголовком, остальные — парами «подпись → значение», и
+        всё читается целиком.
+      */}
+      <div className="max-h-[60vh] space-y-2 overflow-y-auto overscroll-contain sm:hidden">
+        {rows.map((r, i) => (
+          <div
+            key={rowKey(r, i)}
+            onClick={onRowClick ? () => onRowClick(r) : undefined}
+            className={`rounded-xl border border-navy-100 p-3 ${
+              onRowClick ? 'cursor-pointer active:bg-navy-50' : ''
+            }`}
+          >
+            <div className="mb-1.5 font-semibold text-navy-900">
+              {columns[0]?.cell(r, i)}
+            </div>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              {columns.slice(1).map((c) => (
+                <Fragment key={c.key}>
+                  <dt className="text-navy-600">{c.header}</dt>
+                  <dd className="text-right font-medium text-navy-900">
+                    {c.cell(r, i)}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          </div>
+        ))}
+        {/* подвал «Итого» — строки таблицы, поэтому оставляем их в таблице */}
+        {footer && (
+          <table className="w-full text-sm">
+            <tfoot>{footer}</tfoot>
+          </table>
+        )}
+      </div>
+
+      {/* Планшет и компьютер: обычная таблица */}
+      <div className="hidden max-h-[52vh] overflow-auto rounded-xl border border-navy-100 sm:block">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="border-b border-navy-100 text-left text-[11px] uppercase tracking-wide text-navy-600">
@@ -194,7 +237,8 @@ export function DetailTable<T>({
         </tbody>
         {footer && <tfoot className="sticky bottom-0 bg-white">{footer}</tfoot>}
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 

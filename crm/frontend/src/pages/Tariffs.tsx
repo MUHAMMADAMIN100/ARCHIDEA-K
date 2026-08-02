@@ -126,7 +126,7 @@ export function Tariffs() {
     });
   }, [data]);
 
-  if (error) return <ErrorState onRetry={reload} />;
+  if (error) return <ErrorState text={error ?? undefined} onRetry={reload} />;
   if (loading || !data) return <Spinner />;
 
   const saveTariff = (t: Tariff) => {

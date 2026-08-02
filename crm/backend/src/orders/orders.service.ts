@@ -909,6 +909,12 @@ export class OrdersService {
         where: { orderId: id, ...NOT_DELETED },
         data: stamp,
       });
+
+      /*
+       * Уведомления по заказу убираем: переходить по ним больше некуда, а
+       * экран на месте удалённого заказа показывал «Проверьте интернет».
+       */
+      await tx.notification.deleteMany({ where: { orderId: id } });
       /*
        * Доход по заказу уходит в корзину вместе с ним.
        *

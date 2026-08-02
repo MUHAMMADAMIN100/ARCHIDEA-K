@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import {
+  CallType,
   CleaningType,
   FunnelStage,
   LeadSource,
@@ -259,6 +260,15 @@ export class AnalyticsService {
     // Загруженность менеджеров (не финансы) — директору и ops-менеджеру
     if (seesAll(user)) {
       result.managerWorkload = await this.managerWorkload();
+      /*
+       * KPI по менеджерам открыт тому, кто ведёт всю компанию, — как и
+       * разрезы продаж. Обычный менеджер видит только свои заказы, чужих
+       * показателей ему не отдаём.
+       */
+      result.managerKpi = await this.managerKpi(
+        periodScope,
+        hasRange ? { gte: range.gte, lte: range.lte } : undefined,
+      );
 
       /*
        * Разрезы. Деньги в них видит только руководитель, поэтому
@@ -914,6 +924,127 @@ export class AnalyticsService {
    * директора раньше не попадали в отчёт вообще, и сумма по строкам не сходилась
    * с общим числом заказов.
    */
+  /**
+   * KPI по каждому менеджеру за период.
+   *
+   * Всё считается по обращениям, СОЗДАННЫМ в периоде: сколько взял, сколько
+   * довёл до оплаты, сколько потерял. Иначе конверсия сравнивала бы заявки
+   * этого месяца с оплатами прошлого и всегда врала.
+   *
+   * Звонки — клиенты, у которых менеджер отметил тип разговора. Отдельного
+   * журнала звонков в системе нет: тип ставится в карточке клиента, и вместе
+   * с ним обновляется дата последнего контакта — по ней и считаем период.
+   */
+  private async managerKpi(
+    periodScope: Prisma.OrderWhereInput,
+    clientRange?: { gte?: Date; lte?: Date },
+  ) {
+    const hasClientRange =
+      clientRange && (clientRange.gte !== undefined || clientRange.lte !== undefined);
+    const clientWhere: Prisma.ClientWhereInput = { ...NOT_DELETED };
+    const [users, orders, clientsNew, callRows] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { ...NOT_DELETED },
+        select: { id: true, fullName: true },
+        orderBy: { fullName: 'asc' },
+      }),
+      this.prisma.order.findMany({
+        where: periodScope,
+        select: {
+          stage: true,
+          managerId: true,
+          finalPrice: true,
+          estimatedPrice: true,
+          manager: { select: { fullName: true } },
+        },
+      }),
+      this.prisma.client.groupBy({
+        by: ['managerId'],
+        where: hasClientRange
+          ? { ...clientWhere, createdAt: clientRange }
+          : clientWhere,
+        _count: { _all: true },
+      }),
+      this.prisma.client.groupBy({
+        by: ['managerId', 'callType'],
+        where: hasClientRange
+          ? { ...clientWhere, callType: { not: null }, lastContactAt: clientRange }
+          : { ...clientWhere, callType: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    type Row = {
+      id: string | null;
+      name: string;
+      calls: number;
+      cold: number;
+      neutral: number;
+      hot: number;
+      newClients: number;
+      orders: number;
+      paid: number;
+      rejected: number;
+      amount: number;
+      conversion: number;
+    };
+    const by = new Map<string, Row>();
+    const row = (id: string | null, name: string): Row => {
+      const key = id ?? 'none';
+      if (!by.has(key)) {
+        by.set(key, {
+          id,
+          name,
+          calls: 0,
+          cold: 0,
+          neutral: 0,
+          hot: 0,
+          newClients: 0,
+          orders: 0,
+          paid: 0,
+          rejected: 0,
+          amount: 0,
+          conversion: 0,
+        });
+      }
+      return by.get(key)!;
+    };
+    const nameOf = (id: string | null) =>
+      users.find((u) => u.id === id)?.fullName ?? 'Без ответственного';
+
+    const money = (o: { finalPrice: number | null; estimatedPrice: number }) =>
+      o.finalPrice ?? o.estimatedPrice ?? 0;
+
+    for (const o of orders) {
+      const r = row(o.managerId, o.manager?.fullName ?? 'Без ответственного');
+      r.orders += 1;
+      if (o.stage === FunnelStage.PAID) {
+        r.paid += 1;
+        r.amount += money(o);
+      }
+      if (o.stage === FunnelStage.REJECTED) r.rejected += 1;
+    }
+    for (const g of clientsNew) {
+      row(g.managerId, nameOf(g.managerId)).newClients += g._count._all;
+    }
+    for (const g of callRows) {
+      const r = row(g.managerId, nameOf(g.managerId));
+      r.calls += g._count._all;
+      if (g.callType === CallType.COLD) r.cold += g._count._all;
+      if (g.callType === CallType.NEUTRAL) r.neutral += g._count._all;
+      if (g.callType === CallType.HOT) r.hot += g._count._all;
+    }
+
+    return [...by.values()]
+      .map((r) => ({
+        ...r,
+        conversion: r.orders ? Math.round((r.paid / r.orders) * 100) : 0,
+      }))
+      // сотрудники, за которыми в периоде вообще ничего нет, — это шум
+      .filter((r) => r.orders > 0 || r.calls > 0 || r.newClients > 0)
+      .sort((a, b) => b.paid - a.paid || b.orders - a.orders);
+  }
+
   private async managerWorkload() {
     const activeStages: FunnelStage[] = [
       FunnelStage.NEW,

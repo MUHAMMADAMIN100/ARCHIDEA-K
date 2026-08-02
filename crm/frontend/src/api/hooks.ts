@@ -208,6 +208,8 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
   );
   const [loading, setLoading] = useState(() => !(url && cache.has(url)));
   const [error, setError] = useState<string | null>(null);
+  // код ответа последней неудачи: 404 значит «повторять бессмысленно»
+  const [status, setStatus] = useState(0);
 
   // при смене URL — мгновенный сброс состояния прямо в рендере,
   // чтобы ни один кадр не показывал данные предыдущего URL
@@ -217,6 +219,7 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
     setData(url && cache.has(url) ? (cache.get(url) as T) : null);
     setLoading(!(url && cache.has(url)));
     setError(null);
+    setStatus(0);
   }
 
   // защита от «отставших» ответов: ответ старого URL не должен
@@ -259,10 +262,31 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
         if (urlRef.current !== url) return; // URL уже сменился — не трогаем состояние
         setData(body as T);
         setError(null);
+        setStatus(0);
       } catch (e: any) {
         if (urlRef.current !== url) return;
         if (!hasCache && !silent) {
-          setError(e?.response?.data?.message || 'Ошибка загрузки');
+          /*
+           * Причина отказа должна быть названа честно.
+           *
+           * Раньше любая неудача показывала «Проверьте интернет». По
+           * уведомлению об удалённом клиенте человек попадал на этот экран
+           * и искал неполадки со связью, хотя сервер прямо ответил «не
+           * найдено». Различаем: нет записи, сервер упал, связи нет.
+           */
+          const status = e?.response?.status as number | undefined;
+          setStatus(status ?? 0);
+          setError(
+            status === 404
+              ? 'Запись удалена или перемещена в корзину'
+              : status === 403
+                ? 'Нет доступа к этим данным'
+                : status && status >= 500
+                  ? 'Сервер не отвечает. Попробуйте ещё раз'
+                  : status
+                    ? e?.response?.data?.message || 'Не удалось загрузить данные'
+                    : 'Нет связи с сервером. Проверьте интернет',
+          );
         }
       } finally {
         if (urlRef.current === url) setLoading(false);
@@ -339,5 +363,13 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
     [url],
   );
 
-  return { data, loading, error, reload, setData: updateData };
+  return {
+    data,
+    loading,
+    error,
+    /** Записи нет — повторять запрос бессмысленно, кнопку «Повторить» прячем */
+    notFound: status === 404,
+    reload,
+    setData: updateData,
+  };
 }

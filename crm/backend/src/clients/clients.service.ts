@@ -27,6 +27,12 @@ export function normalizePhone(phone: string): string {
   return canonicalPhone(phone) ?? phone.replace(/\D/g, '');
 }
 
+/**
+ * Степени заинтересованности, которые есть в системе с самого начала.
+ * Остальные менеджеры добавляют сами — кнопкой «+ свой» в карточке клиента.
+ */
+export const DEFAULT_INTEREST_LEVELS = ['Перезвоню', 'Подумаю', 'Посоветуюсь'];
+
 @Injectable()
 export class ClientsService {
   constructor(
@@ -249,6 +255,30 @@ export class ClientsService {
     if (!seesAll(user)) delete (data as any).managerId;
     if (dto.phone) (data as any).phone = normalizePhone(dto.phone);
 
+    /*
+     * Холодные звонки. Пустое значение означает «снять»: менеджер должен
+     * мочь отменить ошибочно поставленный перезвон или стереть степень
+     * заинтересованности, а не только заменить их другими.
+     */
+    if (dto.interestLevel !== undefined) {
+      (data as any).interestLevel = dto.interestLevel?.trim() || null;
+    }
+    if (dto.callbackAt !== undefined) {
+      (data as any).callbackAt = dto.callbackAt ? new Date(dto.callbackAt) : null;
+    }
+    if (dto.callType !== undefined) {
+      (data as any).callType = dto.callType ?? null;
+    }
+    /*
+     * Отметили тип разговора или назначили перезвон — значит, с клиентом
+     * только что работали. Двигаем дату последнего контакта: по ней KPI
+     * считает звонки за период, и без этого «сколько звонили за месяц»
+     * оставалось бы нулём.
+     */
+    if (dto.callType !== undefined || dto.callbackAt !== undefined) {
+      (data as any).lastContactAt = new Date();
+    }
+
     const after = await this.prisma.client.update({ where: { id }, data });
 
     await this.audit.log(this.prisma, {
@@ -268,6 +298,9 @@ export class ClientsService {
         'discount',
         'sourceDetail',
         'managerId',
+        'callType',
+        'callbackAt',
+        'interestLevel',
       ]),
     });
     return after;
@@ -305,6 +338,24 @@ export class ClientsService {
         data: stamp,
       });
 
+      /*
+       * Уведомления про этого клиента и его заказы убираем совсем.
+       *
+       * Уведомление — это ссылка «перейти и разобраться». После удаления
+       * переходить некуда: карточка отвечает «не найдено», и человек видел
+       * «Не удалось загрузить данные. Проверьте интернет» — сообщение, не
+       * имеющее к происходящему никакого отношения. В корзину их не кладём:
+       * это оповещения, а не данные компании.
+       */
+      await tx.notification.deleteMany({
+        where: {
+          OR: [
+            { clientId: id },
+            { orderId: { in: client.orders.map((o) => o.id) } },
+          ],
+        },
+      });
+
       await this.audit.log(tx, {
         user,
         entity: 'CLIENT',
@@ -340,6 +391,59 @@ export class ClientsService {
     const all = new Set<string>();
     for (const r of rows) for (const l of r.labels) all.add(l);
     return [...all].sort((a, b) => a.localeCompare(b, 'ru'));
+  }
+
+  /**
+   * Варианты степени заинтересованности.
+   *
+   * Справочника-таблицы нет намеренно: варианты — это три предустановленных
+   * плюс всё, что менеджеры уже вписали сами. Так же устроены теги клиента,
+   * и заводить ради трёх строк отдельный раздел с правами доступа незачем.
+   *
+   * Список общий на всю компанию: добавил один менеджер — предлагается всем,
+   * иначе одно и то же состояние называлось бы у каждого по-своему и не
+   * собиралось бы в отчёт.
+   */
+  async interestLevels(): Promise<string[]> {
+    const rows = await this.prisma.client.findMany({
+      where: { ...NOT_DELETED, interestLevel: { not: null } },
+      select: { interestLevel: true },
+      distinct: ['interestLevel'],
+    });
+    const all = new Set<string>(DEFAULT_INTEREST_LEVELS);
+    for (const r of rows) if (r.interestLevel) all.add(r.interestLevel);
+    return [...all];
+  }
+
+  /**
+   * Перезвоны за период — для отметок «позвонить» в календаре.
+   *
+   * Область данных обычная: менеджер видит своих клиентов, руководство —
+   * всех. Отдаём только то, что нужно отметке: кого, когда и чей клиент.
+   */
+  async callbacks(user: AuthUser, from?: string, to?: string) {
+    const range: Prisma.DateTimeFilter = {};
+    if (from) range.gte = new Date(`${from}T00:00:00.000Z`);
+    if (to) range.lte = new Date(`${to}T23:59:59.999Z`);
+
+    return this.prisma.client.findMany({
+      where: {
+        ...NOT_DELETED,
+        ...(seesAll(user) ? {} : { managerId: user.id }),
+        callbackAt: from || to ? range : { not: null },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        callbackAt: true,
+        callType: true,
+        interestLevel: true,
+        manager: { select: { id: true, fullName: true } },
+      },
+      orderBy: { callbackAt: 'asc' },
+      take: 500,
+    });
   }
 
   async exportCsv(user: AuthUser): Promise<string> {

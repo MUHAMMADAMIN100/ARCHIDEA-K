@@ -914,7 +914,7 @@ function ClientOrdersModal({
       onClose={onClose}
     >
       {error ? (
-        <ErrorState onRetry={reload} />
+        <ErrorState text={error ?? undefined} onRetry={reload} />
       ) : (
         <>
           <DetailStats

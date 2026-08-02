@@ -26,11 +26,17 @@ import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { OrderModal } from '../components/OrderModal';
 import { LabelPicker } from '../components/LabelPicker';
+import { InterestPicker } from '../components/InterestPicker';
+import { DatePicker } from '../components/DatePicker';
+import { TimePicker } from '../components/TimePicker';
 import { NameInput, PhoneInput } from '../components/ContactFields';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { ReminderModal } from '../components/ReminderModal';
 import { CleanerPicker, Tabs } from '../components/common';
 import {
+  CALL_TYPE_COLOR,
+  CALL_TYPE_LABEL,
+  CALL_TYPE_ORDER,
   TAG_LABEL,
   TAG_COLOR,
   SOURCE_LABEL,
@@ -83,7 +89,7 @@ export function ClientCard() {
    * отправляем его вовсе, а показываем понятное объяснение ниже.
    */
   const isPending = !!id && isTempId(id);
-  const { data, loading, error, reload, setData } = useFetch<Client>(
+  const { data, loading, error, notFound, reload, setData } = useFetch<Client>(
     isPending ? null : `/clients/${id}`,
     { deps: [id] },
   );
@@ -108,13 +114,57 @@ export function ClientCard() {
       <EmptyState text="Клиент ещё сохраняется. Вернитесь к списку и откройте карточку через секунду." />
     );
   }
-  if (error && !data) return <ErrorState onRetry={reload} />;
+  /*
+   * Клиента может не быть: по уведомлению об удалённой заявке человек
+   * попадал сюда и видел «Проверьте интернет». Повторять запрос за
+   * удалённой записью бессмысленно, поэтому и кнопки «Повторить» нет.
+   */
+  if (error && !data) {
+    return (
+      <ErrorState
+        text={error}
+        onRetry={notFound ? undefined : reload}
+      />
+    );
+  }
   if (loading || !data) return <Spinner />;
 
   const curNotes = notes ?? data.notes ?? '';
   const curTags = tags ?? data.tags;
   const curLabels = labels ?? data.labels ?? [];
   const curPreferences = preferences ?? data.preferences ?? '';
+
+  /*
+   * Быстрая правка карточки: изменение видно сразу, запрос уходит фоном.
+   * Так работают поля разговора — их отмечают, не отрываясь от звонка.
+   */
+  const patchClient = async (patch: Partial<Client>) => {
+    setData((c) => (c ? { ...c, ...patch } : c));
+    try {
+      await api.patch(`/clients/${id}`, patch);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось сохранить');
+      reload();
+    }
+  };
+
+  // «2026-08-05T09:30» из даты перезвона — для календаря и списка времени
+  const callback = data.callbackAt ? new Date(data.callbackAt) : null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const callbackDate = callback
+    ? `${callback.getFullYear()}-${pad(callback.getMonth() + 1)}-${pad(callback.getDate())}`
+    : '';
+  const callbackTime = callback
+    ? `${pad(callback.getHours())}:${pad(callback.getMinutes())}`
+    : '';
+
+  /** Дата без времени означает начало рабочего дня — иначе перезвон «на полночь» */
+  const setCallback = (date: string, time: string) => {
+    if (!date) return patchClient({ callbackAt: null });
+    const [y, m, d] = date.split('-').map(Number);
+    const [hh, mm] = (time || '09:00').split(':').map(Number);
+    patchClient({ callbackAt: new Date(y, m - 1, d, hh, mm).toISOString() });
+  };
 
   /*
    * Статус клиента ОДИН. Раньше теги включались независимо, и клиент мог
@@ -419,6 +469,70 @@ export function ClientCard() {
             <LabelPicker value={curLabels} onChange={setLabels} />
             <p className="mt-2 text-xs text-navy-600">
               Сохраняются кнопкой «Сохранить…» ниже.
+            </p>
+          </div>
+
+          {/*
+            Холодные звонки.
+            Эти три поля меняются прямо во время разговора, поэтому они
+            сохраняются сразу, без отдельной кнопки: менеджер отметил тип
+            разговора и положил трубку.
+          */}
+          <div className="card p-5">
+            <h3 className="mb-3 font-bold text-navy-900">Звонки</h3>
+
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-navy-600">
+              Тип звонка
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {CALL_TYPE_ORDER.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    patchClient({ callType: data.callType === t ? null : t })
+                  }
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                    data.callType === t
+                      ? `${CALL_TYPE_COLOR[t]} ring-2 ring-navy-200`
+                      : 'border-navy-200 bg-white text-navy-600 hover:bg-navy-50'
+                  }`}
+                >
+                  {CALL_TYPE_LABEL[t]}
+                </button>
+              ))}
+            </div>
+
+            <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-600">
+              Степень заинтересованности
+            </h4>
+            <InterestPicker
+              value={data.interestLevel ?? null}
+              onChange={(v) => patchClient({ interestLevel: v })}
+            />
+
+            <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-navy-600">
+              Повторный звонок
+            </h4>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <DatePicker
+                  clearable
+                  value={callbackDate}
+                  onChange={(v) => setCallback(v, callbackTime)}
+                  placeholder="дд.мм.гггг"
+                />
+              </div>
+              <TimePicker
+                className="w-[7.5rem] shrink-0"
+                value={callbackTime}
+                onChange={(v) => setCallback(callbackDate, v)}
+                ariaLabel="Время перезвона"
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-navy-600">
+              В календаре на этот день и час появится оранжевая отметка
+              «позвонить».
             </p>
           </div>
 

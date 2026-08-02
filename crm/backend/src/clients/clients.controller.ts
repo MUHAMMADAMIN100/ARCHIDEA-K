@@ -57,6 +57,26 @@ export class ClientsController {
     return this.service.labels(user);
   }
 
+  /**
+   * Варианты степени заинтересованности: три предустановленных плюс все,
+   * что менеджеры вписали сами. Список общий на компанию — иначе одно и то
+   * же состояние называлось бы у каждого по-своему.
+   */
+  @Get('interest-levels')
+  interestLevels() {
+    return this.service.interestLevels();
+  }
+
+  /** Перезвоны за период — отметки «позвонить» в календаре */
+  @Get('callbacks')
+  callbacks(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.callbacks(user, from, to);
+  }
+
   @Get('export')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   async export(@CurrentUser() user: AuthUser, @Res() res: Response) {
