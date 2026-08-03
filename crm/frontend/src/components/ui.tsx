@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Eye, EyeOff, X } from 'lucide-react';
 
 /** Поле ввода пароля с кнопкой «показать/скрыть» */
 export function PasswordInput({
@@ -107,11 +108,34 @@ export function PageHeader({
   title,
   subtitle,
   action,
+  back = true,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  /** Своя кнопка возврата уже есть на странице — не рисуем вторую */
+  back?: boolean;
 }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  /*
+   * Возврат на шаг назад есть на каждом экране, кроме дашборда: он и есть
+   * начало пути. Раньше кнопка стояла только в карточках — из «Задач» или
+   * «Финансов» вернуться было нечем, кроме бокового меню, а на телефоне
+   * его ещё надо открыть.
+   *
+   * Открыли раздел по прямой ссылке (из уведомления, из письма) — истории
+   * в этой вкладке нет, и «назад» увело бы на чужой сайт. Такой случай
+   * различаем по счётчику переходов роутера и уводим на дашборд.
+   */
+  const showBack = back && pathname !== '/';
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/');
+  };
+
   /*
    * Заголовок и действия — в одной строке.
    *
@@ -121,12 +145,25 @@ export function PageHeader({
    * к названию раздела.
    */
   return (
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-bold text-navy-900">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-navy-600">{subtitle}</p>}
+    <div className="mb-5">
+      {showBack && (
+        <button
+          type="button"
+          onClick={goBack}
+          className="press mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-navy-600 hover:text-navy-800"
+        >
+          <ArrowLeft className="h-4 w-4" /> Назад
+        </button>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-navy-900">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-navy-600">{subtitle}</p>}
+        </div>
+        {action && (
+          <div className="flex flex-wrap items-center gap-2">{action}</div>
+        )}
       </div>
-      {action && <div className="flex flex-wrap items-center gap-2">{action}</div>}
     </div>
   );
 }

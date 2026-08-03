@@ -102,6 +102,8 @@ export function ClientCard() {
   const [notes, setNotes] = useState<string | null>(null);
   const [tags, setTags] = useState<ClientTag[] | null>(null);
   const [preferences, setPreferences] = useState<string | null>(null);
+  // адрес клиента: подставляется в новые заказы, правится здесь же
+  const [address, setAddress] = useState<string | null>(null);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
@@ -152,6 +154,7 @@ export function ClientCard() {
   const curNotes = notes ?? data.notes ?? '';
   const curTags = tags ?? data.tags;
   const curPreferences = preferences ?? data.preferences ?? '';
+  const curAddress = address ?? data.address ?? '';
 
   /*
    * Быстрая правка карточки: изменение видно сразу, запрос уходит фоном.
@@ -280,6 +283,7 @@ export function ClientCard() {
   const saveMeta = async () => {
     const nextNotes = curNotes;
     const nextPrefs = curPreferences.trim() || null;
+    const nextAddress = curAddress.trim() || null;
     // оптимистично применяем изменения сразу
     setData((c) =>
       c
@@ -287,16 +291,19 @@ export function ClientCard() {
             ...c,
             notes: nextNotes,
             preferences: nextPrefs,
+            address: nextAddress,
           }
         : c,
     );
     setNotes(null);
     setPreferences(null);
+    setAddress(null);
     setSavingMeta(true);
     try {
       await api.patch(`/clients/${id}`, {
         notes: nextNotes,
         preferences: nextPrefs,
+        address: nextAddress,
       });
       toast.success('Сохранено');
     } catch {
@@ -370,6 +377,7 @@ export function ClientCard() {
       </div>
 
       <PageHeader
+        back={false}
         title={data.fullName}
         /*
          * Позвонить и напомнить — рядом: обе про один и тот же звонок.
@@ -493,6 +501,20 @@ export function ClientCard() {
               </div>
             </div>
           )}
+
+          <div className="card p-5">
+            <h3 className="font-bold text-navy-900">Адрес</h3>
+            <p className="mb-3 mt-0.5 text-xs text-navy-600">
+              Подставляется в новые заказы клиента
+            </p>
+            <input
+              className="input"
+              value={curAddress}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Район, улица, дом, квартира"
+              maxLength={300}
+            />
+          </div>
 
           <div className="card p-5">
             <h3 className="font-bold text-navy-900">Предпочтения клиента</h3>

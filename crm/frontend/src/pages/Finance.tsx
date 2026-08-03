@@ -457,8 +457,17 @@ function EntriesTab() {
       </div>
 
       {/* Разбивка по статьям за период */}
+      {/*
+        min-w-0 + overflow-hidden на карточках с графиком.
+
+        Всплывающая подсказка графика — отдельный слой, который библиотека
+        держит в разметке всегда и двигает по месту курсора. На узком экране
+        она вылезала за правый край, и вся страница получала боковую
+        прокрутку: «Финансы» на телефоне открывались сдвинутыми, заголовок
+        уезжал за край. Карточка теперь обрезает всё, что шире её самой.
+      */}
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <div className="card p-5">
+        <div className="card min-w-0 overflow-hidden p-5">
           <h3 className="mb-1 font-bold text-navy-900">Разбивка по статьям за период</h3>
           <p className="mb-3 text-xs text-navy-600">{CHART_HINT}</p>
           {summary && summary.byCategory.length > 0 ? (
@@ -497,7 +506,7 @@ function EntriesTab() {
           )}
         </div>
 
-        <div className="card p-5">
+        <div className="card min-w-0 overflow-hidden p-5">
           <h3 className="mb-1 font-bold text-navy-900">Динамика по месяцам</h3>
           <p className="mb-3 text-xs text-navy-600">{CHART_HINT}</p>
           {summary && summary.series && summary.series.length > 0 ? (

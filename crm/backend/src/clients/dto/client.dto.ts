@@ -63,6 +63,18 @@ export class CreateClientDto {
   @MaxLength(120)
   sourceDetail?: string;
 
+  /**
+   * Адрес клиента — подставляется в новые заказы.
+   *
+   * Необязателен на уровне API: у заведённых раньше клиентов его нет, и
+   * обязательное поле сломало бы их сохранение. Спрашивает его форма
+   * нового клиента, там оно обязательное.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  address?: string;
+
   @IsOptional()
   @IsArray()
   @IsEnum(ClientTag, { each: true })
@@ -106,6 +118,8 @@ export class UpdateClientDto {
   @IsOptional() @IsArray() @ArrayMaxSize(5) @IsTjPhone({ each: true })
   extraPhones?: string[];
   @IsOptional() @IsString() @MaxLength(120) sourceDetail?: string;
+  /** Адрес клиента — подставляется в новые заказы */
+  @IsOptional() @IsString() @MaxLength(300) address?: string | null;
   @IsOptional() @IsArray() @IsEnum(ClientTag, { each: true }) tags?: ClientTag[];
   /*
    * Холодные звонки. Пустая строка и null означают «снять значение» —

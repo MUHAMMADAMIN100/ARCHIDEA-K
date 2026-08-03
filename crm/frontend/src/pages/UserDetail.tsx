@@ -176,7 +176,7 @@ export function UserDetail() {
         <ArrowLeft className="h-4 w-4" /> Назад
       </button>
 
-      <PageHeader title="Профиль сотрудника" />
+      <PageHeader back={false} title="Профиль сотрудника" />
 
       {/* Подключение бота — только в своём профиле: «Старт» за другого не нажать */}
       {viewer?.id === data.id && <TelegramLink />}

@@ -271,6 +271,8 @@ export interface Client {
   extraPhones?: string[];
   /** «От кого» пришёл клиент — рекомендатель или партнёр */
   sourceDetail?: string | null;
+  /** Адрес клиента — подставляется в новые заказы */
+  address?: string | null;
   // ── Холодные звонки ──
   /** Каким вышел последний разговор */
   callType?: CallType | null;

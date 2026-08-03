@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
@@ -46,9 +47,12 @@ export function Tasks() {
    * Без этого календарь и раздел задач для него — экран «только чтение»,
    * в который нельзя записать ни звонок, ни выезд.
    */
-  const isOwnPersonalTask = (t: Task) =>
-    t.creatorId === user?.id &&
-    t.assignments.every((a) => a.userId === user?.id);
+  /*
+   * Своя поставленная задача. Раньше правилом было «поставил себе и сам же
+   * единственный исполнитель»; теперь сотрудник может поручить работу
+   * коллеге, и своё поручение он ведёт сам — так же считает и сервер.
+   */
+  const isOwnPersonalTask = (t: Task) => t.creatorId === user?.id;
   const inFlightRef = useRef(0);
   const { data, loading, reload, setData } = useFetch<Task[]>('/tasks', {
     pollMs: 20000,
@@ -57,6 +61,26 @@ export function Tasks() {
   const [showAdd, setShowAdd] = useState(false);
   // задача, открытая по клику на карточку
   const [editTask, setEditTask] = useState<Task | null>(null);
+
+  /*
+   * Открытие задачи по адресу /tasks?task=<id>.
+   *
+   * Так строка на дашборде открывает саму задачу, а не просто приводит в
+   * раздел. Признак из адреса убираем сразу после открытия: иначе обновление
+   * страницы или возврат назад снова распахивали бы окно.
+   */
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get('task');
+  useEffect(() => {
+    if (!wanted || !data) return;
+    const found = data.find((t) => t.id === wanted);
+    if (found) setEditTask(found);
+    const next = new URLSearchParams(params);
+    next.delete('task');
+    setParams(next, { replace: true });
+    // params и setParams меняются на каждый рендер — следим за самим признаком
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted, data]);
 
   const patchTask = (id: string, patch: Partial<Task>) =>
     setData((tasks) =>

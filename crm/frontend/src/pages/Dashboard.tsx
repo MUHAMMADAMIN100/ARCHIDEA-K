@@ -7,6 +7,7 @@ import {
   Users,
   Wallet,
   ArrowRight,
+  ChevronRight,
 } from 'lucide-react';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
@@ -219,8 +220,9 @@ export function Dashboard() {
                     {formatVolume(o)} · {formatPhone(o.client?.phone)}
                   </div>
                 </div>
-                <div className="text-sm font-bold text-navy-700">
+                <div className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-navy-700">
                   {formatPrice(o.estimatedPrice)}
+                  <ChevronRight className="h-4 w-4 text-navy-400" />
                 </div>
               </Link>
             ))}
@@ -241,16 +243,26 @@ export function Dashboard() {
             </Link>
           </div>
           <div className="space-y-2">
+            {/*
+              Строка задачи открывает саму задачу — раздел «Задачи» покажет
+              её карточку по адресу. Раньше это был неподвижный текст: увидеть
+              задачу на дашборде было можно, а открыть — нет, приходилось
+              искать её заново в списке.
+            */}
             {openTasks.map((t) => (
-              <div
+              <Link
                 key={t.id}
-                className="flex items-center justify-between rounded-xl border border-navy-100 px-3 py-2.5"
+                to={`/tasks?task=${t.id}`}
+                className="press flex items-center justify-between gap-3 rounded-xl border border-navy-100 px-3 py-2.5 hover:bg-navy-50"
               >
-                <div className="text-sm font-medium text-navy-800">{t.title}</div>
-                <span className="text-xs text-navy-600">
+                <div className="min-w-0 truncate text-sm font-medium text-navy-800">
+                  {t.title}
+                </div>
+                <span className="flex shrink-0 items-center gap-1.5 text-xs text-navy-600">
                   {t.deadline ? new Date(t.deadline).toLocaleDateString('ru-RU') : ''}
+                  <ChevronRight className="h-4 w-4 text-navy-400" />
                 </span>
-              </div>
+              </Link>
             ))}
             {openTasks.length === 0 && (
               <div className="py-6 text-center text-sm text-navy-600">

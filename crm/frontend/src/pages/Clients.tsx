@@ -60,6 +60,8 @@ export interface NewOrderInput {
   /** ТЗ 5 — цена за единицу и итог */
   pricePerSqm?: number;
   finalPrice?: number;
+  /** Адрес объекта — тот же, что записан в карточке клиента */
+  address?: string;
 }
 
 export function Clients() {
@@ -106,6 +108,7 @@ export function Clients() {
       discount?: number;
       extraPhones?: string[];
       sourceDetail?: string;
+      address?: string;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -413,6 +416,7 @@ export function AddClientModal({
       discount?: number;
       extraPhones?: string[];
       sourceDetail?: string;
+      address?: string;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -427,6 +431,8 @@ export function AddClientModal({
     так просил заказчик, чтобы база не оставалась с одним контактом.
   */
   const [extraPhones, setExtraPhones] = useState<string[]>(['']);
+  // адрес объекта: спрашиваем один раз здесь, дальше он подставляется в заказы
+  const [address, setAddress] = useState('');
   // свободные теги (ТЗ 1.2) — в дополнение к единственному статусу
   const [labelInput, setLabelInput] = useState('');
   const [source, setSource] = useState<LeadSource>('CALL');
@@ -555,6 +561,12 @@ export function AddClientModal({
   if (extra.replace(/\D/g, '').length > 0 && !isValidPhone(extra)) {
     blockers.push('запасной номер полностью или очистите поле');
   }
+  /*
+   * Адрес обязателен (решение владельца): без него заявку не на что
+   * назначить — клинеру некуда ехать, а менеджер потом ищет адрес в
+   * переписке. Спрашиваем сразу, пока клиент на линии.
+   */
+  if (address.trim().length < 4) blockers.push('адрес');
   const canSubmit = blockers.length === 0;
 
   const submit = () => {
@@ -574,6 +586,7 @@ export function AddClientModal({
           seats: isFurniture ? toInt(seats) : undefined,
           estimatedPrice: toInt(price),
           pricePerSqm: unitPrice || undefined,
+          address: address.trim(),
           /*
            * Итог НЕ отправляем: его считает сервер, и только он знает про
            * постоянную скидку клиента. Пока форма слала свою цифру, скидка
@@ -591,6 +604,7 @@ export function AddClientModal({
         discount: Math.max(0, Math.round(Number(discount) || 0)),
         extraPhones: extraPhones.filter((p) => isValidPhone(p)),
         sourceDetail: sourceDetail.trim() || undefined,
+        address: address.trim(),
       },
       managerName,
       order,
@@ -604,14 +618,14 @@ export function AddClientModal({
         <NameInput value={fullName} onChange={setFullName} autoFocus />
         <PhoneInput value={phone} onChange={setPhone} required />
 
-        {/* Второй номер обязателен, третий и далее — по желанию */}
-        <label className="label !mb-0 mt-2">Второй номер *</label>
+        {/* Запасные номера — по желанию: клиента с одним телефоном тоже
+            надо уметь завести */}
+        <label className="label !mb-0 mt-2">Второй номер</label>
         {extraPhones.map((p, i) => (
           <div key={i} className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <PhoneInput
                 value={p}
-                required={i === 0}
                 onChange={(v) =>
                   setExtraPhones((prev) =>
                     prev.map((x, j) => (j === i ? v : x)),
@@ -640,6 +654,23 @@ export function AddClientModal({
         >
           + ещё номер телефона
         </button>
+
+        {/*
+          Адрес объекта. Спрашиваем при заведении клиента и подставляем в
+          заявку: раньше он жил только в заказе, и у клиента без заявки
+          адреса не было вовсе — при следующем заказе его спрашивали заново.
+        */}
+        <div>
+          <label className="label">Адрес *</label>
+          <input
+            className="input"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Район, улица, дом, квартира"
+            maxLength={300}
+          />
+        </div>
+
         <div>
           {/*
             Постоянная скидка клиента. Подставляется в его новые заказы,

@@ -425,6 +425,8 @@ model Client {
   extraPhones   String[]    @default([])
   /// «От кого» — рекомендатель или партнёр («От Анисы», «От Ибодат»)
   sourceDetail  String?
+  /// Адрес клиента — спрашивается при заведении и подставляется в новые заказы
+  address       String?
   email         String?
   source        LeadSource  @default(SITE)
   tags          ClientTag[] @default([])

@@ -137,6 +137,7 @@ export class ClientsService {
     discount?: number;
     extraPhones?: string[];
     sourceDetail?: string;
+    address?: string;
   }) {
     const phone = canonicalPhone(data.phone);
     if (!phone) {
@@ -180,6 +181,11 @@ export class ClientsService {
           data: {
             lastContactAt: new Date(),
             extraPhones: mergeExtra(existing.extraPhones),
+            // адрес дописываем, только если его ещё не было: правки менеджера
+            // в карточке важнее того, что назвали при повторном обращении
+            ...(existing.address || !data.address?.trim()
+              ? {}
+              : { address: data.address.trim() }),
           },
         });
         return { client: touched, created: false };
@@ -228,6 +234,7 @@ export class ClientsService {
         // запасные номера храним в едином формате — 9 цифр
         extraPhones: incomingExtra,
         sourceDetail: data.sourceDetail?.trim() || null,
+        address: data.address?.trim() || null,
       },
     });
     return { client, created: true };

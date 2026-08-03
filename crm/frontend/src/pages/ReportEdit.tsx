@@ -415,6 +415,7 @@ export function ReportEdit() {
       </button>
 
       <PageHeader
+        back={false}
         title={id ? 'Редактирование отчёта' : 'Новый отчёт'}
       />
 
