@@ -26,6 +26,9 @@ const MENU = {
   unmute: 'Включить уведомления',
 };
 
+/** Форма кода привязки: 9 случайных байт в base64url — ровно 12 символов */
+const LINK_CODE = /^[A-Za-z0-9_-]{12}$/;
+
 @Injectable()
 export class TelegramBot implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger('TelegramBot');
@@ -119,9 +122,20 @@ export class TelegramBot implements OnModuleInit, OnModuleDestroy {
       select: { id: true, fullName: true, telegramEnabled: true },
     });
     if (!user) {
+      /*
+       * Код, присланный отдельным сообщением, — тот же «Старт», только руками.
+       * Он нужен там, где ссылки t.me не открываются (у части провайдеров
+       * домен не разрешается в DNS): сотрудник находит бота поиском и
+       * присылает код из профиля. Форму строки проверяем, чтобы обычное
+       * «привет» не превращалось в «ссылка устарела».
+       */
+      if (LINK_CODE.test(text)) {
+        return this.start(chatId, text, name || msg.from?.username || null);
+      }
       return this.say(
         chatId,
-        'Этот чат не подключён к CRM. Откройте свой профиль в CRM и нажмите «Подключить Telegram».',
+        'Этот чат не подключён к CRM. Откройте свой профиль в CRM, нажмите ' +
+          '«Подключить Telegram» и пришлите сюда код из профиля.',
       );
     }
 
@@ -156,7 +170,8 @@ export class TelegramBot implements OnModuleInit, OnModuleDestroy {
       return this.say(
         chatId,
         'Это бот CRM «Архидея». Чтобы получать уведомления, откройте свой ' +
-          'профиль в CRM и нажмите «Подключить Telegram» — там будет ссылка.',
+          'профиль в CRM, нажмите «Подключить Telegram» и пришлите сюда код ' +
+          'из профиля — одним сообщением.',
       );
     }
 
@@ -171,7 +186,7 @@ export class TelegramBot implements OnModuleInit, OnModuleDestroy {
     if (!user) {
       return this.say(
         chatId,
-        'Ссылка устарела или уже использована. Откройте профиль в CRM и ' +
+        'Код устарел или уже использован. Откройте профиль в CRM и ' +
           'нажмите «Подключить Telegram» ещё раз.',
       );
     }

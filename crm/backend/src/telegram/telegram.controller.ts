@@ -23,7 +23,16 @@ export class TelegramController {
     private bot: TelegramBot,
   ) {}
 
-  /** Ссылка для подключения: одноразовый код + адрес бота */
+  /**
+   * Данные для подключения: одноразовый код, имя бота и две ссылки.
+   *
+   * Ссылок две, потому что t.me открывается не у всех: у части провайдеров
+   * Таджикистана домен не разрешается в DNS, и браузер показывает «Не удаётся
+   * получить доступ к сайту». Само приложение Telegram при этом работает —
+   * поэтому основной путь теперь tg://resolve, его обрабатывает установленная
+   * программа, без обращения к сети. Код отдаём отдельно: даже без обеих
+   * ссылок сотрудник может открыть бота поиском и отправить код сообщением.
+   */
   @Post('link')
   async link(@CurrentUser() user: AuthUser) {
     const username = await this.bot.botUsername();
@@ -42,7 +51,13 @@ export class TelegramController {
         telegramLinkExpires: new Date(Date.now() + LINK_TTL_MS),
       },
     });
-    return { ok: true, url: `https://t.me/${username}?start=${code}` };
+    return {
+      ok: true,
+      bot: username,
+      code,
+      deepLink: `tg://resolve?domain=${username}&start=${code}`,
+      url: `https://t.me/${username}?start=${code}`,
+    };
   }
 
   @Get('status')
