@@ -198,6 +198,17 @@ function saveToQueue(item: Omit<QueuedOrder, 'at'>) {
 }
 
 /**
+ * Убрать заявку из очереди — она уже ушла фоновой попыткой.
+ * Сравниваем по телефону: одна и та же заявка второй раз в очередь не
+ * попадает, а держать данные клиента дольше нужного нельзя.
+ */
+function dropFromQueue(order: OrderPayload) {
+  const phone = order.contact?.phone;
+  if (!phone) return;
+  writeQueue(readQueue().filter((i) => i.order.contact?.phone !== phone));
+}
+
+/**
  * Повторная отправка отложенных заявок (вызывается при загрузке страницы).
  * Успешно отправленные удаляются сразу — данные клиента не задерживаются.
  */
@@ -240,13 +251,49 @@ export function submitOrderOptimistic(
 ): void {
   trySend(order, honeypot)
     .then((ok) => {
-      if (!ok) saveToQueue({ order, honeypot });
-      onResult?.(ok);
+      if (ok) {
+        onResult?.(true);
+        return;
+      }
+      saveToQueue({ order, honeypot });
+      onResult?.(false);
+      void keepTrying(order, honeypot, onResult);
     })
     .catch(() => {
       saveToQueue({ order, honeypot });
       onResult?.(false);
+      void keepTrying(order, honeypot, onResult);
     });
+}
+
+/**
+ * Тихие попытки после того, как экран уже показал «не удалось».
+ *
+ * Сервер бывает недоступен около минуты — например, пока выкатывается
+ * обновление, — а три быстрые попытки укладываются в десять секунд. Дальше
+ * пробуем в фоне: человек в это время читает телефон и часы работы, а если
+ * заявка всё-таки уходит, экран сам сменяется на «Заявка отправлена».
+ *
+ * Причина отказа по существу (не заполнено поле) сюда не попадает: там
+ * повторять нечего, и trySend возвращает результат сразу.
+ */
+async function keepTrying(
+  order: OrderPayload,
+  honeypot: string,
+  onResult?: (ok: boolean) => void,
+): Promise<void> {
+  if (lastMessage) return; // сервер объяснил причину — повтор не поможет
+  const delays = [15_000, 30_000, 60_000, 120_000];
+  for (const wait of delays) {
+    await sleep(wait);
+    const res = await sendToCrm(order, honeypot);
+    if (res === true) {
+      dropFromQueue(order);
+      onResult?.(true);
+      return;
+    }
+    if (res === 'rejected') return;
+  }
 }
 
 /**
