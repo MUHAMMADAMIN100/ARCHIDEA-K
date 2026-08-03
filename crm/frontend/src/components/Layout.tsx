@@ -32,7 +32,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
 import { StuckSentinel, useStuck } from './ScrollArea';
-import { userSeesFinance, userSeesTrash } from '../types';
+import { userFinanceBanned, userSeesFinance, userSeesTrash } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -42,6 +42,12 @@ interface NavItem {
   roles?: Role[]; // если не указано — доступно всем сотрудникам
   trash?: boolean; // корзина — руководитель с личным правом
   finance?: boolean; // деньги компании — скрыто по галочке «без доступа к финансам»
+  /*
+   * Раздел с деньгами, который менеджеру по работе нужен (платёжные
+   * ведомости): он остаётся у всех, кроме сотрудника с личной галочкой
+   * «без доступа к финансам».
+   */
+  moneyBan?: boolean;
 }
 
 /**
@@ -88,7 +94,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Финансы',
     items: [
       { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
-      { to: '/reports', label: 'Ведомости', icon: FileText },
+      { to: '/reports', label: 'Ведомости', icon: FileText, moneyBan: true },
       { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
     ],
   },
@@ -118,7 +124,7 @@ const DIRECTOR_NAV: NavItem[] = [
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
   { to: '/funnel', label: 'Воронка', icon: Filter },
   { to: '/clients', label: 'Клиенты', icon: Users },
-  { to: '/reports', label: 'Ведомости', icon: FileText },
+  { to: '/reports', label: 'Ведомости', icon: FileText, moneyBan: true },
 ];
 
 /** Что лежит за пунктом «Ещё» — две группы с неклика­бельными заголовками */
@@ -215,6 +221,7 @@ export function Layout() {
     // персональный запрет на финансы сильнее роли: галочка в карточке
     // сотрудника убирает денежные разделы даже у руководителя
     if (i.finance && !userSeesFinance(user)) return false;
+    if (i.moneyBan && userFinanceBanned(user)) return false;
     return true;
   };
   const groups = NAV_GROUPS.map((g) => ({

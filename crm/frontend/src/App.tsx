@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { userSeesFinance, userSeesTrash } from './types';
+import { userFinanceBanned, userSeesFinance, userSeesTrash } from './types';
 import type { Role } from './types';
 
 // Разделы грузятся по требованию (code-splitting) — тяжёлые библиотеки
@@ -55,6 +55,19 @@ function Protected({ children }: { children: JSX.Element }) {
 function FinanceOnly({ children }: { children: JSX.Element }) {
   const { user } = useAuth();
   if (user && !userSeesFinance(user)) return <Navigate to="/" replace />;
+  return children;
+}
+
+/**
+ * Разделы с деньгами, которые нужны менеджеру по работе (платёжные ведомости).
+ *
+ * Закрыты не по роли, а по личной галочке «без доступа к финансам»: менеджер
+ * ведомости составляет — это его работа, а сотруднику, которому владелец
+ * закрыл деньги, они не положены. Ту же проверку делает сервер.
+ */
+function MoneyBanned({ children }: { children: JSX.Element }) {
+  const { user } = useAuth();
+  if (user && userFinanceBanned(user)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -127,11 +140,40 @@ export default function App() {
               кто куда ездил. Суммы внутри вырезает бэкенд (ТЗ 4). */}
           <Route path="/shifts" element={<Shifts />} />
           {/* Ведомости: сотрудник видит и составляет только свои — область
-              данных ограничивает сервер, поэтому отдельный запрет не нужен */}
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/reports/new" element={<ReportEdit />} />
-          <Route path="/reports/:id" element={<ReportView />} />
-          <Route path="/reports/:id/edit" element={<ReportEdit />} />
+              данных ограничивает сервер. Закрыты они лишь тому, кому владелец
+              снял доступ к деньгам: в ведомости и цена заказа, и выплаты. */}
+          <Route
+            path="/reports"
+            element={
+              <MoneyBanned>
+                <Reports />
+              </MoneyBanned>
+            }
+          />
+          <Route
+            path="/reports/new"
+            element={
+              <MoneyBanned>
+                <ReportEdit />
+              </MoneyBanned>
+            }
+          />
+          <Route
+            path="/reports/:id"
+            element={
+              <MoneyBanned>
+                <ReportView />
+              </MoneyBanned>
+            }
+          />
+          <Route
+            path="/reports/:id/edit"
+            element={
+              <MoneyBanned>
+                <ReportEdit />
+              </MoneyBanned>
+            }
+          />
           <Route path="/analytics" element={<Analytics />} />
           {/* Услуги и цены — рабочий справочник компании, открыт всем сотрудникам */}
           <Route path="/tariffs" element={<Tariffs />} />

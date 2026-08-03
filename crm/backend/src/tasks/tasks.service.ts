@@ -127,23 +127,25 @@ export class TasksService {
   }
 
   /**
-   * Личная задача сотрудника: он же поставил, он же единственный исполнитель.
-   * Такую он вправе править и удалять сам — это его запись в календаре,
-   * а не поручение руководства.
+   * Задача, которую сотрудник поставил сам, — свою он вправе править и
+   * удалять, кому бы ни поручил.
+   *
+   * Раньше правилом было «поставил себе и сам же единственный исполнитель».
+   * Теперь сотрудник может поручить работу коллеге, и прежнее правило
+   * оставляло его без прав на собственное поручение: ни срок передвинуть,
+   * ни отменить. Поручение остаётся под ответственностью того, кто его дал.
    */
-  private isOwnPersonalTask(
-    task: { creatorId: string; assigneeId: string; assignments: { userId: string }[] },
-    userId: string,
-  ): boolean {
-    if (task.creatorId !== userId) return false;
-    return task.assignments.length
-      ? task.assignments.every((a) => a.userId === userId)
-      : task.assigneeId === userId;
+  private isOwnTask(task: { creatorId: string }, userId: string): boolean {
+    return task.creatorId === userId;
   }
 
   /**
-   * Директор и ops-менеджер видят все задачи; обычный менеджер — только те,
-   * где он исполнитель (в т.ч. один из нескольких).
+   * Директор и ops-менеджер видят все задачи; обычный менеджер — те, где он
+   * исполнитель (в т.ч. один из нескольких), и те, что поставил сам.
+   *
+   * Про «поставил сам»: сотрудник теперь может назначить исполнителем любого
+   * коллегу. Без этого условия он отдавал бы задачу и терял её из виду в ту
+   * же секунду — ни проверить, ни напомнить.
    */
   async list(user: AuthUser) {
     const where: Prisma.TaskWhereInput = seesAll(user)
@@ -151,6 +153,7 @@ export class TasksService {
       : {
           ...NOT_DELETED,
           OR: [
+            { creatorId: user.id },
             { assigneeId: user.id },
             { assignments: { some: { userId: user.id } } },
           ],
@@ -227,11 +230,13 @@ export class TasksService {
         `Слишком много исполнителей (макс. ${MAX_ASSIGNEES})`,
       );
     }
-    if (!seesAll(user) && (ids.length !== 1 || ids[0] !== user.id)) {
-      throw new ForbiddenException(
-        'Ставить задачи другим сотрудникам может руководство. Себе — можно.',
-      );
-    }
+    /*
+     * Исполнителем может быть любой действующий сотрудник — решение владельца.
+     * Раньше здесь стоял запрет «только себе», и управляющий отделом продаж
+     * не мог поручить обзвон менеджеру: в окне задачи была одна строка с его
+     * собственным именем. Проверка ниже — что все выбранные люди существуют
+     * и работают — остаётся.
+     */
     const people = await this.prisma.user.findMany({
       where: { id: { in: ids }, isActive: true },
       select: { id: true },
@@ -385,20 +390,10 @@ export class TasksService {
       include: taskInclude,
     });
     if (!task) throw new NotFoundException('Задача не найдена');
-    if (!seesAll(user)) {
-      if (!this.isOwnPersonalTask(task, user.id)) {
-        throw new ForbiddenException(
-          'Редактировать можно только задачи, которые вы поставили себе',
-        );
-      }
-      if (
-        dto.assigneeIds !== undefined &&
-        (dto.assigneeIds.length !== 1 || dto.assigneeIds[0] !== user.id)
-      ) {
-        throw new ForbiddenException(
-          'Назначать задачу другому сотруднику может руководство',
-        );
-      }
+    if (!seesAll(user) && !this.isOwnTask(task, user.id)) {
+      throw new ForbiddenException(
+        'Редактировать можно только задачи, которые поставили вы',
+      );
     }
 
     const data: Prisma.TaskUpdateInput = {};
@@ -527,9 +522,9 @@ export class TasksService {
       include: { assignments: { select: { userId: true } } },
     });
     if (!task) throw new NotFoundException('Задача не найдена');
-    if (!seesAll(user) && !this.isOwnPersonalTask(task, user.id)) {
+    if (!seesAll(user) && !this.isOwnTask(task, user.id)) {
       throw new ForbiddenException(
-        'Удалять можно только задачи, которые вы поставили себе',
+        'Удалять можно только задачи, которые поставили вы',
       );
     }
 

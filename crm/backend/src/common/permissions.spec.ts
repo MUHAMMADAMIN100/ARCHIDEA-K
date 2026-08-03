@@ -3,6 +3,7 @@ import { AuthUser } from './decorators/current-user.decorator';
 import {
   Permission,
   can,
+  financeBanned,
   managesOps,
   permissionsOf,
   seesAllTasks,
@@ -195,5 +196,32 @@ describe('Операционное управление (ops:manage)', () => {
     expect(managesOps(null)).toBe(false);
     expect(seesFinance(null)).toBe(false);
     expect(seesAllTasks(null)).toBe(false);
+  });
+});
+
+/**
+ * Личный запрет на деньги — не то же самое, что отсутствие права.
+ *
+ * Платёжные ведомости менеджер ведёт: это его работа, и права `finance:view`
+ * для них не требуется. А сотруднику, которому владелец закрыл деньги,
+ * закрыты и они — там цена заказа и выплаты работникам.
+ */
+describe('Личный запрет на деньги (financeBanned)', () => {
+  it('стоит у руководителя с галочкой', () => {
+    expect(financeBanned(director({ noFinance: true }))).toBe(true);
+  });
+
+  it('не стоит у обычного менеджера — ведомости остаются его работой', () => {
+    expect(financeBanned(manager())).toBe(false);
+    expect(seesFinance(manager())).toBe(false);
+  });
+
+  it('не стоит у руководителя без галочки', () => {
+    expect(financeBanned(director())).toBe(false);
+  });
+
+  it('у неавторизованного пользователя запрета нет — но и доступа тоже', () => {
+    expect(financeBanned(null)).toBe(false);
+    expect(seesFinance(null)).toBe(false);
   });
 });

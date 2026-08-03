@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { api } from '../api/client';
+import { subscribeLive } from '../api/hooks';
 import { ScrollArea } from './ScrollArea';
 import type { NotificationItem } from '../types';
 import { formatDateTime, notificationTarget } from '../lib/labels';
@@ -36,20 +37,25 @@ export function NotificationsBell() {
   useEffect(() => {
     load();
     /*
-     * Опрос каждые 10 секунд плюс обновление при возврате на вкладку.
-     * Раньше интервал был 30 секунд, и уведомление о новой заявке появлялось
-     * с заметной задержкой — человек уже видел её в воронке, а колокольчик
-     * ещё молчал.
+     * Колокольчик слушает живой канал — уведомление появляется в тот же
+     * миг, когда оно создано на сервере. Раньше он только опрашивал сервер
+     * раз в десять секунд: человек уже видел заявку в воронке, а
+     * колокольчик ещё молчал.
+     *
+     * Опрос оставлен страховкой на случай, если оба канала оборвались, и
+     * стал редким — раз в полминуты вместо десяти секунд.
      */
+    const off = subscribeLive('/notifications', load);
     const t = setInterval(() => {
       if (!document.hidden) load();
-    }, 10000);
+    }, 30000);
     const onFocus = () => {
       if (!document.hidden) load();
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
     return () => {
+      off();
       clearInterval(t);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);

@@ -18,8 +18,22 @@ const RELATED: Partial<Record<ChangedResource, ChangedResource[]>> = {
   'shift-groups': ['payroll', 'orders'],
   payroll: ['finance'],
   finance: ['reports'],
-  clients: ['orders'],
+  clients: ['orders', 'notifications'],
   reports: ['finance'],
+  tasks: ['notifications'],
+  reminders: ['notifications'],
+};
+
+/**
+ * Пути, которые меняют чужой раздел данных.
+ *
+ * Заявка с сайта приходит на /leads, а заводит клиента и заказ. Раздела
+ * «leads» в списке нет, и объявления об изменении не было вовсе: новая
+ * заявка появлялась в воронке и в колокольчике только со следующим опросом
+ * по таймеру — до десяти секунд ожидания на ровном месте.
+ */
+const ALIAS: Record<string, ChangedResource> = {
+  leads: 'clients',
 };
 
 /**
@@ -51,9 +65,9 @@ function resourceOf(path: string): ChangedResource | null {
     'notifications',
     'trash',
   ];
-  return known.includes(seg as ChangedResource)
-    ? (seg as ChangedResource)
-    : null;
+  if (!seg) return null;
+  if (known.includes(seg as ChangedResource)) return seg as ChangedResource;
+  return ALIAS[seg] ?? null;
 }
 
 /**

@@ -43,7 +43,11 @@ export class EventsGateway implements OnGatewayConnection, OnModuleInit {
   onModuleInit(): void {
     // одна подписка на весь сервер: рассылаем всем подключённым вкладкам
     this.events.changes.subscribe((e) => {
-      this.server?.emit('changed', { resource: e.resource, actorId: e.actorId });
+      this.server?.emit('changed', {
+        id: e.id,
+        resource: e.resource,
+        actorId: e.actorId,
+      });
     });
   }
 

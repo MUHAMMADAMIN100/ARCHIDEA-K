@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ReportsService, ReportInput } from './reports.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { FinanceBanGuard } from '../common/guards/finance-ban.guard';
 import {
   CurrentUser,
   AuthUser,
@@ -20,11 +21,15 @@ import {
  *
  * Раздел открыт каждому сотруднику, но `ReportsService.scope()` показывает
  * не-руководителю ТОЛЬКО его собственные ведомости — свою он и составляет.
- * Общего доступа к чужим выплатам здесь нет, поэтому отдельный финансовый
- * запрет на весь контроллер не нужен: он лишь отбирал у операционного
- * управляющего его же ведомости.
+ * Общего доступа к чужим выплатам здесь нет, поэтому общий финансовый запрет
+ * на весь контроллер не нужен: он лишь отбирал у операционного управляющего
+ * его же ведомости.
+ *
+ * FinanceBanGuard — другое дело: это персональная галочка «без доступа к
+ * финансам». В ведомости стоят и цена заказа, и выплаты работникам, поэтому
+ * сотруднику, которому владелец закрыл деньги, раздел закрыт целиком.
  */
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FinanceBanGuard)
 @Controller('reports')
 export class ReportsController {
   constructor(private service: ReportsService) {}

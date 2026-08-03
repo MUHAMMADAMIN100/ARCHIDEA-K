@@ -12,7 +12,6 @@ import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
-import { seesAllTasks } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { momentRange } from '../common/time/dushanbe';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -103,19 +102,18 @@ export class UsersService {
     });
   }
 
-  assignable(user: AuthUser) {
-    if (!seesAll(user) && !seesAllTasks(user)) {
-      return this.prisma.user.findMany({
-        where: { id: user.id },
-        select: {
-          id: true,
-          fullName: true,
-          position: true,
-          role: true,
-          isActive: true,
-        },
-      });
-    }
+  /*
+   * Кого можно назначить исполнителем задачи — весь действующий штат.
+   *
+   * Раньше сотруднику без права «вести все задачи» возвращался он один, и
+   * в окне новой задачи стояла единственная строка с его же именем:
+   * управляющий отделом продаж не мог поручить обзвон никому, кроме себя.
+   * Решение владельца — список тот же, что у поля «Ответственный»: имя и
+   * должность коллеги секретом не являются, а работу распределяет тот, кто
+   * её ведёт. Кто какие задачи потом ВИДИТ, определяется отдельно (см.
+   * tasks.service.list): свои и те, что поставил сам.
+   */
+  assignable(_user: AuthUser) {
     return this.prisma.user.findMany({
       where: { ...NOT_DELETED, isActive: true },
       // isActive отдаём осознанно: клиент фильтрует список по этому полю, а без

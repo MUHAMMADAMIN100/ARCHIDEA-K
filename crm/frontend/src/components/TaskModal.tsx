@@ -92,9 +92,8 @@ export function TaskModal({
   const canEdit =
     mode === 'create' ||
     userManagesTasks(user) ||
-    (!!task &&
-      task.creatorId === user?.id &&
-      task.assignments.every((a) => a.userId === user?.id));
+    // свою поставленную задачу ведёт тот, кто её поставил, — кому бы ни поручил
+    (!!task && task.creatorId === user?.id);
 
   const [title, setTitle] = useState(task?.title ?? '');
   const [description, setDescription] = useState(task?.description ?? '');

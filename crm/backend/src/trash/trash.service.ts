@@ -6,10 +6,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditAction, Prisma, Role } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser, seesAll } from '../common/decorators/current-user.decorator';
+import { seesFinance } from '../common/permissions';
 import { restoreData, softDeleteData } from '../common/soft-delete';
 import { momentRange } from '../common/time/dushanbe';
 import {
@@ -89,13 +90,16 @@ export class TrashService {
     return TRASH_REGISTRY[type];
   }
 
-  /** Ops-менеджер (canManageOps) — видит всё, кроме финансов */
-  private isOpsOnly(user: AuthUser): boolean {
-    return user.role !== Role.DIRECTOR && user.canManageOps === true;
-  }
-
+  /**
+   * Денежные разделы корзины — ведомости, финансовые записи, премии —
+   * видит только тот, кому открыты деньги компании.
+   *
+   * Раньше правилом было «скрыть от ops-менеджера», и руководитель с личной
+   * галочкой «без доступа к финансам» находил в корзине и удалённые
+   * ведомости, и записи книги доходов: запрет обходился через корзину.
+   */
   private canSeeType(user: AuthUser, type: TrashType): boolean {
-    return !(this.entry(type).financial && this.isOpsOnly(user));
+    return !(this.entry(type).financial && !seesFinance(user));
   }
 
   /** Видимые для пользователя разделы корзины (финансовые скрыты от ops) */

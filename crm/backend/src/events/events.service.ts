@@ -21,6 +21,14 @@ export type ChangedResource =
   | 'trash';
 
 export interface ChangeEvent {
+  /**
+   * Номер события с момента запуска сервера.
+   *
+   * Вкладка держит сразу два канала — сокет и поток, — и одно и то же
+   * изменение приходит по обоим. По номеру второе сообщение отбрасывается,
+   * иначе каждое чужое действие вызывало бы два запроса за данными.
+   */
+  id: number;
   resource: ChangedResource;
   /** Кто вызвал изменение — свой же экран может его пропустить */
   actorId?: string;
@@ -39,6 +47,7 @@ export interface ChangeEvent {
 @Injectable()
 export class EventsService {
   private readonly stream = new Subject<ChangeEvent>();
+  private seq = 0;
 
   /** Поток для подписки (см. EventsController) */
   get changes() {
@@ -46,6 +55,7 @@ export class EventsService {
   }
 
   publish(resource: ChangedResource, actorId?: string): void {
-    this.stream.next({ resource, actorId });
+    this.seq += 1;
+    this.stream.next({ id: this.seq, resource, actorId });
   }
 }

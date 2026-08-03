@@ -1,5 +1,5 @@
 import { Controller, Header, Sse, UseGuards } from '@nestjs/common';
-import { map, Observable } from 'rxjs';
+import { interval, map, merge, Observable, startWith } from 'rxjs';
 import { EventsService } from './events.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import {
@@ -33,13 +33,32 @@ export class EventsController {
   @Header('Cache-Control', 'no-cache, no-transform')
   @Sse()
   stream(@CurrentUser() user: AuthUser): Observable<SseMessage> {
-    return this.events.changes.pipe(
+    const changes = this.events.changes.pipe(
       map((e) => ({
         data: JSON.stringify({
+          id: e.id,
           resource: e.resource,
           mine: e.actorId === user.id,
         }),
       })),
     );
+
+    /*
+     * Пульс раз в 20 секунд.
+     *
+     * Две задачи. Первая: посредники (Vercel, Railway) закрывают соединение,
+     * по которому долго ничего не шло, — и вкладка оставалась без изменений,
+     * сама того не зная. Вторая: по пульсу вкладка понимает, что канал жив.
+     * Молчание дольше сорока пяти секунд означает обрыв, и она переподключается,
+     * не дожидаясь, пока человек заметит, что данные устарели.
+     *
+     * Первый пульс уходит сразу: он же подтверждает, что поток открылся.
+     */
+    const beat = interval(20_000).pipe(
+      startWith(0),
+      map(() => ({ data: JSON.stringify({ ping: 1 }) })),
+    );
+
+    return merge(changes, beat);
   }
 }

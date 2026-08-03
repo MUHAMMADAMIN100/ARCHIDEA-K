@@ -137,6 +137,18 @@ export function seesFinance(user: AuthUser | null | undefined): boolean {
   return can(user, 'finance:view');
 }
 
+/**
+ * Персональный запрет на деньги компании.
+ *
+ * Отличается от seesFinance тем, что это ЗАПРЕТ, а не отсутствие права.
+ * Менеджеру книга доходов не положена по роли, но платёжные ведомости он
+ * ведёт — они его работа. А сотруднику с галочкой «без доступа к финансам»
+ * закрыты и они: владелец закрывает деньги целиком, включая выплаты.
+ */
+export function financeBanned(user: AuthUser | null | undefined): boolean {
+  return user?.noFinance === true;
+}
+
 /** Управление командой, бригадами, выездами и учётом смен (ТЗ 2, 4) */
 export function managesOps(user: AuthUser | null | undefined): boolean {
   return can(user, 'ops:manage');
