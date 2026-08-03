@@ -7,7 +7,6 @@ export function Login() {
   const { login } = useAuth();
   const [loginValue, setLoginValue] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +16,7 @@ export function Login() {
     setLoading(true);
     try {
       // обрезаем случайные пробелы по краям (частая причина «неверный пароль»)
-      await login(loginValue.trim(), password.trim(), remember);
+      await login(loginValue.trim(), password.trim());
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Неверный логин или пароль');
     } finally {
@@ -58,21 +57,15 @@ export function Login() {
               placeholder="••••••••"
             />
           </div>
-          <label className="mb-5 flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-navy-500"
-            />
-            <span className="text-sm text-navy-700">
-              Запомнить меня
-              <span className="mt-0.5 block text-xs text-navy-600">
-                Не спрашивать пароль 30 дней. Только на личном устройстве —
-                на чужом или общем компьютере не отмечайте.
-              </span>
-            </span>
-          </label>
+          {/*
+            Галочки «Запомнить меня» больше нет: вход и так держится 90 дней
+            и продлевается при каждом открытии CRM (решение владельца).
+            Оставлять переключатель, который ничего не меняет, — обманывать.
+          */}
+          <p className="mb-5 text-xs text-navy-600">
+            Вход сохраняется — пароль не спросят при следующем заходе. На
+            чужом компьютере выходите кнопкой «Выйти».
+          </p>
 
           {error && (
             // сообщение об ошибке проявляется, а не возникает рывком:

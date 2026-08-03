@@ -186,67 +186,12 @@
   /*
    * ── Край прокрутки ──────────────────────────────────────────────────
    *
-   * Показывает, что содержимое продолжается за краем, БЕЗ единой подписи.
-   * Содержимое растворяется у той стороны, куда ещё можно крутить, и край
-   * пропадает, когда прокрутили до конца, — так видно и что «там есть
-   * ещё», и что «дальше некуда».
-   *
-   * Признаки data-start / data-end проставляет компонент ScrollArea: чистым
-   * CSS положение прокрутки не узнать, а показывать край всегда — значит
-   * врать в конце списка.
-   *
-   * --fade-bg переопределяется, если полоса лежит не на белом.
+   * Растворяющегося края больше нет: владелец попросил убрать «туман и
+   * размытие» — на воронке дымка у левого края доски читалась как грязь на
+   * экране, а не как подсказка. Классы .scroll-edge* оставлены пустыми,
+   * чтобы не править полтора десятка мест разметки: признаки положения
+   * прокрутки по-прежнему проставляются, просто ничего не рисуют.
    */
-  .scroll-edge {
-    position: relative;
-    --fade-bg: #ffffff;
-  }
-  .scroll-edge::before,
-  .scroll-edge::after {
-    content: '';
-    position: absolute;
-    pointer-events: none;
-    z-index: 5;
-    opacity: 0;
-    transition: opacity 160ms ease-out;
-  }
-  /* горизонтальная прокрутка: края слева и справа */
-  .scroll-edge-x::before,
-  .scroll-edge-x::after {
-    top: 0;
-    bottom: 0;
-    width: 2.5rem;
-  }
-  .scroll-edge-x::before {
-    left: 0;
-    background: linear-gradient(to right, var(--fade-bg), transparent);
-  }
-  .scroll-edge-x::after {
-    right: 0;
-    background: linear-gradient(to left, var(--fade-bg), transparent);
-  }
-  /* вертикальная прокрутка: края сверху и снизу */
-  .scroll-edge-y::before,
-  .scroll-edge-y::after {
-    left: 0;
-    right: 0;
-    height: 2rem;
-  }
-  .scroll-edge-y::before {
-    top: 0;
-    background: linear-gradient(to bottom, var(--fade-bg), transparent);
-  }
-  .scroll-edge-y::after {
-    bottom: 0;
-    background: linear-gradient(to top, var(--fade-bg), transparent);
-  }
-  /* край виден, только пока в эту сторону есть куда крутить */
-  .scroll-edge[data-at-start='false']::before {
-    opacity: 1;
-  }
-  .scroll-edge[data-at-end='false']::after {
-    opacity: 1;
-  }
 
   /*
    * ── Прилипшая шапка ─────────────────────────────────────────────────

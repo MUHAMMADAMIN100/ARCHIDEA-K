@@ -10,9 +10,21 @@ const MAX_FAILED = 5;
 /** На сколько блокируется аккаунт после превышения */
 const LOCK_MS = 15 * 60 * 1000;
 
-/** Срок жизни сессии: обычный вход и «Запомнить меня» */
-export const SESSION_MS = 12 * 60 * 60 * 1000; // 12 часов
-export const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
+/**
+ * Срок жизни сессии — 90 дней, и он продлевается при каждом открытии CRM
+ * (см. refreshSession и AuthController.me).
+ *
+ * Раньше обычный вход жил 12 часов: сотрудник открывал систему на следующее
+ * утро и упирался в «Требуется авторизация» — пароль приходилось вводить
+ * заново каждый день. Решение владельца: работающий человек не должен
+ * логиниться вообще. Бессрочной сессию не делаем: потерянный телефон не
+ * должен открывать базу клиентов вечно, а «Выйти» и «Выйти на всех
+ * устройствах» гасят её мгновенно.
+ */
+export const SESSION_DAYS = 90;
+export const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
+/** Оставлено для совместимости: «Запомнить меня» больше ничего не меняет */
+export const REMEMBER_MS = SESSION_MS;
 
 /**
  * Хэш-заглушка: сравниваем с ней, когда пользователя нет — чтобы время
@@ -147,19 +159,15 @@ export class AuthService {
     }
     await this.record({ login, userId: user.id, success: true, meta });
 
-    const remember = dto.remember === true;
     const token = await this.jwt.signAsync(
       // ep — версия сессии: при смене пароля она растёт и старые токены гаснут
       { sub: user.id, role: user.role, ep: user.sessionEpoch },
-      {
-        secret: JWT_SECRET,
-        expiresIn: remember ? '30d' : '12h',
-      },
+      { secret: JWT_SECRET, expiresIn: `${SESSION_DAYS}d` },
     );
 
     return {
       token,
-      maxAge: remember ? REMEMBER_MS : SESSION_MS,
+      maxAge: SESSION_MS,
       user: {
         id: user.id,
         login: user.login,
@@ -205,6 +213,29 @@ export class AuthService {
    * Билет для живого канала: живёт минуту, помечен признаком ws — обычным
    * токеном доступа его не подменить и наоборот.
    */
+  /**
+   * Продление сессии при заходе в систему.
+   *
+   * Вызывается на /auth/me — то есть при каждом открытии CRM. Пока человек
+   * работает хотя бы раз в три месяца, пароль у него больше не спросят.
+   * Возвращает null, если сотрудник отключён или сессия отозвана: тогда
+   * куку обновлять нечем и её снимет обычная проверка доступа.
+   */
+  async refreshSession(
+    userId: string,
+  ): Promise<{ token: string; maxAge: number } | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, sessionEpoch: true, isActive: true },
+    });
+    if (!user?.isActive) return null;
+    const token = await this.jwt.signAsync(
+      { sub: user.id, role: user.role, ep: user.sessionEpoch },
+      { secret: JWT_SECRET, expiresIn: `${SESSION_DAYS}d` },
+    );
+    return { token, maxAge: SESSION_MS };
+  }
+
   async issueWsTicket(userId: string): Promise<{ ticket: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

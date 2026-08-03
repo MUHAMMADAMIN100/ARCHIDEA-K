@@ -254,19 +254,40 @@ export class ClientsService {
      */
     const managerId = await resolveManager(this.prisma, user, dto.managerId);
 
-    // Защита от IDOR через дедупликацию по телефону: если клиент с таким
-    // номером уже закреплён за ДРУГИМ сотрудником, обычный менеджер не должен
-    // получить его карточку (ФИО, e-mail, заметки). Раньше findOrCreateByPhone
-    // возвращал существующего клиента любому — утечка чужих данных по номеру.
+    /*
+     * Один номер — один клиент.
+     *
+     * Раньше форма «Новый клиент» с уже известным номером молча заводила
+     * ЗАЯВКУ на существующего клиента, и в воронке появлялась вторая карточка
+     * с тем же именем и телефоном. Теперь сохранение отклоняется, а в ответе
+     * названо, кто это и чей: менеджер сразу видит, что клиент в базе, и
+     * открывает его карточку вместо создания двойника.
+     *
+     * Это же закрывает утечку по номеру: карточка чужого клиента (ФИО,
+     * заметки) обычному менеджеру не возвращается — только имя и
+     * ответственный, чтобы он понимал, к кому идти.
+     */
     const phone = normalizePhone(dto.phone || '');
-    if (phone.length >= 5 && !seesAll(user)) {
+    if (phone.length >= 5) {
       const existing = await this.prisma.client.findUnique({
         where: { phone },
-        select: { managerId: true },
+        select: {
+          fullName: true,
+          deletedAt: true,
+          manager: { select: { fullName: true } },
+        },
       });
-      if (existing && existing.managerId !== user.id) {
+      if (existing?.deletedAt) {
         throw new ConflictException(
-          'Клиент с таким телефоном уже закреплён за другим сотрудником',
+          `Клиент с этим номером в корзине — «${existing.fullName}». Восстановите его, а не заводите заново`,
+        );
+      }
+      if (existing) {
+        const owner = existing.manager?.fullName;
+        throw new ConflictException(
+          `Клиент с этим номером уже есть — «${existing.fullName}»` +
+            (owner ? `, ответственный ${owner}` : '') +
+            '. Новую заявку заведите из его карточки',
         );
       }
     }

@@ -104,9 +104,27 @@ export class AuthController {
     return this.auth.issueWsTicket(user.id);
   }
 
+  /**
+   * Кто я — и заодно продление сессии.
+   *
+   * CRM спрашивает это при каждом открытии, поэтому здесь же обновляем куку
+   * ещё на 90 дней: работающий сотрудник пароль больше не вводит. Если
+   * продлить не вышло (сотрудника отключили, сессию отозвали), просто
+   * отвечаем как раньше — доступ снимет обычная проверка на следующем шаге.
+   */
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  me(@CurrentUser() user: AuthUser) {
+  async me(
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const fresh = await this.auth.refreshSession(user.id);
+    if (fresh) {
+      res.cookie(COOKIE_NAME, fresh.token, {
+        ...COOKIE_OPTS,
+        maxAge: fresh.maxAge,
+      });
+    }
     return user;
   }
 

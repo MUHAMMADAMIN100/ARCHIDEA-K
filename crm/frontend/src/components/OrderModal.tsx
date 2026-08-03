@@ -281,6 +281,17 @@ export function OrderModal({
     0,
   );
   const subtotalSum = workSum + extrasSum;
+
+  /*
+   * Авто-итог: пока сумму не задали руками, поле «Общая сумма» повторяет
+   * расчёт целиком — работы, доп. услуги в заявке и надбавки. Один источник
+   * цифры вместо трёх разрозненных пересчётов в обработчиках полей.
+   */
+  useEffect(() => {
+    if (isManualPrice) return;
+    const next = subtotalSum > 0 ? String(subtotalSum) : '';
+    setFinalPrice((prev) => (prev === next ? prev : next));
+  }, [subtotalSum, isManualPrice]);
   // скидка не может быть больше стоимости — так же считает сервер
   const discountSum = Math.min(
     Math.max(0, Math.round(Number(discount) || 0)),
@@ -420,12 +431,17 @@ export function OrderModal({
 
   // ── Расчёт суммы (ТЗ 5): единица × цена за единицу = итог, пока итог не задан вручную ──
 
-  const applyUnitPrice = (rawPrice: string, units: number) => {
+  /*
+   * Итог больше не считается здесь «объём × цена».
+   *
+   * Именно из-за этой формулы добавленная услуга не попадала в «Общую сумму»:
+   * поле обновлялось только при смене объёма или цены за единицу, а про доп.
+   * услуги и надбавки не знало вовсе. Человек добавлял услугу на 32 сомони,
+   * видел в поле прежние 270 и решал, что система её не посчитала. Теперь
+   * поле держит эффект ниже — по той же цифре, что стоит в итоговой панели.
+   */
+  const applyUnitPrice = (rawPrice: string, _units: number) => {
     setPricePerSqm(rawPrice);
-    if (!isManualPrice) {
-      const p = Number(rawPrice || 0);
-      setFinalPrice(units > 0 && p >= 0 ? String(Math.round(p * units)) : '');
-    }
   };
 
   const onServiceChange = (key: string) => {
@@ -451,21 +467,11 @@ export function OrderModal({
   const onAreaChange = (v: string) => {
     markTouched('pricing');
     setEditArea(v);
-    if (!isSeatsUnit && !isManualPrice) {
-      const units = Number(v || 0);
-      const p = Number(pricePerSqm || 0);
-      setFinalPrice(units > 0 && p >= 0 ? String(Math.round(p * units)) : '');
-    }
   };
 
   const onSeatsChange = (v: string) => {
     markTouched('pricing');
     setEditSeats(v);
-    if (isSeatsUnit && !isManualPrice) {
-      const units = Number(v || 0);
-      const p = Number(pricePerSqm || 0);
-      setFinalPrice(units > 0 && p >= 0 ? String(Math.round(p * units)) : '');
-    }
   };
 
   const onPricePerSqmChange = (v: string) => {
@@ -481,9 +487,8 @@ export function OrderModal({
 
   const resetToComputed = () => {
     markTouched('pricing');
+    // дальше поле подхватит эффект авто-итога
     setIsManualPrice(false);
-    const p = Number(pricePerSqm || 0);
-    setFinalPrice(unitsNow > 0 && p >= 0 ? String(Math.round(p * unitsNow)) : '');
   };
 
   // ── Сохранение ──
@@ -1132,6 +1137,8 @@ export function OrderModal({
                       <p className="mt-1 text-xs text-navy-600">
                         {unitsNow} {unitLabel} × {pricePerSqm} ={' '}
                         {formatPrice(Math.round(Number(pricePerSqm) * unitsNow))}
+                        {addSum > 0 && ` + услуги ${formatPrice(addSum)}`}
+                        {extrasSum > 0 && ` + доп. ${formatPrice(extrasSum)}`}
                       </p>
                     )
                   )}

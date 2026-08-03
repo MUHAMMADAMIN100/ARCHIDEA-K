@@ -25,7 +25,7 @@ import {
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import { tempId, nowISO, isTempId } from '../lib/util';
-import { isValidPersonName, isValidPhone } from '../lib/contact';
+import { isValidPhone } from '../lib/contact';
 import { NameInput, PhoneInput } from '../components/ContactFields';
 import { userSeesAll } from '../types';
 import type {
@@ -109,6 +109,7 @@ export function Clients() {
       extraPhones?: string[];
       sourceDetail?: string;
       address?: string;
+      tags?: ClientTag[];
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -119,7 +120,7 @@ export function Clients() {
       fullName: payload.fullName,
       phone: payload.phone,
       source: payload.source,
-      tags: [],
+      tags: payload.tags ?? [],
       lastContactAt: nowISO(),
       managerId: payload.managerId,
       manager: managerName
@@ -417,6 +418,7 @@ export function AddClientModal({
       extraPhones?: string[];
       sourceDetail?: string;
       address?: string;
+      tags?: ClientTag[];
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -433,6 +435,8 @@ export function AddClientModal({
   const [extraPhones, setExtraPhones] = useState<string[]>(['']);
   // адрес объекта: спрашиваем один раз здесь, дальше он подставляется в заказы
   const [address, setAddress] = useState('');
+  // статусы клиента — те же, что в карточке; можно отметить несколько
+  const [tags, setTags] = useState<ClientTag[]>([]);
   // свободные теги (ТЗ 1.2) — в дополнение к единственному статусу
   const [labelInput, setLabelInput] = useState('');
   const [source, setSource] = useState<LeadSource>('CALL');
@@ -554,7 +558,6 @@ export function AddClientModal({
    */
   const blockers: string[] = [];
   if (!fullName.trim()) blockers.push('ФИО клиента');
-  else if (!isValidPersonName(fullName)) blockers.push('ФИО без цифр и символов');
   if (!phone.replace(/\D/g, '')) blockers.push('телефон');
   else if (!isValidPhone(phone)) blockers.push('телефон полностью, 9 цифр');
   const extra = extraPhones[0] ?? '';
@@ -605,6 +608,7 @@ export function AddClientModal({
         extraPhones: extraPhones.filter((p) => isValidPhone(p)),
         sourceDetail: sourceDetail.trim() || undefined,
         address: address.trim(),
+        tags,
       },
       managerName,
       order,
@@ -669,6 +673,36 @@ export function AddClientModal({
             placeholder="Район, улица, дом, квартира"
             maxLength={300}
           />
+        </div>
+
+        {/*
+          Статус клиента — тот же набор, что в карточке. Отмечать можно
+          несколько: клиент бывает и постоянным, и крупным одновременно.
+          Раньше статус ставили только потом, открыв карточку, — про него
+          забывали, и воронка стояла без пометок.
+        */}
+        <div>
+          <label className="label">Статус клиента</label>
+          <div className="flex flex-wrap gap-2">
+            {TAGS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() =>
+                  setTags((prev) =>
+                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+                  )
+                }
+                className={`press rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  tags.includes(t)
+                    ? TAG_COLOR[t] + ' ring-2 ring-navy-200'
+                    : 'border border-navy-200 bg-white text-navy-600'
+                }`}
+              >
+                {TAG_LABEL[t]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>

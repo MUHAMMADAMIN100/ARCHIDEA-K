@@ -203,8 +203,15 @@ export function ClientCard() {
      * доходили — и в воронке карточка оставалась без метки. Соседние поля
      * разговора уже так и работают.
      */
+    /*
+     * Статусов может быть несколько: клиент бывает и постоянным, и крупным,
+     * и при этом отказником по последней заявке. Раньше выбор одного снимал
+     * все остальные — в воронке у карточек оставалась одна метка из трёх.
+     */
     const base = tags ?? data.tags;
-    const next: ClientTag[] = base.includes(t) ? [] : [t];
+    const next: ClientTag[] = base.includes(t)
+      ? base.filter((x) => x !== t)
+      : [...base, t];
     setTags(null);
     patchClient({ tags: next });
   };

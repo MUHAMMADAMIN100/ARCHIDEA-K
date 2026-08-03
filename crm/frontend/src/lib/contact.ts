@@ -59,16 +59,22 @@ export function isValidPhone(input: string | null | undefined): boolean {
  * Правило НЕ применяется к полю «Клиент / объект» в платёжной ведомости —
  * туда пишут адреса вида «ЖК Сомони 12».
  */
-const NAME_RE = /^[А-Яа-яЁёA-Za-z][А-Яа-яЁёA-Za-z\s'’.-]*$/u;
-
+/*
+ * Проверки на «только буквы» больше нет (решение владельца).
+ *
+ * Раньше поле резало цифры прямо во время набора и не давало сохранить
+ * «Тест клиент 2» или «ЖК Сомони 12». В работе имена бывают какими угодно:
+ * с номером квартиры, с цифрой в названии компании. Осталась одна проверка —
+ * длина: пустое имя и простыня на тысячу знаков одинаково бесполезны.
+ */
 export function isValidPersonName(input: string | null | undefined): boolean {
   const v = (input ?? '').trim();
-  return v.length >= 2 && v.length <= 120 && NAME_RE.test(v);
+  return v.length >= 2 && v.length <= 120;
 }
 
-/** Убирает из ввода то, чего в имени быть не может — прямо во время набора */
+/** Обрезает слишком длинный ввод — больше ничего не трогаем */
 export function sanitizePersonName(input: string): string {
-  return input.replace(/[^А-Яа-яЁёA-Za-z\s'’.-]/gu, '').slice(0, 120);
+  return input.slice(0, 120);
 }
 
 /** Текст ошибки под полем — null, если всё в порядке */
@@ -83,6 +89,6 @@ export function nameError(input: string, required = true): string | null {
   const v = input.trim();
   if (!v) return required ? 'Укажите ФИО' : null;
   if (v.length < 2) return 'Слишком короткое имя';
-  if (!isValidPersonName(v)) return 'Только буквы, пробел и дефис — без цифр';
+  if (v.length > 120) return 'Слишком длинное имя';
   return null;
 }

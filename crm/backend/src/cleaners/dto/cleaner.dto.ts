@@ -8,13 +8,12 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
+import { IsTjPhone } from '../../common/validation/contact';
 
 export class CreateCleanerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
-  @IsPersonName()
   fullName: string;
 
   @IsOptional()
@@ -50,7 +49,6 @@ export class UpdateCleanerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
-  @IsPersonName()
   fullName?: string;
 
   @IsOptional()

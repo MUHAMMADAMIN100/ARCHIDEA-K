@@ -277,6 +277,9 @@ export function Funnel() {
   const boardWrapRef = useRef<HTMLDivElement>(null);
   // точки под доской: сколько этапов и на каком вы сейчас
   const dotsRef = useRef<HTMLDivElement>(null);
+  // стрелки прокрутки: гаснут на краях доски — дальше листать нечего
+  const prevBtnRef = useRef<HTMLButtonElement>(null);
+  const nextBtnRef = useRef<HTMLButtonElement>(null);
   const scrollBoard = (dir: -1 | 1) =>
     boardRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
@@ -368,8 +371,17 @@ export function Funnel() {
       const full = box.scrollWidth;
       // допуск в пиксель: при дробном масштабе браузера конец не совпадает точно
       const fits = full <= size + 1;
-      wrap.setAttribute('data-at-start', String(fits || pos <= 1));
-      wrap.setAttribute('data-at-end', String(fits || pos + size >= full - 1));
+      const atStart = fits || pos <= 1;
+      const atEnd = fits || pos + size >= full - 1;
+      wrap.setAttribute('data-at-start', String(atStart));
+      wrap.setAttribute('data-at-end', String(atEnd));
+      /*
+       * Стрелка на краю доски гаснет. Раньше на последнем этапе «вперёд»
+       * оставалась активной и нажималась впустую: экран не двигался, и
+       * непонятно было, кончились этапы или кнопка сломалась.
+       */
+      if (prevBtnRef.current) prevBtnRef.current.disabled = atStart;
+      if (nextBtnRef.current) nextBtnRef.current.disabled = atEnd;
 
       const dots = dotsRef.current;
       const count = dots?.children.length ?? 0;
@@ -623,41 +635,20 @@ export function Funnel() {
    */
   const board = filtered;
 
-  return (
-    <div className="animate-page-in">
-      <PageHeader
-        title="Воронка продаж"
-        /*
-         * На телефоне кнопка — только плюс, рядом с заголовком: подпись
-         * «Добавить клиента» занимала целую строку над фильтрами и отодвигала
-         * доску вниз. На компьютере подпись остаётся — там места хватает.
-         */
-        action={
-          <button
-            onClick={() => setShowAddClient(true)}
-            className="btn-primary h-10 w-10 p-0 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2"
-            aria-label="Добавить клиента"
-            title="Добавить клиента"
-          >
-            <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Добавить клиента</span>
-          </button>
-        }
-      />
-
-      {/*
-        Панель отбора. Выбор менеджера — только тем, кто видит всю компанию;
-        статус клиента и тег нужны каждому, кто работает с воронкой.
-      */}
-      <div className="mb-4 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
-        {canFilter && (
-          <>
-          {/* подпись только на компьютере: в самом селекте уже написано «Все менеджеры» */}
-          <span className="hidden text-xs font-medium text-navy-600 sm:inline">
-            Менеджер:
-          </span>
+  /*
+   * Разметка фильтров одна на два места: в строке заголовка (компьютер) и
+   * отдельным блоком под ним (телефон). Ширина разная — на телефоне селекты
+   * во всю ширину, на компьютере по содержимому.
+   */
+  const renderFilters = (mobile: boolean) => (
+    <>
+      {canFilter && (
+        <>
+          {!mobile && (
+            <span className="text-xs font-medium text-navy-600">Менеджер:</span>
+          )}
           <select
-            className="input w-full sm:w-[240px] sm:flex-none"
+            className={mobile ? 'input w-full' : 'input w-[190px] flex-none'}
             value={managerFilter}
             onChange={(e) => setManagerFilter(e.target.value)}
           >
@@ -671,38 +662,69 @@ export function Funnel() {
               <option value={NO_MANAGER}>Без менеджера</option>
             )}
           </select>
-          </>
-        )}
-          {/* Отбор по клиенту: статус и свободный тег */}
-          <label className="hidden text-xs font-medium text-navy-600 sm:ml-1 sm:inline">
-            Статус:
-          </label>
-          <select
-            className="input w-full sm:w-auto"
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value as ClientTag | 'ALL')}
-          >
-            <option value="ALL">Все статусы</option>
-            {CLIENT_TAGS.map((t) => (
-              <option key={t} value={t}>
-                {TAG_LABEL[t]}
-              </option>
-            ))}
-          </select>
+        </>
+      )}
+      {!mobile && (
+        <span className="ml-1 text-xs font-medium text-navy-600">Статус:</span>
+      )}
+      <select
+        className={mobile ? 'input w-full' : 'input w-auto flex-none'}
+        value={tagFilter}
+        onChange={(e) => setTagFilter(e.target.value as ClientTag | 'ALL')}
+      >
+        <option value="ALL">Все статусы</option>
+        {CLIENT_TAGS.map((t) => (
+          <option key={t} value={t}>
+            {TAG_LABEL[t]}
+          </option>
+        ))}
+      </select>
+      {(managerFilter !== 'ALL' || tagFilter !== 'ALL') && (
+        <button
+          onClick={() => {
+            setManagerFilter('ALL');
+            setTagFilter('ALL');
+          }}
+          className="press text-xs font-medium text-navy-600 underline-offset-2 hover:underline"
+        >
+          Сбросить
+        </button>
+      )}
+    </>
+  );
 
-          {(managerFilter !== 'ALL' || tagFilter !== 'ALL') && (
+  return (
+    <div className="animate-page-in">
+      {/*
+        Фильтры стоят в одной строке с заголовком и кнопкой (решение владельца).
+        Раньше они занимали отдельную строку под ним и отодвигали доску вниз —
+        на ноутбуке из-за этого терялся целый ряд карточек.
+
+        На телефоне так не выходит: два селекта и кнопка в одну строку не
+        помещаются, поэтому там всё остаётся как было — плюс рядом с
+        заголовком, фильтры отдельными строками во всю ширину.
+      */}
+      <PageHeader
+        title="Воронка продаж"
+        action={
+          <>
+            <div className="hidden items-center gap-2 sm:flex">
+              {renderFilters(false)}
+            </div>
             <button
-              onClick={() => {
-                setManagerFilter('ALL');
-                setTagFilter('ALL');
-              }}
-              className="press text-xs font-medium text-navy-600 underline-offset-2 hover:text-navy-600 hover:underline"
+              onClick={() => setShowAddClient(true)}
+              className="btn-primary h-10 w-10 p-0 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2"
+              aria-label="Добавить клиента"
+              title="Добавить клиента"
             >
-              Сбросить
+              <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Добавить клиента</span>
             </button>
-          )}
+          </>
+        }
+      />
 
-      </div>
+      <div className="mb-4 grid gap-2 sm:hidden">{renderFilters(true)}</div>
 
       <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
         {/*
@@ -760,7 +782,7 @@ export function Funnel() {
                        * выпадающие уведомления и меню пользователя уходили под
                        * карточки должников.
                        */
-                      'sm:sticky sm:left-0 sm:z-10 sm:-ml-1 sm:rounded-2xl sm:bg-navy-50/95 sm:px-1 sm:pt-1 sm:backdrop-blur'
+                      'sm:sticky sm:left-0 sm:z-10 sm:-ml-1 sm:rounded-2xl sm:bg-navy-50 sm:px-1 sm:pt-1'
                     : ''
                 }`}
               >
@@ -945,16 +967,18 @@ export function Funnel() {
           */}
           <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center gap-1">
             <button
+              ref={prevBtnRef}
               onClick={() => scrollBoard(-1)}
-              className="press pointer-events-auto rounded-lg border border-navy-200 bg-white/95 p-1.5 text-navy-600 shadow-card backdrop-blur transition-colors hover:bg-navy-50"
+              className="press pointer-events-auto rounded-lg border border-navy-200 bg-white p-1.5 text-navy-600 shadow-card transition-colors hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white"
               aria-label="Прокрутить доску влево"
               title="Влево"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
+              ref={nextBtnRef}
               onClick={() => scrollBoard(1)}
-              className="press pointer-events-auto rounded-lg border border-navy-200 bg-white/95 p-1.5 text-navy-600 shadow-card backdrop-blur transition-colors hover:bg-navy-50"
+              className="press pointer-events-auto rounded-lg border border-navy-200 bg-white p-1.5 text-navy-600 shadow-card transition-colors hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white"
               aria-label="Прокрутить доску вправо"
               title="Вправо"
             >
