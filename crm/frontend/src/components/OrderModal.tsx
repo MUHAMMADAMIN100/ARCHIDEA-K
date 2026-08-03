@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { userSeesFinance } from '../types';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { Modal, Badge, Spinner, ErrorState, EmptyState, Skeleton } from './ui';
 import { useToast } from './Toast';
@@ -111,6 +113,7 @@ export function OrderModal({
 }: Props) {
   const toast = useToast();
   const dialog = useDialog();
+  const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
   const [detailError, setDetailError] = useState(false);
   const [tab, setTab] = useState<TabKey>('order');
@@ -301,6 +304,13 @@ export function OrderModal({
   // оплата не может превышать итог — остаток никогда не уходит в минус
   const paidSum = Math.min(paidRaw, toPaySum);
   const dueSum = toPaySum - paidSum;
+  /*
+   * Закрытый заказ: этап у него не меняется. Вернуть в работу может только
+   * руководитель — на случай, если оплату отметили по ошибке. Тот же запрет
+   * стоит на сервере, здесь он лишь честно показывает, что доступно.
+   */
+  const closedOrder = order?.stage === 'PAID';
+  const canReopen = userSeesFinance(user);
   // постоянные предпочтения клиента — вынесены в переменную, чтобы TS не
   // требовал повторного optional chaining внутри вложенного колбэка кнопки
   const clientPreferences = order?.client?.preferences ?? '';
@@ -1047,6 +1057,19 @@ export function OrderModal({
               {/* Текущий этап */}
               <div>
                 <label className="label">Этап воронки</label>
+                {/*
+                  Закрытый заказ. Этап у него не меняется ни здесь, ни
+                  перетаскиванием: сделка завершена, доход записан. Исключение
+                  одно — руководитель, если оплату отметили по ошибке; тогда
+                  доход снимается автоматически при возврате.
+                */}
+                {closedOrder && (
+                  <p className="mb-2 text-xs text-navy-600">
+                    {canReopen
+                      ? 'Заказ оплачен и закрыт. Смена этапа снимет записанный доход — делайте это, только если оплату отметили по ошибке.'
+                      : 'Заказ оплачен и закрыт — этап менять нельзя. Если оплату отметили по ошибке, обратитесь к руководителю.'}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {STAGE_ORDER.map((s) => {
                     /*
@@ -1054,17 +1077,21 @@ export function OrderModal({
                      * закрытый заказ уходит из воронки и попадает в выручку,
                      * и долг после этого теряется из виду.
                      */
-                    const blocked = s === 'PAID' && dueSum > 0;
+                    const blocked =
+                      (s === 'PAID' && dueSum > 0) ||
+                      (closedOrder && s !== 'PAID' && !canReopen);
                     return (
                       <button
                         key={s}
                         disabled={blocked}
                         title={
-                          blocked
+                          s === 'PAID' && dueSum > 0
                             ? `Клиент должен ${formatPrice(
                                 dueSum,
                               )} — внесите оплату выше`
-                            : undefined
+                            : closedOrder && !canReopen
+                              ? 'Заказ закрыт — вернуть его в работу может руководитель'
+                              : undefined
                         }
                         onClick={() => {
                           markTouched('stage');

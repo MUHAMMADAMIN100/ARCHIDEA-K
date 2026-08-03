@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
+import { seesFinance } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { resolveManager } from '../common/resolve-manager';
 import { formatDate, parseDate } from '../common/time/dushanbe';
@@ -845,10 +847,25 @@ export class OrdersService {
      * полностью рассчитался, снова оказывался в долгах этапа. Тот же запрет
      * стоит в воронке — здесь он на случай прямого запроса к серверу.
      */
-    if (order.stage === FunnelStage.PAID && dto.stage === FunnelStage.DONE) {
-      throw new BadRequestException(
-        'Заказ уже оплачен — вернуть его в «К оплате» нельзя, иначе он снова попадёт в долги',
-      );
+    /*
+     * Оплаченный заказ с этапа не двигается (решение владельца).
+     *
+     * Раньше запрет стоял на одном переходе — «Оплачено» → «К оплате», — а
+     * во все остальные колонки карточку можно было утащить мышью: закрытая
+     * сделка с уже записанным доходом уезжала обратно «в работу».
+     *
+     * Исключение одно: руководитель может вернуть заказ, если оплату отметили
+     * по ошибке. Делается это в карточке заказа — в воронке карточка не
+     * берётся вовсе, поэтому случайным движением руки сделку не откроешь.
+     * Доход при возврате снимается автоматически (см. removeOrderIncome ниже),
+     * так что книга доходов остаётся согласованной с воронкой.
+     */
+    if (order.stage === FunnelStage.PAID && dto.stage !== FunnelStage.PAID) {
+      if (!seesFinance(user)) {
+        throw new ForbiddenException(
+          'Заказ оплачен и закрыт. Вернуть его в работу может только руководитель — из карточки заказа',
+        );
+      }
     }
 
     if (dto.stage === FunnelStage.PAID) {
