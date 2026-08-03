@@ -57,6 +57,12 @@ export function ReportView() {
 
   const workersSum = r.workers.reduce((s, w) => s + workerSum(w), 0);
   const expensesSum = r.expenses.reduce((s, e) => s + e.amount, 0);
+  /*
+   * Чистый доход по объекту: выручка минус то, что по нему заплачено —
+   * работникам и на дорогу. Именно эта цифра говорит, заработала компания
+   * на уборке или отработала в ноль.
+   */
+  const netIncome = r.totalPrice - workersSum - expensesSum;
   const canEdit = r.status !== 'ACCEPTED';
 
   const sendReport = () => {
@@ -201,7 +207,7 @@ export function ReportView() {
             ['Доп. услуга и стоимость на единицу', r.extraServices || '—'],
             ['Предоставленная скидка', r.discount ? formatPrice(r.discount) : '—'],
             ['Итоговая стоимость', formatPrice(r.totalPrice)],
-            ['Прибыл(а)', r.arrivedBy || '—'],
+            ['Привёл', r.arrivedBy || '—'],
             ['Ответственный бригадир', r.brigadierName || '—'],
             ['Ответственный менеджер', r.managerName || r.manager?.fullName || '—'],
           ].map(([k, v], i) => (
@@ -320,8 +326,12 @@ export function ReportView() {
           </ScrollArea>
         )}
 
-        {/* Сводка */}
-        <div className="mt-6 grid gap-3 rounded-xl bg-navy-50 p-4 text-sm sm:grid-cols-3">
+        {/*
+          Сводка. Четвёртой цифрой — чистый доход: сколько осталось компании
+          после выплат работникам и расходов по объекту. Раньше три числа
+          лежали рядом, а вычитать их приходилось в уме.
+        */}
+        <div className="mt-6 grid gap-3 rounded-xl bg-navy-50 p-4 text-sm sm:grid-cols-4">
           <div>
             <div className="text-xs text-navy-600">Выручка по объекту</div>
             <div className="text-lg font-extrabold text-navy-900">
@@ -338,6 +348,16 @@ export function ReportView() {
             <div className="text-xs text-navy-600">Доп. расходы</div>
             <div className="text-lg font-extrabold text-navy-900">
               {formatPrice(expensesSum)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-navy-600">Чистый доход</div>
+            <div
+              className={`text-lg font-extrabold ${
+                netIncome < 0 ? 'text-red-600' : 'text-green-700'
+              }`}
+            >
+              {formatPrice(netIncome)}
             </div>
           </div>
         </div>

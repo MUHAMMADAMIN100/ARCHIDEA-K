@@ -509,7 +509,7 @@ export function ReportEdit() {
             />
           </div>
           <div>
-            <label className="label">Прибыл(а)</label>
+            <label className="label">Привёл</label>
             <input
               className="input"
               value={arrivedBy}

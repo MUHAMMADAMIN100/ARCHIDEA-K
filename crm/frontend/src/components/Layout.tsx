@@ -441,7 +441,7 @@ export function Layout() {
         <StuckSentinel sentinelRef={sentinelRef} />
         <header
           ref={headerRef}
-          className="sticky-head flex h-16 items-center justify-between gap-3 border-b border-navy-100 bg-white/90 px-4 backdrop-blur sm:px-6"
+          className="sticky-head flex h-16 items-center justify-between gap-3 border-b border-navy-100 bg-white px-4 sm:px-6"
         >
           <button
             className="press rounded-lg p-2 text-navy-600 hover:bg-navy-50 lg:hidden"

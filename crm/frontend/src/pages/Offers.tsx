@@ -1050,20 +1050,16 @@ function TemplateModal({
       isDefault,
       isActive,
     };
-    try {
-      if (template) {
-        await api.patch(`/proposal-templates/${template.id}`, payload);
-        toast.success('Шаблон обновлён');
-      } else {
-        await api.post('/proposal-templates', payload);
-        toast.success('Шаблон создан');
-      }
-      onSaved();
-    } catch (e: any) {
+    // окно закрывается сразу, запрос уходит фоном
+    toast.success(template ? 'Шаблон обновлён' : 'Шаблон создан');
+    onSaved();
+    const request = template
+      ? api.patch(`/proposal-templates/${template.id}`, payload)
+      : api.post('/proposal-templates', payload);
+    request.catch((e: any) => {
       toast.error(e?.response?.data?.message || 'Не удалось сохранить шаблон');
-    } finally {
-      setSaving(false);
-    }
+      onSaved();
+    });
   };
 
   return (

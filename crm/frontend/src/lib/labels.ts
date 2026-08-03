@@ -237,6 +237,9 @@ export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
   ACCEPTED: 'Принят',
 };
 
+/** Порядок состояний для отбора: как ведомость движется по жизни */
+export const REPORT_STATUS_ORDER: ReportStatus[] = ['DRAFT', 'SENT', 'ACCEPTED'];
+
 export const REPORT_STATUS_COLOR: Record<ReportStatus, string> = {
   DRAFT: 'bg-navy-100 text-navy-600',
   SENT: 'bg-amber-100 text-amber-700',

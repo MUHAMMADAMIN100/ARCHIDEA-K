@@ -256,7 +256,7 @@ export function Modal({
   /*
    * Через портал в body — обязательно.
    *
-   * У оверлея есть backdrop-blur, а размытие делает элемент точкой отсчёта для
+   * Раньше у подложки было размытие, и оно делало её точкой отсчёта для
    * вложенных position: fixed. Из-за этого модалка, открытая ИЗ другой модалки
    * («Напомнить о звонке» из карточки заказа), считала «верх экрана» от
    * прокрученного родителя и всплывала за пределами видимой части — человеку
@@ -266,7 +266,7 @@ export function Modal({
   return createPortal(
     <div
       // items-center: окно всегда в центре экрана, как бы страница ни была прокручена
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-navy-950/10 p-3 backdrop-blur-md sm:p-8"
+      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-navy-950/35 p-3 sm:p-8"
       onClick={onClose}
     >
       {/*

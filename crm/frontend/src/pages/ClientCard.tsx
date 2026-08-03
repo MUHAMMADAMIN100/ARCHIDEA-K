@@ -104,8 +104,6 @@ export function ClientCard() {
   const [preferences, setPreferences] = useState<string | null>(null);
   // адрес клиента: подставляется в новые заказы, правится здесь же
   const [address, setAddress] = useState<string | null>(null);
-  const [savingMeta, setSavingMeta] = useState(false);
-  const [savingPrefs, setSavingPrefs] = useState(false);
   const [openOrder, setOpenOrder] = useState<Order | null>(null);
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
@@ -203,15 +201,9 @@ export function ClientCard() {
      * доходили — и в воронке карточка оставалась без метки. Соседние поля
      * разговора уже так и работают.
      */
-    /*
-     * Статусов может быть несколько: клиент бывает и постоянным, и крупным,
-     * и при этом отказником по последней заявке. Раньше выбор одного снимал
-     * все остальные — в воронке у карточек оставалась одна метка из трёх.
-     */
+    // статус один: нажатие на новый снимает прежний (решение владельца)
     const base = tags ?? data.tags;
-    const next: ClientTag[] = base.includes(t)
-      ? base.filter((x) => x !== t)
-      : [...base, t];
+    const next: ClientTag[] = base.includes(t) ? [] : [t];
     setTags(null);
     patchClient({ tags: next });
   };
@@ -305,20 +297,23 @@ export function ClientCard() {
     setNotes(null);
     setPreferences(null);
     setAddress(null);
-    setSavingMeta(true);
-    try {
-      await api.patch(`/clients/${id}`, {
+    /*
+     * Кнопка не ждёт сервер. Изменение уже на экране, запрос уходит фоном:
+     * раньше кнопка на секунду превращалась в «Сохранение…», и человек
+     * сидел перед ней вместо того, чтобы работать дальше. Не прошло —
+     * скажем об этом и вернём карточку к тому, что лежит на сервере.
+     */
+    toast.success('Сохранено');
+    api
+      .patch(`/clients/${id}`, {
         notes: nextNotes,
         preferences: nextPrefs,
         address: nextAddress,
+      })
+      .catch(() => {
+        toast.error('Не удалось сохранить — изменения отменены');
+        reload();
       });
-      toast.success('Сохранено');
-    } catch {
-      toast.error('Не удалось сохранить — изменения отменены');
-      reload();
-    } finally {
-      setSavingMeta(false);
-    }
   };
 
   // ТЗ 10.2 — постоянные предпочтения клиента (переносятся в форму заказа)
@@ -326,16 +321,13 @@ export function ClientCard() {
     const next = curPreferences.trim() || null;
     setData((c) => (c ? { ...c, preferences: next } : c));
     setPreferences(null);
-    setSavingPrefs(true);
-    try {
-      await api.patch(`/clients/${id}`, { preferences: next });
-      toast.success('Предпочтения сохранены');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить — изменения отменены');
+    toast.success('Предпочтения сохранены');
+    api.patch(`/clients/${id}`, { preferences: next }).catch((e: any) => {
+      toast.error(
+        e?.response?.data?.message || 'Не удалось сохранить — изменения отменены',
+      );
       reload();
-    } finally {
-      setSavingPrefs(false);
-    }
+    });
   };
 
   const removeClient = async () => {
@@ -628,15 +620,9 @@ export function ClientCard() {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Комментарии о клиенте…"
             />
-            <button
-              onClick={saveMeta}
-              disabled={savingMeta}
-              className="btn-primary mt-3 w-full"
-            >
+            <button onClick={saveMeta} className="btn-primary mt-3 w-full">
               <Save className="h-4 w-4" />
-              {savingMeta
-                ? 'Сохранение…'
-                : 'Сохранить предпочтения и заметки'}
+              Сохранить предпочтения и заметки
             </button>
           </div>
         </div>
@@ -1158,13 +1144,11 @@ function EditClientModal({
   const [source, setSource] = useState<LeadSource>(client.source);
   const [sourceDetail, setSourceDetail] = useState(client.sourceDetail ?? '');
   const [discount, setDiscount] = useState(String(client.discount ?? 0));
-  const [saving, setSaving] = useState(false);
 
   const canSave = isValidPersonName(fullName) && isValidPhone(phone);
 
-  const submit = async () => {
-    if (!canSave || saving) return;
-    setSaving(true);
+  const submit = () => {
+    if (!canSave) return;
     const patch = {
       fullName: fullName.trim(),
       phone: normalizePhone(phone) ?? phone,
@@ -1181,12 +1165,11 @@ function EditClientModal({
      * сообщение объяснит причину.
      */
     onSaved(patch as Partial<Client>);
+    onClose();
     toast.success('Данные клиента обновлены');
-    try {
-      await api.patch(`/clients/${client.id}`, patch);
-    } catch (e: any) {
+    api.patch(`/clients/${client.id}`, patch).catch((e: any) => {
       toast.error(e?.response?.data?.message || 'Не удалось сохранить');
-    }
+    });
   };
 
   return (
@@ -1276,7 +1259,7 @@ function EditClientModal({
           </button>
           <button
             onClick={submit}
-            disabled={!canSave || saving}
+            disabled={!canSave}
             className="btn-primary justify-center disabled:opacity-50"
             title={canSave ? undefined : 'Заполните ФИО и телефон правильно'}
           >

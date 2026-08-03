@@ -14,10 +14,11 @@ import {
 import {
   REPORT_STATUS_LABEL,
   REPORT_STATUS_COLOR,
+  REPORT_STATUS_ORDER,
   formatPrice,
   formatDate,
 } from '../lib/labels';
-import type { Report } from '../types';
+import type { Report, ReportStatus } from '../types';
 
 /** Сумма выплат работникам по ведомости */
 export function workersTotal(r: Report): number {
@@ -38,12 +39,20 @@ export function Reports() {
   const isDirector = user?.role === 'DIRECTOR';
   const { data, loading } = useFetch<Report[]>('/reports', { pollMs: 20000 });
   const [drill, setDrill] = useState<{ report: Report; tab: ReportDetailTab } | null>(null);
+  /*
+   * Отбор по состоянию: черновик, отправлена, принята. У менеджера ведомостей
+   * набирается несколько десятков, и без отбора он ищет глазами, какие ещё
+   * не отправлены.
+   */
+  const [statusFilter, setStatusFilter] = useState<ReportStatus | 'ALL'>('ALL');
 
   // заглушка повторяет ленту отчётов: те же строки-карточки той же высоты,
   // поэтому при появлении данных экран не прыгает
   if (loading || !data) return <SkeletonList rows={4} />;
 
   const waiting = isDirector ? data.filter((r) => r.status === 'SENT').length : 0;
+  const rows =
+    statusFilter === 'ALL' ? data : data.filter((r) => r.status === statusFilter);
 
   return (
     <div className="animate-page-in">
@@ -57,11 +66,45 @@ export function Reports() {
         }
       />
 
-      {data.length === 0 ? (
-        <EmptyState text="Отчётов пока нет — создайте первый по кнопке «Новый отчёт»" />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="hidden text-xs font-medium text-navy-600 sm:inline">
+          Состояние:
+        </span>
+        <select
+          className="input w-full sm:w-[200px] sm:flex-none"
+          value={statusFilter}
+          onChange={(e) =>
+            setStatusFilter(e.target.value as ReportStatus | 'ALL')
+          }
+        >
+          <option value="ALL">Все ведомости</option>
+          {REPORT_STATUS_ORDER.map((st) => (
+            <option key={st} value={st}>
+              {REPORT_STATUS_LABEL[st]}
+            </option>
+          ))}
+        </select>
+        {statusFilter !== 'ALL' && (
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className="press text-xs font-medium text-navy-600 underline-offset-2 hover:underline"
+          >
+            Сбросить
+          </button>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          text={
+            data.length === 0
+              ? 'Отчётов пока нет — создайте первый по кнопке «Новый отчёт»'
+              : 'С таким состоянием ведомостей нет'
+          }
+        />
       ) : (
         <div className="space-y-3">
-          {data.map((r) => (
+          {rows.map((r) => (
             <Link
               key={r.id}
               to={`/reports/${r.id}`}

@@ -110,8 +110,18 @@ export class LeadsService {
     }
     this.recent.set(phoneKey, nowMs);
 
-    // 3. Выбираем наименее загруженного менеджера
-    const managerId = await this.pickManager();
+    /*
+     * 3. Кому заявка.
+     *
+     * Клиент, который уже обращался, возвращается к СВОЕМУ менеджеру мимо
+     * очереди: тот знает историю, договорённости и цену прошлой уборки.
+     * Новый клиент идёт следующему по очереди.
+     */
+    const known = await this.prisma.client.findUnique({
+      where: { phone: normalizePhone(contact.phone) || contact.phone },
+      select: { managerId: true },
+    });
+    const managerId = known?.managerId ?? (await this.pickManager());
 
     // 4. Клиент (защита от дублей по телефону)
     const { client } = await this.clients.findOrCreateByPhone({
@@ -257,18 +267,66 @@ export class LeadsService {
       `Расчёт: ${clamp(dto.total)} сомони`,
       dto.quiz?.comment ? `Комментарий: ${escapeHtml(dto.quiz.comment)}` : null,
     ].filter(Boolean);
-    await this.telegram.enqueueToCompanyChat(lines.join('\n'), {
+    const text = lines.join('\n');
+    await this.telegram.enqueueToCompanyChat(text, {
       kind: 'lead',
       refId: order.id,
     });
+
+    /*
+     * Личное сообщение тому, кому заявка досталась (решение владельца).
+     *
+     * Рабочий чат читают все и не сразу; заявка же адресована конкретному
+     * человеку, и звонить по ней ему. Если Telegram у него не подключён,
+     * заявка всё равно остаётся за ним, а сообщение уходит руководителям —
+     * иначе обращение могло бы пролежать незамеченным.
+     */
+    const assignee = managerId
+      ? await this.prisma.user.findUnique({
+          where: { id: managerId },
+          select: { fullName: true, telegramChatId: true, telegramEnabled: true },
+        })
+      : null;
+    if (assignee?.telegramChatId && assignee.telegramEnabled) {
+      await this.telegram.enqueueToUser(
+        managerId,
+        `${text}\n\n<b>Заявка ваша — позвоните клиенту.</b>`,
+        { kind: 'lead-personal', refId: order.id },
+      );
+    } else {
+      const note = assignee
+        ? `\n\n<i>У ${escapeHtml(assignee.fullName)} не подключён Telegram — заявка закреплена за ним.</i>`
+        : '\n\n<i>Менеджер не назначен: некому распределить заявку.</i>';
+      const directors = await this.prisma.user.findMany({
+        where: { ...NOT_DELETED, role: Role.DIRECTOR, isActive: true },
+        select: { id: true },
+      });
+      for (const d of directors) {
+        await this.telegram.enqueueToUser(d.id, text + note, {
+          kind: 'lead-personal',
+          refId: order.id,
+        });
+      }
+    }
 
     this.logger.log(`Новая заявка: ${client.fullName} (${order.id})`);
     return { ok: true, orderId: order.id };
   }
 
-  /** Менеджер отдела продаж с наименьшим числом активных заказов */
+  /**
+   * Кому отдать заявку с сайта — по очереди.
+   *
+   * Раньше выбирался менеджер с наименьшим числом активных заказов. На
+   * практике это значило, что все заявки шли одному и тому же: пока он не
+   * закроет свои, он же и остаётся самым свободным по счётчику. Решение
+   * владельца — ровная очередь: заявка уходит тому, кто получал предыдущую
+   * раньше всех, и следующая достанется уже другому.
+   *
+   * Очередь считаем по самой свежей заявке каждого менеджера — отдельного
+   * счётчика в базе не нужно, а порядок остаётся верным и после того, как
+   * кого-то отключили от распределения или добавили нового сотрудника.
+   */
   private async pickManager(): Promise<string | null> {
-    // 2 запроса вместо 1+N: менеджеры + групповой count активных заказов
     const [managers, groups] = await Promise.all([
       this.prisma.user.findMany({
         where: {
@@ -278,26 +336,30 @@ export class LeadsService {
           acceptsLeads: true,
         },
         select: { id: true },
+        orderBy: { createdAt: 'asc' },
       }),
       this.prisma.order.groupBy({
         by: ['managerId'],
         where: {
           ...NOT_DELETED,
-          stage: { notIn: ['PAID', 'REJECTED'] },
+          source: LeadSource.SITE,
           managerId: { not: null },
         },
-        _count: { _all: true },
+        _max: { createdAt: true },
       }),
     ]);
     if (managers.length === 0) return null;
 
-    const countBy = new Map(groups.map((g) => [g.managerId, g._count._all]));
+    const lastBy = new Map(
+      groups.map((g) => [g.managerId, g._max.createdAt?.getTime() ?? 0]),
+    );
     let best = managers[0].id;
-    let bestCount = Infinity;
+    let bestAt = Infinity;
     for (const m of managers) {
-      const count = countBy.get(m.id) ?? 0; // менеджера нет в группах = 0 заказов
-      if (count < bestCount) {
-        bestCount = count;
+      // ни одной заявки ещё не получал — его очередь первая
+      const at = lastBy.get(m.id) ?? 0;
+      if (at < bestAt) {
+        bestAt = at;
         best = m.id;
       }
     }

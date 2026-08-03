@@ -32,7 +32,7 @@ export function Header() {
       transition={{ duration: 0.6, ease: 'easeOut' }}
       className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,box-shadow,color] duration-160 ease-out ${
         scrolled
-          ? 'border-b border-navy-100 bg-white/90 text-navy-900 shadow-card backdrop-blur-xl'
+          ? 'border-b border-navy-100 bg-white text-navy-900 shadow-card'
           : 'border-b border-transparent bg-transparent text-white'
       }`}
     >
@@ -65,7 +65,7 @@ export function Header() {
           className={`press inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-120 ease-out sm:gap-2 sm:px-4 sm:py-2 sm:text-sm [@media(max-width:359px)]:px-2 [@media(max-width:359px)]:text-[11px] ${
             scrolled
               ? 'bg-brand-500 text-white hover:bg-brand-600'
-              : 'border border-white/25 bg-white/5 text-white backdrop-blur hover:bg-white/10'
+              : 'border border-white/25 bg-white/10 text-white hover:bg-white/20'
           }`}
         >
           <IconPhone className="h-4 w-4 shrink-0" />

@@ -642,25 +642,25 @@ function TariffModal({
       sortOrder: toInt(sortOrder),
       isActive,
     };
-    try {
-      if (isEdit && tariff) {
-        // у базовой услуги ключ и единицу измерения бэкенд менять не даёт —
-        // просто не отправляем unit, если это базовая услуга
-        await api.patch(`/tariffs/tariff/${tariff.key}`, {
-          ...payload,
-          unit: tariff.isSystem ? undefined : payload.unit,
-        });
-        toast.success('Услуга обновлена');
-      } else {
-        await api.post('/tariffs/tariff', payload);
-        toast.success('Услуга добавлена');
-      }
-      onSaved();
-    } catch (e: any) {
+    /*
+     * Окно закрывается сразу, запрос уходит фоном — как и везде в системе.
+     * Раньше кнопка держала человека, пока сервер отвечал; при отказе
+     * список всё равно перезапросится и покажет, что ничего не изменилось.
+     */
+    toast.success(isEdit ? 'Услуга обновлена' : 'Услуга добавлена');
+    onSaved();
+    const request =
+      isEdit && tariff
+        ? api.patch(`/tariffs/tariff/${tariff.key}`, {
+            // у базовой услуги ключ и единицу измерения бэкенд менять не даёт
+            ...payload,
+            unit: tariff.isSystem ? undefined : payload.unit,
+          })
+        : api.post('/tariffs/tariff', payload);
+    request.catch((e: any) => {
       toast.error(e?.response?.data?.message || 'Не удалось сохранить услугу');
-    } finally {
-      setSaving(false);
-    }
+      onSaved();
+    });
   };
 
   return (

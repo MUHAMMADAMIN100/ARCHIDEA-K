@@ -99,10 +99,23 @@ export class ReportsService {
     private audit: AuditService,
   ) {}
 
+  /**
+   * Чьи ведомости человек видит.
+   *
+   * Руководителю — все, КРОМЕ чужих черновиков (решение владельца): черновик
+   * это работа менеджера в процессе, и в списке руководителя он только
+   * мешает. Свои черновики руководитель видит — их составил он сам.
+   * Менеджер, как и прежде, видит только свои.
+   */
   private scope(user: AuthUser): Prisma.ReportWhereInput {
-    return seesFinance(user)
-      ? { ...NOT_DELETED }
-      : { ...NOT_DELETED, managerId: user.id };
+    if (!seesFinance(user)) return { ...NOT_DELETED, managerId: user.id };
+    return {
+      ...NOT_DELETED,
+      OR: [
+        { status: { not: ReportStatus.DRAFT } },
+        { managerId: user.id },
+      ],
+    };
   }
 
   list(user: AuthUser) {

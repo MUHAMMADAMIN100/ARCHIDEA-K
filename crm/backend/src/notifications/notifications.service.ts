@@ -2,6 +2,29 @@ import { Injectable } from '@nestjs/common';
 import { NotificationType, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * О чём вообще уведомляем (решение владельца).
+ *
+ * Колокольчик был забит переходами заказа по этапам: одна уборка давала
+ * шесть строк «Статус заказа изменён», и за ними терялись новые заявки и
+ * напоминания — то, на что действительно надо реагировать. Оставлены
+ * четыре повода: обращение клиента, напоминание, задача и платёжная
+ * ведомость, по которой нужно принять решение.
+ *
+ * Фильтр стоит в одном месте, а не в тридцати вызовах: добавить или
+ * убрать повод — правка одной строки, и невозможно забыть про какой-то
+ * из путей создания.
+ */
+const ALLOWED: ReadonlySet<NotificationType> = new Set([
+  NotificationType.NEW_LEAD,
+  NotificationType.NEW_TASK,
+  NotificationType.TASK_STATUS_CHANGED,
+  NotificationType.REMINDER_DUE,
+  NotificationType.REMINDER_ASSIGNED,
+  NotificationType.REPORT_SENT,
+  NotificationType.REPORT_DRAFT_READY,
+]);
+
 @Injectable()
 export class NotificationsService {
   constructor(private prisma: PrismaService) {}
@@ -16,6 +39,7 @@ export class NotificationsService {
     taskId?: string;
     clientId?: string;
   }) {
+    if (!ALLOWED.has(params.type)) return null;
     return this.prisma.notification.create({ data: params });
   }
 
@@ -33,6 +57,7 @@ export class NotificationsService {
     orderId?: string;
     clientId?: string;
   }) {
+    if (!ALLOWED.has(params.type)) return;
     const staff = await this.prisma.user.findMany({
       where: { isActive: true, deletedAt: null },
       select: { id: true },
@@ -51,6 +76,7 @@ export class NotificationsService {
     orderId?: string;
     clientId?: string;
   }) {
+    if (!ALLOWED.has(params.type)) return;
     const directors = await this.prisma.user.findMany({
       where: { role: Role.DIRECTOR, isActive: true },
       select: { id: true },

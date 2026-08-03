@@ -676,10 +676,10 @@ export function AddClientModal({
         </div>
 
         {/*
-          Статус клиента — тот же набор, что в карточке. Отмечать можно
-          несколько: клиент бывает и постоянным, и крупным одновременно.
-          Раньше статус ставили только потом, открыв карточку, — про него
-          забывали, и воронка стояла без пометок.
+          Статус клиента — тот же набор, что в карточке, и он один:
+          нажатие на новый снимает прежний. Раньше статус ставили только
+          потом, открыв карточку, — про него забывали, и воронка стояла
+          без пометок.
         */}
         <div>
           <label className="label">Статус клиента</label>
@@ -689,9 +689,8 @@ export function AddClientModal({
                 key={t}
                 type="button"
                 onClick={() =>
-                  setTags((prev) =>
-                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-                  )
+                  // статус один: нажатие на новый снимает прежний
+                  setTags((prev) => (prev.includes(t) ? [] : [t]))
                 }
                 className={`press rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                   tags.includes(t)
@@ -706,29 +705,18 @@ export function AddClientModal({
         </div>
 
         <div>
-          {/*
-            Постоянная скидка клиента. Подставляется в его новые заказы,
-            в самом заказе её можно изменить — так постоянному клиенту не
-            нужно каждый раз вписывать скидку заново.
-          */}
-          <label className="label">Постоянная скидка, сомони</label>
-          <input
-            type="number"
-            min={0}
-            className="input"
-            value={discount}
-            onChange={(e) => setDiscount(e.target.value)}
-            placeholder="0 — без скидки"
-          />
-        </div>
-        <div>
           <label className="label">Источник</label>
           <select className="input" value={source} onChange={(e) => setSource(e.target.value as LeadSource)}>
             {SOURCES.map((s) => (
               <option key={s} value={s}>{SOURCE_LABEL[s]}</option>
             ))}
           </select>
-          {/* «От кого» (ТЗ 1.4): рекомендатель или партнёр */}
+          {/*
+            «От кого» (ТЗ 1.4): рекомендатель или партнёр. Поле показывается
+            только при источнике «Рекомендация» — при звонке или заявке с
+            сайта рекомендателя нет, и пустая строка сбивала с толку.
+          */}
+          {source === 'RECOMMENDATION' && (
           <input
             className="input mt-2"
             value={sourceDetail}
@@ -736,6 +724,7 @@ export function AddClientModal({
             onChange={(e) => setSourceDetail(e.target.value)}
             placeholder="От кого — например: От Анисы, От Ибодат"
           />
+          )}
         </div>
 
         {/*
@@ -918,6 +907,23 @@ export function AddClientModal({
               </div>
             </div>
 
+            {/*
+              Скидка стоит рядом с итогом (решение владельца): раньше она
+              была в самом верху формы, среди контактов, и её задавали
+              вслепую — не видя суммы, из которой она вычитается.
+            */}
+            <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Скидка, сомони</label>
+              <input
+                type="number"
+                min={0}
+                className="input"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="0 — без скидки"
+              />
+            </div>
             <div>
               <label className="label">Общая сумма</label>
               <input
@@ -977,6 +983,25 @@ export function AddClientModal({
                 )}
               </div>
             </div>
+            </div>
+          </div>
+        )}
+
+        {/*
+          Заявку не создают — скидку всё равно надо где-то задать: она
+          постоянная и подставится в следующий заказ клиента.
+        */}
+        {!makeOrder && (
+          <div>
+            <label className="label">Скидка, сомони</label>
+            <input
+              type="number"
+              min={0}
+              className="input"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              placeholder="0 — без скидки"
+            />
           </div>
         )}
 

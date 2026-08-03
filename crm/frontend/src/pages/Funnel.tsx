@@ -98,6 +98,23 @@ function OrderCardBody({
           до того, как карточку открыли.
         */}
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {/*
+            Повторный клиент — мигающая точка.
+            Человек уже платил компании раньше и пришёл снова: это видно до
+            того, как карточку открыли, и разговор с ним начинается иначе.
+            Для карточки в «Оплачено» нужен второй оплаченный заказ — свой
+            собственный она бы и так посчитала.
+          */}
+          {(o.client?.paidOrdersCount ?? 0) >= (o.stage === 'PAID' ? 2 : 1) && (
+            <span
+              className="relative mr-0.5 flex h-2.5 w-2.5 shrink-0"
+              title="Повторный клиент — обращается не впервые"
+              aria-label="Повторный клиент"
+            >
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-70" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-500" />
+            </span>
+          )}
           {o.isLarge && (
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
               КРУПНЫЙ
