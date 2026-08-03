@@ -365,6 +365,8 @@ export interface Order {
     preferences?: string | null;
     isRepeat?: boolean;
     paidOrdersCount?: number;
+    /** Сколько всего раз клиент обращался — по нему мигает точка «повторный» */
+    ordersTotal?: number;
   };
   manager?: { id: string; fullName: string } | null;
   cleaners?: { id: string; fullName: string }[];
@@ -375,6 +377,8 @@ export interface Order {
 export interface BoardColumn {
   stage: FunnelStage;
   label: string;
+  /** Сколько закрытых заказов этапа уехало в архив (45 дней после закрытия) */
+  archived?: number;
   /** Полная стоимость заказов этапа — сколько на нём заработано */
   amount?: number;
   /** Сколько из этой суммы ещё не получено (недоплата по начатым заказам) */

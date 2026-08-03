@@ -237,12 +237,40 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Через сколько дней после оплаты или отказа заказ уходит из воронки в
+   * архив (решение владельца). Доска показывает работу, а не историю: без
+   * этого «Оплачено» разрасталось до сотен карточек, и найти среди них
+   * свежую было нельзя.
+   */
+  private static readonly ARCHIVE_DAYS = 45;
+
+  /** Заказы, закрытые раньше этой даты, показываются только в архиве */
+  private archiveCutoff(): Date {
+    return new Date(Date.now() - OrdersService.ARCHIVE_DAYS * 86_400_000);
+  }
+
+  /** Условие «этот заказ уже в архиве» — закрыт и с тех пор прошло 45 дней */
+  private archivedWhere(): Prisma.OrderWhereInput {
+    return {
+      stage: { in: [FunnelStage.PAID, FunnelStage.REJECTED] },
+      closedAt: { lt: this.archiveCutoff() },
+    };
+  }
+
   list(
     user: AuthUser,
-    q: { stage?: FunnelStage; managerId?: string; search?: string },
+    q: {
+      stage?: FunnelStage;
+      managerId?: string;
+      search?: string;
+      /** доска: закрытое больше 45 дней назад лежит в архиве, а не в колонке */
+      liveOnly?: boolean;
+    },
   ) {
     const where: Prisma.OrderWhereInput = this.scopeWhere(user);
     if (q.stage) where.stage = q.stage;
+    if (q.liveOnly) where.NOT = this.archivedWhere();
     if (seesAll(user) && q.managerId) where.managerId = q.managerId;
     if (q.search) {
       const term = q.search.trim();
@@ -265,7 +293,48 @@ export class OrdersService {
 
   /** Доска воронки: заказы, сгруппированные по этапам */
   async board(user: AuthUser) {
-    const orders = await this.list(user, {});
+    const orders = await this.list(user, { liveOnly: true });
+
+    /*
+     * Сколько закрытого лежит в архиве — по этапам. Показываем числом на
+     * значке папки: видно, что история никуда не делась, и одним нажатием
+     * она открывается.
+     */
+    const archivedGroups = await this.prisma.order.groupBy({
+      by: ['stage'],
+      where: {
+        ...this.scopeWhere(user),
+        ...this.archivedWhere(),
+      },
+      _count: { _all: true },
+      _sum: { finalPrice: true, estimatedPrice: true },
+    });
+    const archivedBy = new Map(
+      archivedGroups.map((g) => [g.stage, g._count._all]),
+    );
+
+    /*
+     * Сколько всего раз клиент к нам обращался — считаем по всем его
+     * заказам, включая архивные и чужие. Из этого числа воронка рисует
+     * мигающую точку: человек пришёл во второй раз.
+     */
+    const clientIds = [
+      ...new Set(orders.map((o) => o.clientId).filter(Boolean)),
+    ];
+    const totals = clientIds.length
+      ? await this.prisma.order.groupBy({
+          by: ['clientId'],
+          where: { clientId: { in: clientIds }, ...NOT_DELETED },
+          _count: { _all: true },
+        })
+      : [];
+    const totalBy = new Map(totals.map((t) => [t.clientId, t._count._all]));
+    for (const o of orders) {
+      if (o.client) {
+        (o.client as { ordersTotal?: number }).ordersTotal =
+          totalBy.get(o.clientId) ?? 1;
+      }
+    }
     /*
      * «Обработка» и «КП» исключены из процесса (ТЗ 3): колонки не показываем.
      * Значения остаются в перечислении ради истории — существующие сделки
@@ -304,7 +373,30 @@ export class OrdersService {
           0,
         ),
         orders: inStage,
+        /** сколько закрытых заказов этого этапа уехало в архив */
+        archived: archivedBy.get(stage) ?? 0,
       };
+    });
+  }
+
+  /**
+   * Архив этапа: закрытые заказы старше 45 дней.
+   *
+   * Отдельным запросом, а не вместе с доской: архив открывают редко, и
+   * тянуть его на каждое обновление воронки незачем. Вернуть заказ в работу
+   * можно как обычно — сменить этап в карточке, и он снова окажется в
+   * колонке (дата закрытия при этом сбрасывается).
+   */
+  archive(user: AuthUser, stage: FunnelStage, take = 200) {
+    return this.prisma.order.findMany({
+      where: {
+        ...this.scopeWhere(user),
+        ...this.archivedWhere(),
+        stage,
+      },
+      include: orderInclude,
+      orderBy: { closedAt: 'desc' },
+      take: Math.min(Math.max(1, take), 500),
     });
   }
 
@@ -444,6 +536,8 @@ export class OrdersService {
     });
 
     await this.notifyPreferences(order, 'создан');
+    // пожелания из новой заявки тоже запоминаем в карточке клиента
+    await this.rememberPreferences(order.clientId, order.preferences);
     return order;
   }
 
@@ -693,9 +787,42 @@ export class OrdersService {
       (before.preferences ?? '') !== (after.preferences ?? '')
     ) {
       await this.notifyPreferences(after, 'изменён');
+      await this.rememberPreferences(after.clientId, after.preferences);
     }
 
     return after;
+  }
+
+  /**
+   * Пожелания из заказа запоминаются в карточке клиента.
+   *
+   * Менеджер записывает их в заказе — «есть кот», «обувь снимать», — а при
+   * следующей уборке всё выяснялось заново: поле у клиента оставалось
+   * пустым, и связи между двумя полями не было никакой.
+   *
+   * Дописываем новой строкой, а не заменяем: у постоянного клиента в
+   * карточке уже могут быть пожелания, и свежий заказ не должен их стирать.
+   * Повтор одного и того же текста не добавляем — иначе после третьей
+   * уборки в карточке лежала бы одна фраза трижды.
+   */
+  private async rememberPreferences(
+    clientId: string,
+    text: string | null,
+  ): Promise<void> {
+    const fresh = text?.trim();
+    if (!fresh) return;
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { preferences: true },
+    });
+    const saved = client?.preferences?.trim() ?? '';
+    if (saved === fresh) return;
+    if (saved.split('\n').some((line) => line.trim() === fresh)) return;
+    const next = saved ? `${saved}\n${fresh}` : fresh;
+    await this.prisma.client.update({
+      where: { id: clientId },
+      data: { preferences: next.slice(0, 2000) },
+    });
   }
 
   /** Перевод по воронке + побочные эффекты */

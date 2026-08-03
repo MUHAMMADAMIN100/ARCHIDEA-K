@@ -6,7 +6,7 @@ import {
   Draggable,
   type DropResult,
 } from '@hello-pangea/dnd';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderClosed } from 'lucide-react';
 import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
@@ -100,12 +100,12 @@ function OrderCardBody({
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
           {/*
             Повторный клиент — мигающая точка.
-            Человек уже платил компании раньше и пришёл снова: это видно до
-            того, как карточку открыли, и разговор с ним начинается иначе.
-            Для карточки в «Оплачено» нужен второй оплаченный заказ — свой
-            собственный она бы и так посчитала.
+            Человек обращается к нам не в первый раз: это видно до того, как
+            карточку открыли, и разговор с ним начинается иначе. Считаем ВСЕ
+            его заявки, включая уехавшие в архив, — поэтому клиент, который
+            вернулся через полгода, тоже отмечен.
           */}
-          {(o.client?.paidOrdersCount ?? 0) >= (o.stage === 'PAID' ? 2 : 1) && (
+          {(o.client?.ordersTotal ?? 1) >= 2 && (
             <span
               className="relative mr-0.5 flex h-2.5 w-2.5 shrink-0"
               title="Повторный клиент — обращается не впервые"
@@ -451,6 +451,8 @@ export function Funnel() {
   }, [data]);
   // «Добавить клиента» прямо из воронки — та же форма, что в «Клиентах»
   const [showAddClient, setShowAddClient] = useState(false);
+  // какой этап открыт в архиве (папка у заголовка колонки)
+  const [archiveOf, setArchiveOf] = useState<FunnelStage | null>(null);
   // счётчик над колонкой — не просто число: по клику показываем сам список
   const [stageDrill, setStageDrill] = useState<BoardColumn | null>(null);
 
@@ -829,6 +831,22 @@ export function Funnel() {
                         <span className="min-w-0 truncate">{col.label}</span>
                       </Badge>
                     </span>
+                    {/*
+                      Папка архива. Закрытые заказы старше 45 дней уходят с
+                      доски, чтобы «Оплачено» не разрасталось до сотен
+                      карточек. Значок с числом говорит, что история никуда не
+                      делась, и открывает её одним нажатием.
+                    */}
+                    {(col.archived ?? 0) > 0 && (
+                      <button
+                        onClick={() => setArchiveOf(col.stage)}
+                        className="press mr-1 inline-flex shrink-0 items-center gap-1 rounded-md border border-navy-200 bg-white px-1.5 py-0.5 text-xs font-semibold text-navy-600 hover:bg-navy-50"
+                        title={`Архив этапа «${col.label}»: закрыто больше 45 дней назад`}
+                      >
+                        <FolderClosed className="h-3.5 w-3.5" />
+                        {col.archived}
+                      </button>
+                    )}
                     <span className="shrink-0 text-sm font-bold text-navy-600">
                       <DrillValue
                         tone="muted"
@@ -1005,6 +1023,17 @@ export function Funnel() {
         </div>
       </DragDropContext>
 
+      {archiveOf && (
+        <ArchiveModal
+          stage={archiveOf}
+          onPick={(o) => {
+            setArchiveOf(null);
+            setOpenOrder(o);
+          }}
+          onClose={() => setArchiveOf(null)}
+        />
+      )}
+
       {stageDrill && (
         <StageOrdersModal
           column={stageDrill}
@@ -1077,6 +1106,94 @@ export function Funnel() {
  * карточки видны не все сразу (колонка скроллится), а здесь этап виден
  * целиком — с итогом по деньгам, которого на доске нет вообще.
  */
+/**
+ * Архив этапа: заказы, закрытые больше 45 дней назад.
+ *
+ * Отдельным запросом, а не вместе с доской: архив открывают редко, и тянуть
+ * его на каждое обновление воронки незачем. Нажатие на строку открывает
+ * карточку заказа — оттуда его можно вернуть в работу, сменив этап.
+ */
+function ArchiveModal({
+  stage,
+  onPick,
+  onClose,
+}: {
+  stage: FunnelStage;
+  onPick: (order: Order) => void;
+  onClose: () => void;
+}) {
+  const { data, loading } = useFetch<Order[]>(`/orders/archive?stage=${stage}`);
+  const rows = data ?? [];
+  const sum = rows.reduce((s, o) => s + orderTotal(o), 0);
+
+  return (
+    <DetailModal
+      title={`Архив — ${STAGE_LABEL[stage]}`}
+      subtitle="Закрыто больше 45 дней назад. Чтобы вернуть заказ в работу, откройте его и смените этап"
+      onClose={onClose}
+    >
+      <DetailStats
+        items={[
+          { label: 'Заказов', value: rows.length },
+          { label: 'На сумму', value: formatPrice(sum), tone: 'success' },
+        ]}
+      />
+      <DetailTable
+        rows={rows}
+        rowKey={(o) => o.id}
+        onRowClick={onPick}
+        emptyText={loading ? 'Загружаем архив…' : 'В архиве пока пусто'}
+        columns={[
+          {
+            key: 'client',
+            header: 'Клиент',
+            cell: (o) => (
+              <div>
+                <div className="font-medium text-navy-900">
+                  {o.client?.fullName}
+                </div>
+                <div className="text-xs text-navy-600">
+                  закрыт {o.closedAt ? cardDate(o.closedAt) : cardDate(o.createdAt)}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'what',
+            header: 'Уборка',
+            cell: (o) => (
+              <div>
+                <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
+                <div className="text-xs text-navy-600">
+                  {formatVolume(o)}
+                  {o.address ? ` · ${o.address}` : ''}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'manager',
+            header: 'Ответственный',
+            cell: (o) => (
+              <span className="text-navy-600">{o.manager?.fullName ?? '—'}</span>
+            ),
+          },
+          {
+            key: 'price',
+            header: 'Сумма',
+            align: 'right',
+            cell: (o) => (
+              <span className="font-bold text-navy-900">
+                {formatPrice(orderTotal(o))}
+              </span>
+            ),
+          },
+        ]}
+      />
+    </DetailModal>
+  );
+}
+
 function StageOrdersModal({
   column,
   onPick,

@@ -43,6 +43,20 @@ export class OrdersController {
     return this.service.board(user);
   }
 
+  /**
+   * Архив этапа: закрытые заказы старше 45 дней.
+   *
+   * Стоит ВЫШЕ маршрута ':id' — иначе слово archive попало бы в него как
+   * идентификатор заказа и вернуло «не найдено».
+   */
+  @Get('archive')
+  archive(
+    @CurrentUser() user: AuthUser,
+    @Query('stage') stage: FunnelStage,
+  ) {
+    return this.service.archive(user, stage);
+  }
+
   @Get(':id')
   getOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.service.getOne(user, id);
