@@ -15,9 +15,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { escapeHtml } from '../telegram/telegram.util';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { seesAllTasks } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
+import { formatDate } from '../common/time/dushanbe';
 
 /**
  * Полный доступ к модулю задач (ТЗ 1.2).
@@ -61,6 +64,22 @@ const taskInclude = {
 
 type TaskWithRelations = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 
+/** Подписи для сообщения в Telegram — те же слова, что и в CRM */
+const TYPE_LABEL: Record<TaskType, string> = {
+  CALL: 'Звонок',
+  INSPECTION: 'Осмотр объекта',
+  VISIT: 'Выезд',
+  MEETING: 'Встреча',
+  PERSONAL: 'Личное',
+};
+
+const PRIORITY_LABEL: Record<TaskPriority, string> = {
+  LOW: 'Низкий',
+  MEDIUM: 'Средний',
+  HIGH: 'Высокий',
+  URGENT: 'Срочный',
+};
+
 const STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN: 'Открыта',
   IN_PROGRESS: 'В работе',
@@ -95,6 +114,7 @@ export class TasksService {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private audit: AuditService,
+    private telegram: TelegramService,
   ) {}
 
   /**
@@ -137,6 +157,40 @@ export class TasksService {
    */
   private isOwnTask(task: { creatorId: string }, userId: string): boolean {
     return task.creatorId === userId;
+  }
+
+  /**
+   * Сообщение исполнителю в Telegram о поставленной задаче.
+   *
+   * Раньше о задаче узнавали только по колокольчику в CRM — то есть когда
+   * человек её откроет. Теперь задача приходит туда же, куда заявки: с
+   * названием, типом, приоритетом, сроком, клиентом и тем, кто поставил.
+   * Отправляется тем, кому её только что поручили: и при постановке, и когда
+   * исполнителя добавили к уже существующей задаче.
+   */
+  private async notifyTelegram(
+    task: ReturnType<TasksService['shape']>,
+    userIds: string[],
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    const lines = [
+      '<b>Новая задача</b>',
+      escapeHtml(task.title),
+      `Тип: ${TYPE_LABEL[task.type]} · Приоритет: ${PRIORITY_LABEL[task.priority]}`,
+      task.deadline ? `Срок: ${formatDate(task.deadline)}` : 'Срок: без срока',
+      task.client
+        ? `Клиент: ${escapeHtml(task.client.fullName)} · ${escapeHtml(task.client.phone)}`
+        : null,
+      task.creator ? `Поставил: ${escapeHtml(task.creator.fullName)}` : null,
+      task.description ? `\n${escapeHtml(task.description)}` : null,
+    ].filter(Boolean);
+    const text = lines.join('\n');
+    for (const userId of userIds) {
+      await this.telegram.enqueueToUser(userId, text, {
+        kind: 'task',
+        refId: `${task.id}:${userId}`,
+      });
+    }
   }
 
   /**
@@ -261,6 +315,9 @@ export class TasksService {
       },
       include: taskInclude,
     });
+
+    // личное сообщение в Telegram каждому исполнителю — со всеми подробностями
+    await this.notifyTelegram(this.shape(task), ids);
 
     await Promise.all(
       ids.map((userId) =>
@@ -495,6 +552,9 @@ export class TasksService {
       data,
       include: taskInclude,
     });
+
+    // тем, кого только что добавили, — то же сообщение в Telegram
+    await this.notifyTelegram(this.shape(updated), added);
 
     await Promise.all(
       added.map((userId) =>

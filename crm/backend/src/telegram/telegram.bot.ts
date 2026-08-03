@@ -18,13 +18,15 @@ import { formatDate } from '../common/time/dushanbe';
  * Нагрузка мизерная — одно ожидающее соединение.
  */
 
-/** Кнопки главного меню — они же тексты, которые бот понимает */
-const MENU = {
-  today: 'Что у меня сегодня',
-  reminders: 'Мои напоминания',
-  mute: 'Отключить уведомления',
-  unmute: 'Включить уведомления',
-};
+/*
+ * Кнопок у бота больше нет (решение владельца).
+ *
+ * Были три: «Что у меня сегодня», «Мои напоминания», «Отключить
+ * уведомления». Бот должен работать сам — рассылать заявки, задачи и
+ * напоминания, — а не быть вторым интерфейсом рядом с CRM. Отключить
+ * уведомления можно в своём профиле в CRM, там же, где Telegram
+ * подключали.
+ */
 
 /** Форма кода привязки: 9 случайных байт в base64url — ровно 12 символов */
 const LINK_CODE = /^[A-Za-z0-9_-]{12}$/;
@@ -139,25 +141,16 @@ export class TelegramBot implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    if (text === MENU.today) return this.today(chatId, user.id);
-    if (text === MENU.reminders) return this.reminders(chatId, user.id);
-    if (text === MENU.mute || text === MENU.unmute) {
-      const enabled = text === MENU.unmute;
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { telegramEnabled: enabled },
-      });
-      return this.say(
-        chatId,
-        enabled
-          ? 'Уведомления включены.'
-          : 'Уведомления отключены. Включить можно кнопкой ниже.',
-        true,
-        enabled,
-      );
-    }
-
-    return this.say(chatId, 'Выберите пункт меню ниже.', true, user.telegramEnabled);
+    /*
+     * Любое сообщение от подключённого сотрудника: бот только рассылает,
+     * отвечать ему нечем. Говорим об этом прямо, чтобы человек не ждал
+     * ответа и не искал кнопки, которых нет.
+     */
+    return this.say(
+      chatId,
+      `${user.fullName}, бот присылает вам новые заявки, задачи и напоминания. ` +
+        'Отвечать здесь не нужно — вся работа в CRM.',
+    );
   }
 
   /** /start с кодом — привязываем чат к сотруднику */
@@ -214,111 +207,28 @@ export class TelegramBot implements OnModuleInit, OnModuleDestroy {
     await this.say(
       chatId,
       `Здравствуйте, ${escapeHtml(user.fullName)}. Бот подключён к CRM «Архидея».\n\n` +
-        'Сюда будут приходить новые заявки, напоминания о звонках и изменения ' +
-        'по вашим заказам. Меню ниже — на случай, если понадобится посмотреть ' +
-        'дела за день.',
-      true,
+        'Сюда будут приходить новые заявки, задачи и напоминания о звонках. ' +
+        'Отвечать боту не нужно — вся работа в CRM.',
     );
   }
 
-  /** Что у сотрудника на сегодня: задачи, уборки и перезвоны */
-  private async today(chatId: string, userId: string): Promise<void> {
-    const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const to = new Date(from.getTime() + 86_400_000 - 1);
-
-    const [tasks, orders, callbacks] = await Promise.all([
-      this.prisma.task.findMany({
-        where: {
-          ...NOT_DELETED,
-          status: { not: 'DONE' },
-          deadline: { gte: from, lte: to },
-          assignments: { some: { userId } },
-        },
-        select: { title: true },
-        take: 20,
-      }),
-      this.prisma.order.findMany({
-        where: {
-          ...NOT_DELETED,
-          managerId: userId,
-          scheduledDate: { gte: from, lte: to },
-        },
-        select: { address: true, client: { select: { fullName: true } } },
-        take: 20,
-      }),
-      this.prisma.client.findMany({
-        where: { ...NOT_DELETED, managerId: userId, callbackAt: { gte: from, lte: to } },
-        select: { fullName: true, phone: true, callbackAt: true },
-        take: 20,
-      }),
-    ]);
-
-    const lines: string[] = [`<b>Сегодня, ${formatDate(from)}</b>`];
-    if (callbacks.length) {
-      lines.push('', '<b>Позвонить</b>');
-      for (const c of callbacks) {
-        lines.push(`• ${escapeHtml(c.fullName)} — ${escapeHtml(c.phone)}`);
-      }
-    }
-    if (orders.length) {
-      lines.push('', '<b>Уборки</b>');
-      for (const o of orders) {
-        lines.push(
-          `• ${escapeHtml(o.client?.fullName ?? 'Клиент')}${
-            o.address ? ` — ${escapeHtml(o.address)}` : ''
-          }`,
-        );
-      }
-    }
-    if (tasks.length) {
-      lines.push('', '<b>Задачи</b>');
-      for (const t of tasks) lines.push(`• ${escapeHtml(t.title)}`);
-    }
-    if (lines.length === 1) lines.push('', 'На сегодня дел нет.');
-
-    await this.say(chatId, lines.join('\n'), true);
-  }
-
-  /** Напоминания перезвонить, которые ещё не выполнены */
-  private async reminders(chatId: string, userId: string): Promise<void> {
-    const rows = await this.prisma.reminder.findMany({
-      where: { ...NOT_DELETED, assigneeId: userId, status: { in: ['PENDING', 'SENT'] } },
-      orderBy: { remindAt: 'asc' },
-      select: {
-        title: true,
-        remindAt: true,
-        client: { select: { fullName: true, phone: true } },
-      },
-      take: 20,
-    });
-    if (!rows.length) {
-      return this.say(chatId, 'Напоминаний нет.', true);
-    }
-    const lines = ['<b>Мои напоминания</b>', ''];
-    for (const r of rows) {
-      lines.push(
-        `• ${formatDate(r.remindAt)} — ${escapeHtml(r.client?.fullName ?? '')}` +
-          `${r.client?.phone ? ` (${escapeHtml(r.client.phone)})` : ''}\n  ${escapeHtml(r.title)}`,
-      );
-    }
-    await this.say(chatId, lines.join('\n'), true);
-  }
+  /*
+   * Сводки «что у меня сегодня» и «мои напоминания» убраны вместе с кнопками:
+   * они дублировали календарь и раздел напоминаний в CRM, а бот теперь только
+   * рассылает.
+   */
 
   /**
    * Ответ ботом — напрямую, минуя очередь.
    *
    * Очередь существует для деловых уведомлений: они не должны потеряться при
-   * перезапуске. Ответ на нажатие кнопки — другое дело: он нужен сейчас, а
-   * если не дошёл, человек нажмёт ещё раз. Плюс к ответу прикладывается меню,
-   * а очередь хранит только текст.
+   * перезапуске. Ответ на сообщение — другое дело: он нужен сейчас, а если не
+   * дошёл, человек напишет ещё раз.
+   *
+   * Клавиатуры нет: бот только рассылает, а кнопки под полем ввода делали его
+   * вторым интерфейсом рядом с CRM.
    */
-  private async say(
-    chatId: string,
-    text: string,
-    withMenu = false,
-    enabled = true,
-  ): Promise<void> {
+  private async say(chatId: string, text: string): Promise<void> {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
     try {
@@ -330,18 +240,8 @@ export class TelegramBot implements OnModuleInit, OnModuleDestroy {
           text,
           parse_mode: 'HTML',
           disable_web_page_preview: true,
-          ...(withMenu
-            ? {
-                reply_markup: {
-                  keyboard: [
-                    [{ text: MENU.today }],
-                    [{ text: MENU.reminders }],
-                    [{ text: enabled ? MENU.mute : MENU.unmute }],
-                  ],
-                  resize_keyboard: true,
-                },
-              }
-            : {}),
+          // снимаем клавиатуру, если она осталась с прошлых версий
+          reply_markup: { remove_keyboard: true },
         }),
         signal: AbortSignal.timeout(15_000),
       });

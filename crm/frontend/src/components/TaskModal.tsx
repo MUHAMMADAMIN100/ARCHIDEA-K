@@ -1,9 +1,8 @@
 import { useEffect, useState, type MutableRefObject } from 'react';
-import { Trash2, Users } from 'lucide-react';
+import { Check, Trash2, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { ClientPicker } from './ClientPicker';
-import { ScrollArea } from './ScrollArea';
 import { useAuth } from '../auth/AuthContext';
 import { userManagesTasks } from '../types';
 import { Modal } from './ui';
@@ -332,72 +331,80 @@ export function TaskModal({
             Исполнители * {assigneeIds.length > 0 && `· выбрано ${assigneeIds.length}`}
           </label>
           {/*
-            Сотрудников больше, чем помещается: нижняя строка растворяется у
-            края, пока список не докручен до конца, — видно, что там есть ещё,
-            и видно, когда закончилось.
+            Исполнители — плитками, а не списком с прокруткой.
+            На телефоне список внутри окна прокручивался отдельно от самого
+            окна: попасть пальцем по нужной строке было тяжело, а половина
+            сотрудников пряталась за краем. Плитки видны все сразу, цель под
+            палец крупная, а должность убрана — она занимала вторую строку и
+            рвала вёрстку («Управляющий отделом продаж и клиентского
+            сервиса»), ничего при этом не добавляя: имена в компании не
+            повторяются.
           */}
-          <ScrollArea
-            axis="y"
-            className="overflow-hidden rounded-xl border border-navy-200"
-            innerClassName="max-h-52 space-y-1 p-1.5"
-            label="Исполнители"
-          >
-            {options.length === 0 && (
-              <div className="px-2 py-3 text-sm text-navy-600">
-                Загрузка сотрудников…
-              </div>
-            )}
-            {options.map((p) => {
-              const on = assigneeIds.includes(p.id);
-              const assignment = task?.assignments.find((a) => a.userId === p.id);
-              return (
-                <div
-                  key={p.id}
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition ${
-                    on ? 'bg-navy-50' : 'hover:bg-navy-50/60'
-                  }`}
-                >
-                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => toggleAssignee(p.id)}
-                      className="h-4 w-4 shrink-0 accent-navy-500"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-navy-900">
+          {options.length === 0 ? (
+            <div className="rounded-xl border border-navy-200 px-3 py-3 text-sm text-navy-600">
+              Загрузка сотрудников…
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {options.map((p) => {
+                const on = assigneeIds.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => toggleAssignee(p.id)}
+                    className={`press inline-flex min-h-[42px] items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                      on
+                        ? 'border-brand-500 bg-brand-50 text-brand-700'
+                        : 'border-navy-200 bg-white text-navy-700 hover:bg-navy-50'
+                    }`}
+                  >
+                    {on && <Check className="h-4 w-4 shrink-0" />}
+                    {p.fullName}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* статусы исполнителей — отдельной строкой, только при правке */}
+          {mode === 'edit' && (
+            <div className="mt-2 space-y-1.5">
+              {options
+                .filter((p) => assigneeIds.includes(p.id))
+                .map((p) => {
+                  const assignment = task?.assignments.find(
+                    (a) => a.userId === p.id,
+                  );
+                  if (!assignment) return null;
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-navy-50 px-2.5 py-1.5"
+                    >
+                      <span className="min-w-0 truncate text-sm text-navy-800">
                         {p.fullName}
                       </span>
-                      {p.position && (
-                        <span className="block truncate text-xs text-navy-600">
-                          {p.position}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-
-                  {/* статус исполнителя — только в режиме редактирования */}
-                  {mode === 'edit' && assignment && (
-                    <select
-                      value={assignment.status}
-                      onChange={(e) =>
-                        setAssigneeStatus(p.id, e.target.value as TaskStatus)
-                      }
-                      className={`shrink-0 rounded-lg border-0 px-2 py-1 text-xs font-semibold ${
-                        TASK_STATUS_COLOR[assignment.status]
-                      }`}
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {TASK_STATUS_LABEL[s]}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              );
-            })}
-          </ScrollArea>
+                      <select
+                        value={assignment.status}
+                        onChange={(e) =>
+                          setAssigneeStatus(p.id, e.target.value as TaskStatus)
+                        }
+                        className={`shrink-0 rounded-lg border-0 px-2 py-1 text-xs font-semibold ${
+                          TASK_STATUS_COLOR[assignment.status]
+                        }`}
+                      >
+                        {STATUSES.map((st) => (
+                          <option key={st} value={st}>
+                            {TASK_STATUS_LABEL[st]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
           {mode === 'edit' && (
             <p className="mt-1.5 flex items-center gap-1 text-xs text-navy-600">
               <Users className="h-3 w-3" />
