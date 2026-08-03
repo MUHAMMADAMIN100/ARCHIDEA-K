@@ -538,8 +538,9 @@ export class OrdersService {
     });
 
     await this.notifyPreferences(order, 'создан');
-    // пожелания из новой заявки тоже запоминаем в карточке клиента
+    // пожелания и комментарий из новой заявки запоминаем в карточке клиента
     await this.rememberPreferences(order.clientId, order.preferences);
+    await this.rememberComment(order.clientId, order.comment);
     return order;
   }
 
@@ -792,6 +793,14 @@ export class OrdersService {
       await this.rememberPreferences(after.clientId, after.preferences);
     }
 
+    // комментарий клиента — в заметки карточки, если его меняли
+    if (
+      dto.comment !== undefined &&
+      (before.comment ?? '') !== (after.comment ?? '')
+    ) {
+      await this.rememberComment(after.clientId, after.comment);
+    }
+
     return after;
   }
 
@@ -807,23 +816,49 @@ export class OrdersService {
    * Повтор одного и того же текста не добавляем — иначе после третьей
    * уборки в карточке лежала бы одна фраза трижды.
    */
-  private async rememberPreferences(
+  private rememberPreferences(clientId: string, text: string | null) {
+    return this.appendToClient(clientId, 'preferences', text);
+  }
+
+  /**
+   * Комментарий клиента из заказа запоминается в заметках карточки.
+   *
+   * «Есть кот», «домофон не работает» — сказанное при обращении жило только
+   * внутри одного заказа: при следующей уборке всё выяснялось заново.
+   * Кладём именно в заметки, а не в предпочтения: предпочтения показываются
+   * менеджеру при оформлении КАЖДОГО заказа, и разовые фразы вроде «сегодня
+   * буду после трёх» там только мешали бы (решение владельца).
+   */
+  private rememberComment(clientId: string, text: string | null) {
+    return this.appendToClient(clientId, 'notes', text);
+  }
+
+  /**
+   * Дописать строку в текстовое поле карточки клиента.
+   *
+   * Именно дописать, а не заменить: у постоянного клиента там уже может быть
+   * записанное раньше, и свежий заказ не должен его стирать. Повтор одной и
+   * той же фразы не добавляем — иначе после третьей уборки она лежала бы
+   * трижды.
+   */
+  private async appendToClient(
     clientId: string,
+    field: 'preferences' | 'notes',
     text: string | null,
   ): Promise<void> {
     const fresh = text?.trim();
     if (!fresh) return;
     const client = await this.prisma.client.findUnique({
       where: { id: clientId },
-      select: { preferences: true },
+      select: { preferences: true, notes: true },
     });
-    const saved = client?.preferences?.trim() ?? '';
+    const saved = (client?.[field] ?? '').trim();
     if (saved === fresh) return;
     if (saved.split('\n').some((line) => line.trim() === fresh)) return;
     const next = saved ? `${saved}\n${fresh}` : fresh;
     await this.prisma.client.update({
       where: { id: clientId },
-      data: { preferences: next.slice(0, 2000) },
+      data: { [field]: next.slice(0, 2000) },
     });
   }
 

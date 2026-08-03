@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { PhoneCall, Pencil, Trash2 } from 'lucide-react';
+import { PhoneCall, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
@@ -33,6 +33,8 @@ export function Reminders() {
   const [period, setPeriod] = useState<Period>(() => rangeOf('all'));
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Reminder | null>(null);
+  // окно нового напоминания — клиента в нём выбирают сами
+  const [showAdd, setShowAdd] = useState(false);
 
   const query = new URLSearchParams();
   if (period.from) query.set('from', period.from);
@@ -216,6 +218,17 @@ export function Reminders() {
     <div className="animate-page-in">
       <PageHeader
         title="Напоминания"
+        /*
+          Раньше напоминание можно было поставить только из карточки клиента:
+          в самом разделе кнопки не было вовсе, и «поставить перезвон» значило
+          сначала найти клиента, открыть карточку и лишь потом нажать.
+        */
+        action={
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Напоминание
+          </button>
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -248,6 +261,16 @@ export function Reminders() {
         error={error}
         onRetry={reload}
         emptyText={emptyTextByTab[tab]}
+      />
+
+      {/* Новое напоминание: клиента выбирают прямо в окне */}
+      <ReminderModal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSaved={() => {
+          setShowAdd(false);
+          reload();
+        }}
       />
 
       <ReminderModal

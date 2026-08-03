@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
+import { ClientPicker } from './ClientPicker';
 import { Modal } from './ui';
 import { useToast } from './Toast';
 import { UserPicker } from './common';
@@ -74,6 +75,15 @@ export function ReminderModal({
   const [customAt, setCustomAt] = useState('');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /*
+   * Клиент, выбранный прямо в окне.
+   *
+   * Из карточки клиента он известен и приходит пропсом. Из раздела
+   * «Напоминания» напоминание ставят «в воздухе» — там его надо выбрать:
+   * без телефона под рукой напоминание перезвонить бесполезно.
+   */
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [pickedName, setPickedName] = useState<string | null>(null);
 
   // Компонент может оставаться смонтированным между открытиями (карточка
   // клиента/заказа переиспользует его) — поэтому поля заполняем заново
@@ -86,21 +96,27 @@ export function ReminderModal({
     setIntervalDays(null);
     setCustomAt(reminder ? toDateTimeInput(reminder.remindAt) : '');
     setAssigneeId(reminder?.assigneeId ?? null);
+    setPickedId(null);
+    setPickedName(null);
   }, [open, reminder]);
 
   // Если имя клиента не передали явно — подтягиваем карточку клиента,
   // чтобы менеджер видел, кому именно ставит напоминание.
-  const targetClientId = reminder?.clientId ?? clientId;
+  const targetClientId = reminder?.clientId ?? clientId ?? pickedId ?? undefined;
   const { data: fetchedClient } = useFetch<Client>(
     open && !clientName && targetClientId ? `/clients/${targetClientId}` : null,
   );
-  const displayName = clientName ?? fetchedClient?.fullName ?? '…';
+  const displayName =
+    clientName ?? pickedName ?? fetchedClient?.fullName ?? 'не выбран';
+  /** Клиента выбирают в самом окне только там, где он неизвестен */
+  const needsPick = !isEdit && !clientId;
 
   // «2026-08-07T09:00» → части для календаря и списка времени
   const customDate = customAt.slice(0, 10);
   const customTime = customAt.slice(11, 16);
 
   const canSubmit =
+    (!needsPick || !!pickedId) &&
     title.trim().length > 0 &&
     (mode === 'interval' ? !!intervalDays : !!customAt) &&
     !saving;
@@ -134,11 +150,12 @@ export function ReminderModal({
         saved = (await api.patch<Reminder>(`/reminders/${reminder.id}`, payload))
           .data;
       } else {
-        if (!clientId) throw new Error('Не выбран клиент для напоминания');
+        const target = clientId ?? pickedId;
+        if (!target) throw new Error('Не выбран клиент для напоминания');
         saved = (
           await api.post<Reminder>('/reminders', {
             ...payload,
-            clientId,
+            clientId: target,
             orderId: orderId ?? undefined,
           })
         ).data;
@@ -156,9 +173,23 @@ export function ReminderModal({
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? 'Напоминание' : 'Напомнить о звонке'}>
       <div className="space-y-3">
+        {needsPick ? (
+          <div>
+            <label className="label">Клиент *</label>
+            <ClientPicker
+              value={pickedId}
+              onChange={(id, c) => {
+                setPickedId(id);
+                setPickedName(c?.fullName ?? null);
+              }}
+              placeholder="Найдите клиента по имени или телефону"
+            />
+          </div>
+        ) : (
         <div className="rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2 text-sm text-navy-600">
           Клиент: <span className="font-medium text-navy-900">{displayName}</span>
         </div>
+        )}
 
         <div>
           <label className="label">Заголовок *</label>
