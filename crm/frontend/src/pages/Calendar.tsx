@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Phone,
+  BellRing,
   Plus,
   Inbox,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ import type {
   Callback,
   FunnelStage,
   Order,
+  Reminder,
   Task,
   TaskType,
 } from '../types';
@@ -389,6 +391,16 @@ export function Calendar() {
   const callbacksQuery = useFetch<Callback[]>('/clients/callbacks', {
     pollMs: 60000,
   });
+
+  /*
+   * Напоминания из одноимённого раздела — в календаре их не было вовсе.
+   * Поставили напоминание, а планируете день по календарю — и оно не
+   * попадалось на глаза до самого срока. Берём незакрытые: выполненные
+   * в плане дня уже не нужны.
+   */
+  const remindersQuery = useFetch<Reminder[]>('/reminders', {
+    pollMs: 60000,
+  });
   // в модалке храним ТОЛЬКО id — саму задачу берём из свежих данных,
   // иначе статусы, изменённые внутри модалки, не были бы видны
   const [modal, setModal] = useState<
@@ -440,6 +452,19 @@ export function Calendar() {
     }
     return map;
   }, [callbacksQuery.data]);
+
+  const remindersByDay = useMemo(() => {
+    const map = new Map<string, Reminder[]>();
+    for (const r of remindersQuery.data ?? []) {
+      // выполненные и отменённые в плане дня не нужны
+      if (!r.remindAt || r.status === 'DONE' || r.status === 'CANCELLED') continue;
+      const key = dayKey(new Date(r.remindAt));
+      const list = map.get(key);
+      if (list) list.push(r);
+      else map.set(key, [r]);
+    }
+    return map;
+  }, [remindersQuery.data]);
 
   // заказы по дням уборки (с учётом фильтра этапа)
   const { ordersByDay, ordersUndated } = useMemo(() => {
@@ -801,6 +826,7 @@ export function Calendar() {
               const count =
                 (ordersByDay.get(key)?.length ?? 0) +
                 (byDay.get(key)?.length ?? 0) +
+                (remindersByDay.get(key)?.length ?? 0) +
                 calls;
               const dots = dayDots(key);
               return (
@@ -960,11 +986,18 @@ export function Calendar() {
                     {...provided.droppableProps}
                     onClick={(e) => {
                       /*
-                       * Клик по пустому месту клетки раскрывает день целиком.
-                       * По самим карточкам клик обрабатывается отдельно и
-                       * сюда не всплывает — иначе открывались бы оба окна.
+                       * Нажатие по клетке раскрывает день целиком.
+                       *
+                       * Раньше срабатывало только по самой рамке: условие
+                       * сравнивало цель клика с клеткой, а между карточками,
+                       * под ними и на точках срочности лежат вложенные
+                       * элементы — по ним не открывалось ничего. Теперь
+                       * открываем везде, кроме самих дел: у них свой клик и
+                       * они останавливают всплытие.
                        */
-                      if (e.target === e.currentTarget) pickDay(key);
+                      const el = e.target as HTMLElement;
+                      if (el.closest('[data-cal-item]')) return;
+                      pickDay(key);
                     }}
                     className={`group flex min-w-0 cursor-pointer flex-col rounded-xl border p-1.5 transition-colors sm:p-2 ${cellMin} ${
                       isToday
@@ -1011,7 +1044,11 @@ export function Calendar() {
                           </span>
                         )}
                         <button
-                          onClick={() => setModal({ mode: 'create', date: key })}
+                          data-cal-item
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModal({ mode: 'create', date: key });
+                          }}
                           className={`press inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-navy-600 transition hover:bg-navy-100 hover:text-navy-800 sm:px-1.5 ${
                             isTouch ? '' : 'opacity-0 group-hover:opacity-100'
                           }`}
@@ -1023,11 +1060,40 @@ export function Calendar() {
                     </div>
 
                     <div className="flex-1 space-y-1.5">
+                      {/*
+                        Напоминания — фиолетовые, чтобы не путались с
+                        оранжевыми перезвонами: перезвон живёт в карточке
+                        клиента, напоминание — в разделе «Напоминания», и
+                        закрывают их в разных местах.
+                      */}
+                      {(remindersByDay.get(key) ?? []).map((r) => (
+                        <div
+                          key={r.id}
+                          data-cal-item
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(
+                              r.clientId ? `/clients/${r.clientId}` : '/reminders',
+                            );
+                          }}
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-left shadow-card transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift"
+                          title={`Напоминание: ${r.title}`}
+                        >
+                          <BellRing className="h-3 w-3 shrink-0 text-violet-600" />
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-800">
+                            {r.client?.fullName ?? r.title}
+                          </span>
+                        </div>
+                      ))}
                       {/* перезвоны первыми: у них назначен час, а не весь день */}
                       {(callbacksByDay.get(key) ?? []).map((c) => (
                         <div
                           key={c.id}
-                          onClick={() => navigate(`/clients/${c.id}`)}
+                          data-cal-item
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/clients/${c.id}`);
+                          }}
                           className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1.5 text-left shadow-card transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift"
                           title={`Позвонить ${c.fullName}`}
                         >
@@ -1040,7 +1106,11 @@ export function Calendar() {
                       {(ordersByDay.get(key) ?? []).map((o) => (
                           <div
                             key={o.id}
-                            onClick={() => setOpenOrder(o)}
+                            data-cal-item
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOrder(o);
+                            }}
                             className="press cursor-pointer"
                           >
                             <OrderCard order={o} compact={view === 'month'} />
@@ -1058,7 +1128,9 @@ export function Calendar() {
                               ref={p.innerRef}
                               {...p.draggableProps}
                               {...p.dragHandleProps}
-                              onClick={() => {
+                              data-cal-item
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (draggingRef.current || isTemp(t.id)) return;
                                 setModal({ mode: 'edit', id: t.id });
                               }}
@@ -1098,12 +1170,35 @@ export function Calendar() {
         >
           {(ordersByDay.get(selectedDay) ?? []).length === 0 &&
           (byDay.get(selectedDay) ?? []).length === 0 &&
-          (callbacksByDay.get(selectedDay) ?? []).length === 0 ? (
+          (callbacksByDay.get(selectedDay) ?? []).length === 0 &&
+          (remindersByDay.get(selectedDay) ?? []).length === 0 ? (
             <p className="rounded-lg border border-dashed border-navy-200 px-4 py-8 text-center text-sm text-navy-600">
               На этот день дел нет
             </p>
           ) : (
             <div className="space-y-1.5">
+              {(remindersByDay.get(selectedDay) ?? []).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    setDayOpen(false);
+                    navigate(r.clientId ? `/clients/${r.clientId}` : '/reminders');
+                  }}
+                  className="press flex w-full items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-left"
+                >
+                  <BellRing className="h-4 w-4 shrink-0 text-violet-600" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-violet-900">
+                      {r.title}
+                    </span>
+                    <span className="block truncate text-xs text-violet-700">
+                      {r.client?.fullName ?? 'Напоминание'}
+                      {r.client?.phone ? ` · ${r.client.phone}` : ''}
+                    </span>
+                  </span>
+                </button>
+              ))}
               {(callbacksByDay.get(selectedDay) ?? []).map((c) => (
                 <CallbackRow
                   key={c.id}

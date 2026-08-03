@@ -186,8 +186,19 @@ function ServiceCard({ type }: { type: CleaningType }) {
           ))}
         </ul>
 
+        {/*
+          Кнопка не просто прокручивает к калькулятору, а сообщает ему, какую
+          услугу выбрали. Раньше человек нажимал «Рассчитать» у «Уборки после
+          ремонта», а в калькуляторе стояла генеральная — и он считал не то,
+          что смотрел.
+        */}
         <button
-          onClick={() => scrollToId('request')}
+          onClick={() => {
+            window.dispatchEvent(
+              new CustomEvent('archidea:service', { detail: type.id }),
+            );
+            scrollToId('request');
+          }}
           className={`mt-7 w-full ${
             type.popular ? 'btn-primary' : 'btn-outline-dark'
           }`}

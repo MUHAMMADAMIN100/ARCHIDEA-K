@@ -35,6 +35,25 @@ export function QuizForm() {
     flushPendingOrders();
   }, []);
 
+  /*
+   * Услуга, выбранная в каталоге.
+   *
+   * Кнопка «Рассчитать» у карточки услуги сообщает сюда её id, и калькулятор
+   * открывается уже с ней. Раньше кнопка только прокручивала страницу, и
+   * человек, смотревший «Уборку после ремонта», считал генеральную.
+   * Заодно возвращаем на первый шаг: иначе выбор услуги оказался бы позади.
+   */
+  useEffect(() => {
+    const onPick = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (!id) return;
+      setCalc((c) => (c.cleaningTypeId === id ? c : { ...c, cleaningTypeId: id }));
+      setStep(0);
+    };
+    window.addEventListener('archidea:service', onPick);
+    return () => window.removeEventListener('archidea:service', onPick);
+  }, []);
+
   const pricing = usePricing();
   const [calc, setCalc] = useState<CalculatorState>({
     area: DEFAULTS.area,

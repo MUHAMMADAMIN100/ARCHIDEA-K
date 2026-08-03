@@ -13,7 +13,7 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Skeleton, PageHeader, ErrorState } from '../components/ui';
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
-import { formatPrice, formatVolume } from '../lib/labels';
+import { formatDate, formatPrice, formatVolume } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import type { Order, Task } from '../types';
 
@@ -216,8 +216,14 @@ export function Dashboard() {
                   <div className="text-sm font-semibold text-navy-800">
                     {o.client?.fullName}
                   </div>
+                  {/*
+                    Дата обращения — по ней видно, сколько заявка ждёт ответа.
+                    Раньше в строке были только объём и телефон: вчерашняя
+                    заявка ничем не отличалась от недельной.
+                  */}
                   <div className="text-xs text-navy-600">
-                    {formatVolume(o)} · {formatPhone(o.client?.phone)}
+                    {formatDate(o.createdAt)} · {formatVolume(o)} ·{' '}
+                    {formatPhone(o.client?.phone)}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-navy-700">
