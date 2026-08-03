@@ -146,7 +146,15 @@ export default async function handler(req, res) {
     let message = null;
     if (!upstream.ok) {
       try {
-        const body = await upstream.clone().json();
+        // сырой текст: ответ мог прийти и не в JSON (страница ошибки прокси)
+        const text = await upstream.clone().text();
+        let body = null;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          message = text.slice(0, 200) || null;
+        }
+        if (!body) throw new Error('not json');
         /*
          * Проверка полей отвечает МАССИВОМ сообщений («phone must be…»), а
          * ручные отказы — строкой. Раньше массив молча превращался в null,
