@@ -44,22 +44,44 @@ function originAllowed(req) {
   return extra.includes(srcHost);
 }
 
-/** IP посетителя (Vercel кладёт реальный адрес в x-forwarded-for) */
+/**
+ * Адрес посетителя.
+ *
+ * Возвращает null, если настоящий адрес определить нечем. Это важно:
+ * подставлять сюда «unknown» или адрес прокси нельзя — тогда все посетители
+ * попадают в ОДИН счётчик, и четвёртая заявка с сайта за десять минут
+ * отбивалась у всех подряд. Именно так сайт и переставал принимать заказы.
+ */
 function clientIp(req) {
+  // Vercel кладёт проверенный адрес отдельно — ему доверяем в первую очередь
+  const vercel = req.headers['x-vercel-forwarded-for'];
   const fwd = req.headers['x-forwarded-for'];
-  const raw = Array.isArray(fwd) ? fwd[0] : fwd;
-  return (raw ? raw.split(',')[0].trim() : '') || req.socket?.remoteAddress || 'unknown';
+  const real = req.headers['x-real-ip'];
+  const first = (v) => {
+    const raw = Array.isArray(v) ? v[0] : v;
+    const value = (raw || '').split(',')[0].trim();
+    return value || null;
+  };
+  return first(vercel) || first(fwd) || first(real);
 }
 
 /**
  * Лёгкий лимит по IP (best-effort, в памяти тёплого инстанса): не более
- * WINDOW_MAX заявок за WINDOW_MS. Основной барьер — лимит на самом бэкенде,
- * это дополнительный рубеж от простого спама.
+ * WINDOW_MAX заявок за WINDOW_MS с ОДНОГО адреса.
+ *
+ * Порог поднят с четырёх до пятнадцати. Четыре — это меньше, чем бывает у
+ * живого сайта: из одного офиса или из одной квартиры заявки идут с общего
+ * адреса, а менеджер ещё и проверяет форму сам. Спам этим лимитом всё равно
+ * не остановить — от него защищают ключ доступа, проверка источника,
+ * ограничитель самого сервера и защита от повторной заявки по телефону.
+ * Задача здесь скромнее: не дать одному человеку случайно послать сотню.
  */
 const WINDOW_MS = 10 * 60 * 1000;
-const WINDOW_MAX = 4;
+const WINDOW_MAX = 15;
 const hits = new Map();
 function rateLimited(ip) {
+  // адрес неизвестен — не ограничиваем: общий счётчик отбивал бы всех сразу
+  if (!ip) return false;
   const now = Date.now();
   const arr = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
   arr.push(now);
