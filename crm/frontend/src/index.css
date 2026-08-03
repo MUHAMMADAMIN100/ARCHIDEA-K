@@ -14,6 +14,26 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Свой глазок у поля пароля один.
+   *
+   * Edge и Chrome рисуют СВОЙ значок «показать пароль» прямо в поле, и рядом
+   * с нашей кнопкой их получалось два: непонятно, какой из них нажимать, и
+   * они наезжали друг на друга. Системный убираем — наш умеет то же самое и
+   * выглядит одинаково во всех браузерах.
+   */
+  input[type='password']::-ms-reveal,
+  input[type='password']::-ms-clear,
+  input[type='password']::-webkit-credentials-auto-fill-button,
+  input[type='password']::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+    visibility: hidden;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+    margin: 0;
+  }
+
   body {
     /*
      * Фон страницы — светло-серый, карточки на нём белые.
