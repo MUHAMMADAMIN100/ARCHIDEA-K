@@ -52,7 +52,21 @@ async function sendToCrm(
   order: OrderPayload,
   honeypot: string,
 ): Promise<SendResult> {
-  const payload = JSON.stringify({ ...order, company: honeypot });
+  /*
+   * Пустой запасной номер не отправляем.
+   *
+   * Поле заполнено кодом страны («+992 ») с самого начала: если посетитель
+   * его не трогал, на сервер уходила эта строка, проверка браковала её — и
+   * заявка целиком получала отказ, хотя запасной номер необязателен.
+   * Убираем поле, когда цифр после кода страны нет.
+   */
+  const extraDigits = (order.contact?.phone2 ?? '')
+    .replace(/\D/g, '')
+    .replace(/^992/, '');
+  const contact = extraDigits
+    ? order.contact
+    : { ...order.contact, phone2: undefined };
+  const payload = JSON.stringify({ ...order, contact, company: honeypot });
 
   // dev: прямой вызов бэкенда с локальным ключом
   const devUrl = import.meta.env.VITE_CRM_API_URL as string | undefined;
