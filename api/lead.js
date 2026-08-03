@@ -147,7 +147,13 @@ export default async function handler(req, res) {
     if (!upstream.ok) {
       try {
         const body = await upstream.clone().json();
-        message = typeof body?.message === 'string' ? body.message : null;
+        /*
+         * Проверка полей отвечает МАССИВОМ сообщений («phone must be…»), а
+         * ручные отказы — строкой. Раньше массив молча превращался в null,
+         * и на экране оставалось пустое «связь прервалась».
+         */
+        const raw = body?.message ?? body?.error ?? null;
+        message = Array.isArray(raw) ? raw.join('; ') : typeof raw === 'string' ? raw : null;
       } catch {
         message = null;
       }
