@@ -44,55 +44,19 @@ function originAllowed(req) {
   return extra.includes(srcHost);
 }
 
-/**
- * Адрес посетителя.
+/*
+ * Счётчика заявок здесь больше нет.
  *
- * Возвращает null, если настоящий адрес определить нечем. Это важно:
- * подставлять сюда «unknown» или адрес прокси нельзя — тогда все посетители
- * попадают в ОДИН счётчик, и четвёртая заявка с сайта за десять минут
- * отбивалась у всех подряд. Именно так сайт и переставал принимать заказы.
- */
-function clientIp(req) {
-  // Vercel кладёт проверенный адрес отдельно — ему доверяем в первую очередь
-  const vercel = req.headers['x-vercel-forwarded-for'];
-  const fwd = req.headers['x-forwarded-for'];
-  const real = req.headers['x-real-ip'];
-  const first = (v) => {
-    const raw = Array.isArray(v) ? v[0] : v;
-    const value = (raw || '').split(',')[0].trim();
-    return value || null;
-  };
-  return first(vercel) || first(fwd) || first(real);
-}
-
-/**
- * Лёгкий лимит по IP (best-effort, в памяти тёплого инстанса): не более
- * WINDOW_MAX заявок за WINDOW_MS с ОДНОГО адреса.
+ * Он существовал «на всякий случай», а на деле только мешал: сперва считал
+ * всех посетителей вместе и отбивал заявки у живых клиентов, потом остался
+ * лишним рубежом перед четырьмя настоящими. От спама сайт защищают:
+ * ключ доступа (его нет ни в одной странице), проверка источника запроса,
+ * ловушка для ботов в самой форме, ограничитель сервера и запрет повторной
+ * заявки с одного телефона чаще раза в 20 секунд.
  *
- * Порог поднят с четырёх до пятнадцати. Четыре — это меньше, чем бывает у
- * живого сайта: из одного офиса или из одной квартиры заявки идут с общего
- * адреса, а менеджер ещё и проверяет форму сам. Спам этим лимитом всё равно
- * не остановить — от него защищают ключ доступа, проверка источника,
- * ограничитель самого сервера и защита от повторной заявки по телефону.
- * Задача здесь скромнее: не дать одному человеку случайно послать сотню.
+ * Потерянный заказ дороже, чем гипотетический спам, который всё равно
+ * останавливают перечисленные выше.
  */
-const WINDOW_MS = 10 * 60 * 1000;
-const WINDOW_MAX = 15;
-const hits = new Map();
-function rateLimited(ip) {
-  // адрес неизвестен — не ограничиваем: общий счётчик отбивал бы всех сразу
-  if (!ip) return false;
-  const now = Date.now();
-  const arr = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
-  arr.push(now);
-  hits.set(ip, arr);
-  if (hits.size > 2000) {
-    for (const [k, v] of hits) {
-      if (!v.length || now - v[v.length - 1] > WINDOW_MS) hits.delete(k);
-    }
-  }
-  return arr.length > WINDOW_MAX;
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -102,10 +66,6 @@ export default async function handler(req, res) {
   if (!originAllowed(req)) {
     return res.status(403).json({ error: 'Forbidden origin' });
   }
-  if (rateLimited(clientIp(req))) {
-    return res.status(429).json({ error: 'Too many requests' });
-  }
-
   const apiUrl = process.env.CRM_API_URL;
   const apiKey = process.env.CRM_INTAKE_KEY;
   if (!apiUrl || !apiKey) {

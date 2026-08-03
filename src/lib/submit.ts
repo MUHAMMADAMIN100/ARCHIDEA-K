@@ -37,6 +37,17 @@ export interface SubmitResult {
  */
 type SendResult = true | false | 'rejected' | null;
 
+/**
+ * Последняя причина отказа от сервера — её показывает экран «не удалось».
+ * Без неё человек видел «связь прервалась» даже тогда, когда не заполнил
+ * адрес: подсказать, что именно поправить, было нечем.
+ */
+let lastMessage: string | null = null;
+
+export function lastSubmitMessage(): string | null {
+  return lastMessage;
+}
+
 async function sendToCrm(
   order: OrderPayload,
   honeypot: string,
@@ -73,17 +84,30 @@ async function sendToCrm(
      * (429). Сервер ответил и объяснил причину — повторять нечего.
      * Всё остальное (502, 504, обрыв) — временная неполадка, повторим.
      */
-    if (res.status === 400 || res.status === 403 || res.status === 429) {
-      return 'rejected';
-    }
+    let text: string | null = null;
     try {
       const body = await res.json();
+      const raw = body?.message;
+      text = typeof raw === 'string' ? raw : null;
+      /*
+       * «Слишком частые заявки» — это НЕ отказ. Сервер защищается от двойной
+       * отправки одного и того же обращения: первая заявка уже принята, и
+       * пугать человека экраном «связь прервалась» нельзя — он решит, что
+       * заказа нет, и уйдёт.
+       */
+      if (text && /част/i.test(text)) return true;
       if (typeof body?.reason === 'string' && body.reason.startsWith('upstream_4')) {
+        lastMessage = text;
         return 'rejected';
       }
     } catch {
       /* тело не разобрать — считаем сбоем связи и повторим */
     }
+    if (res.status === 400 || res.status === 403) {
+      lastMessage = text;
+      return 'rejected';
+    }
+    if (res.status === 429) return true; // тот же случай: заявка уже ушла
     return false;
   } catch (e) {
     console.warn('[CRM] Не удалось отправить заявку в CRM:', e);

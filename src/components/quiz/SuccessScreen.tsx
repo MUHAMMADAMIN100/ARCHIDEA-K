@@ -1,6 +1,7 @@
 import { IconCheck, IconPhone } from '../ui/icons';
 import { formatPrice } from '../../lib/format';
 import { COMPANY } from '../../config/company';
+import { lastSubmitMessage } from '../../lib/submit';
 
 interface Props {
   total: number;
@@ -71,6 +72,7 @@ export function SuccessScreen({ total, name, phone, delivered = null }: Props) {
  * восстановится, — поэтому предлагаем позвонить, а не «отправить ещё раз».
  */
 function FailureScreen({ name }: { name: string }) {
+  const reason = lastSubmitMessage();
   return (
     <div className="card-light animate-pop-in mx-auto max-w-xl p-8 text-center text-navy-900 sm:p-12">
       <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
@@ -82,10 +84,16 @@ function FailureScreen({ name }: { name: string }) {
       <h3 className="mt-6 text-2xl font-bold tracking-[-0.025em] sm:text-3xl">
         Не удалось отправить заявку
       </h3>
+      {/*
+        Причина — словами сервера, если она есть.
+        «Связь прервалась» врала там, где на самом деле не хватало адреса
+        или даты: человек звонил и жаловался на сайт, хотя достаточно было
+        дописать поле.
+      */}
       <p className="mt-3 text-[0.9375rem] leading-[1.65] text-navy-600">
-        {name ? `${name}, с` : 'С'}вязь с нашей системой прервалась, и заявка
-        не дошла. Позвоните или напишите — примем заказ прямо сейчас и
-        посчитаем стоимость вместе с вами.
+        {reason
+          ? `${name ? `${name}, ` : ''}${reason}. Или позвоните — примем заказ прямо сейчас.`
+          : `${name ? `${name}, с` : 'С'}вязь с нашей системой прервалась, и заявка не дошла. Позвоните или напишите — примем заказ прямо сейчас и посчитаем стоимость вместе с вами.`}
       </p>
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
