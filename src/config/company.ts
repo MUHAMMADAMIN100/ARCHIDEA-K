@@ -18,8 +18,24 @@ export const COMPANY = {
   phones: PHONES,
   email: 'info@arhydeya.tj',
   whatsapp: 'https://wa.me/992303888777',
-  telegram: 'https://t.me/arhydeya',
-  instagram: 'https://instagram.com/arhydeya',
+  telegram: 'https://t.me/archideacleaning',
+  telegramHandle: '@archideacleaning',
+  /** Профиль Instagram */
+  instagram: 'https://www.instagram.com/archidea.cleaning/',
+  /** Актуальное «Отзывы» — для футера и блока отзывов на лендинге */
+  instagramReviews:
+    'https://www.instagram.com/stories/highlights/18039382238536790/',
   workingHours: 'Ежедневно с 8:00 до 22:00',
   address: 'г. Душанбе',
 };
+
+/** Районы выезда по Душанбе — для блока локальности */
+export const DISTRICTS = [
+  'Сино',
+  'Фирдавси',
+  'И. Сомони',
+  'Шохмансур',
+  'Рудаки',
+  'Вахдат',
+  'Гиссар',
+] as const;

@@ -15,8 +15,8 @@ export function SpecificsStep({ state, onChange, minDate }: Props) {
     onChange({ ...state, [key]: value });
 
   return (
-    <div className="space-y-7">
-      <div className="grid gap-4 sm:grid-cols-2">
+    <div className="quiz-stack space-y-5 sm:space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
         <div>
           <FieldLabel required>Желаемая дата</FieldLabel>
           <DatePickerField

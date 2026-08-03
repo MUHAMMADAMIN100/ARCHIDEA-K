@@ -128,10 +128,10 @@ export function TimePickerField({ value, onChange, invalid }: Props) {
             setOpen(false);
           }
         }}
-        className={`w-full rounded-2xl border bg-white px-4 py-3 pr-11 tabular-nums text-navy-900 placeholder:text-navy-300 transition-colors focus:outline-none focus:ring-2 ${
+        className={`quiz-input w-full rounded-lg border bg-white px-4 py-3 pr-11 tabular-nums placeholder:text-navy-300 transition-colors duration-120 ease-out focus:outline-none focus:ring-2 ${
           invalid
             ? 'border-red-400 ring-red-100'
-            : 'border-navy-200 focus:border-navy-600 focus:ring-navy-200'
+            : 'border-navy-200 focus:border-brand-400 focus:ring-brand-100'
         }`}
       />
       <button
@@ -158,7 +158,7 @@ export function TimePickerField({ value, onChange, invalid }: Props) {
       {open && (
         <div
           ref={listRef}
-          className="animate-pop-in absolute left-0 right-0 z-40 mt-2 max-h-60 origin-top overflow-y-auto overscroll-contain rounded-2xl border border-navy-100 bg-white py-1 shadow-pop"
+          className="animate-pop-in absolute left-0 right-0 z-40 mt-2 max-h-60 origin-top overflow-y-auto overscroll-contain rounded-xl border border-navy-100 bg-white py-1 shadow-pop"
         >
           {OPTIONS.map((t) => (
             <button
@@ -170,10 +170,10 @@ export function TimePickerField({ value, onChange, invalid }: Props) {
                 commit(t);
                 setOpen(false);
               }}
-              className={`block w-full px-4 py-2 text-left tabular-nums transition-colors ${
+              className={`quiz-input block w-full px-4 py-2 text-left tabular-nums transition-colors duration-120 ease-out ${
                 t === value
-                  ? 'bg-navy-500 font-semibold text-white'
-                  : 'text-navy-900 hover:bg-navy-50'
+                  ? 'bg-brand-50 font-semibold text-brand-700'
+                  : 'text-navy-900 hover:bg-mist'
               }`}
             >
               {t}

@@ -27,22 +27,22 @@ export function SuccessScreen({ total, name, phone, delivered = null }: Props) {
   */
   return (
     <div className="card-light animate-pop-in mx-auto max-w-xl p-8 text-center text-navy-900 sm:p-12">
-      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-navy-100">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-navy-500">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-brand-50">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500">
           <IconCheck className="h-8 w-8 text-white" />
         </span>
       </div>
 
-      <h3 className="mt-6 text-2xl font-extrabold sm:text-3xl">
+      <h3 className="mt-6 text-2xl font-bold tracking-[-0.025em] sm:text-3xl">
         Заявка отправлена!
       </h3>
-      <p className="mt-3 text-navy-600">
+      <p className="mt-3 text-[0.9375rem] leading-[1.65] text-navy-600">
         Спасибо{name ? `, ${name}` : ''}! Мы получили вашу заявку на сумму{' '}
         <span className="font-semibold text-navy-800">{formatPrice(total)}</span>
         . Менеджер свяжется с вами в ближайшее время для подтверждения.
       </p>
 
-      <div className="mt-6 rounded-2xl border border-navy-100 bg-navy-50 px-5 py-4 text-sm text-navy-600">
+      <div className="mt-6 rounded-xl border border-navy-100 bg-mist px-5 py-4 text-sm text-navy-600">
         Мы позвоним на номер{' '}
         <span className="font-semibold text-navy-900">{phone}</span>
       </div>
@@ -79,10 +79,10 @@ function FailureScreen({ name }: { name: string }) {
         </span>
       </div>
 
-      <h3 className="mt-6 text-2xl font-extrabold sm:text-3xl">
+      <h3 className="mt-6 text-2xl font-bold tracking-[-0.025em] sm:text-3xl">
         Не удалось отправить заявку
       </h3>
-      <p className="mt-3 text-navy-600">
+      <p className="mt-3 text-[0.9375rem] leading-[1.65] text-navy-600">
         {name ? `${name}, с` : 'С'}вязь с нашей системой прервалась, и заявка
         не дошла. Позвоните или напишите — примем заказ прямо сейчас и
         посчитаем стоимость вместе с вами.

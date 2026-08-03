@@ -42,7 +42,7 @@ export function ContactsStep({ state, onChange, errors }: Props) {
   const sameNumbers = samePhones(state.phone, state.phone2);
 
   return (
-    <div className="space-y-5">
+    <div className="quiz-stack space-y-4 sm:space-y-5">
       <div>
         <FieldLabel required>Ваше имя</FieldLabel>
         <TextInput
@@ -76,7 +76,7 @@ export function ContactsStep({ state, onChange, errors }: Props) {
           autoComplete="tel"
         />
         {errors.phone && (
-          <p className="mt-1.5 text-xs text-red-500">
+          <p className="quiz-hint mt-1.5 !text-red-500">
             Введите корректный номер телефона
           </p>
         )}
@@ -108,13 +108,13 @@ export function ContactsStep({ state, onChange, errors }: Props) {
           autoComplete="tel"
         />
         {errors.phone2 ? (
-          <p className="mt-1.5 text-xs text-red-500">
+          <p className="quiz-hint mt-1.5 !text-red-500">
             {sameNumbers
               ? 'Укажите другой номер — этот уже вписан выше'
               : 'Введите корректный номер телефона'}
           </p>
         ) : (
-          <p className="mt-1.5 text-xs text-navy-400">
+          <p className="quiz-hint mt-1.5">
             Не обязательно. Позвоним на него, если по первому не дозвонимся
           </p>
         )}
@@ -135,7 +135,7 @@ export function ContactsStep({ state, onChange, errors }: Props) {
         </div>
       </div>
 
-      <p className="pt-1 text-xs text-navy-400">
+      <p className="quiz-hint pt-1">
         Нажимая «Отправить заявку», вы соглашаетесь на обработку персональных
         данных. Мы свяжемся с вами для подтверждения.
       </p>

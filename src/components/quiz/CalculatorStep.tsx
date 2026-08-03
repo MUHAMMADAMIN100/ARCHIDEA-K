@@ -1,4 +1,4 @@
-import { FieldLabel, OptionCard } from './fields';
+import { FieldLabel, OptionCard, Chip } from './fields';
 import {
   IconWindow,
   IconFridge,
@@ -53,104 +53,101 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
     });
 
   return (
-    <div className="space-y-8">
-      {/* Услуга */}
+    <div className="quiz-stack space-y-5 sm:space-y-6">
+      {/* Услуга: 3 в ряд уже с xs */}
       <div>
-        <FieldLabel required>Что нужно сделать?</FieldLabel>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <FieldLabel required hint="Выберите тип услуги">
+          Что нужно сделать?
+        </FieldLabel>
+        <div className="grid grid-cols-1 gap-2 xs:grid-cols-3 min-[400px]:grid-cols-3">
           {pricing.types.map((t) => (
-            <OptionCard
+            <button
               key={t.id}
-              active={state.cleaningTypeId === t.id}
+              type="button"
               onClick={() => setType(t.id)}
-              title={t.title}
-              subtitle={
-                t.perSeat
-                  ? `${t.prices.light} ${CURRENCY} / место`
-                  : `от ${t.prices.light} ${CURRENCY} / м²`
-              }
-            />
+              className={`press rounded-lg border px-2.5 py-2.5 text-left transition-colors duration-120 ease-out sm:px-3 sm:py-3 ${
+                state.cleaningTypeId === t.id
+                  ? 'border-brand-500 bg-brand-50'
+                  : 'border-navy-200 bg-white hover:border-navy-300'
+              }`}
+            >
+              <span className="quiz-option-title block leading-tight">
+                {t.title}
+              </span>
+              <span className="quiz-option-meta mt-0.5 block">
+                {t.perSeat
+                  ? `${t.prices.light} ${CURRENCY}/место`
+                  : `от ${t.prices.light} ${CURRENCY}/м²`}
+              </span>
+            </button>
           ))}
         </div>
       </div>
 
       {isFurniture ? (
-        /* Посадочные места — для мойки мягкой мебели */
         <div>
-          <FieldLabel required>Количество посадочных мест</FieldLabel>
+          <FieldLabel required>Посадочные места</FieldLabel>
           <div className="relative">
             <input
               inputMode="numeric"
               value={state.seats || ''}
               onChange={(e) => setSeats(e.target.value)}
-              placeholder="Например, 3"
-              className="w-full rounded-2xl border border-navy-200 bg-white px-4 py-4 pr-16 text-2xl font-bold text-navy-900 placeholder:text-base placeholder:font-normal placeholder:text-navy-300 focus:border-navy-600 focus:outline-none focus:ring-2 focus:ring-navy-200"
+              placeholder="3"
+              className="quiz-value w-full rounded-lg border border-navy-200 bg-mist/40 px-3 py-3 pr-14 sm:px-4 sm:py-3.5 sm:pr-16 placeholder:text-sm placeholder:font-normal placeholder:text-navy-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-navy-400">
+            <span className="quiz-option-meta absolute right-3 top-1/2 -translate-y-1/2 sm:right-4">
               мест
             </span>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
             {[2, 3, 4, 5, 6].map((v) => (
-              <button
+              <Chip
                 key={v}
-                type="button"
+                active={state.seats === v}
                 onClick={() => onChange({ ...state, seats: v })}
-                className={`press rounded-full px-3.5 py-1.5 text-sm transition-[background-color,color,transform] duration-120 ease-out ${
-                  state.seats === v
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-                }`}
               >
-                {v} мест{v === 2 ? 'а' : ''}
-              </button>
+                {v}
+              </Chip>
             ))}
           </div>
-          <p className="mt-2 text-xs text-navy-400">
-            Посадочное место — одно сиденье дивана или кресло. Например, диван
-            на 3 места + кресло = 4 места.
+          <p className="quiz-hint mt-2">
+            1 место = сиденье дивана или кресло.
           </p>
         </div>
       ) : (
         <>
-          {/* Площадь */}
           <div>
-            <FieldLabel required>Площадь помещения, м²</FieldLabel>
+            <FieldLabel required>Площадь помещения</FieldLabel>
             <div className="relative">
               <input
                 inputMode="numeric"
                 value={state.area || ''}
                 onChange={(e) => setArea(e.target.value)}
-                placeholder="Например, 60"
-                className="w-full rounded-2xl border border-navy-200 bg-white px-4 py-4 pr-16 text-2xl font-bold text-navy-900 placeholder:text-base placeholder:font-normal placeholder:text-navy-300 focus:border-navy-600 focus:outline-none focus:ring-2 focus:ring-navy-200"
+                placeholder="60"
+                className="quiz-value w-full rounded-lg border border-navy-200 bg-mist/40 px-3 py-3 pr-12 sm:px-4 sm:py-3.5 sm:pr-14 placeholder:text-sm placeholder:font-normal placeholder:text-navy-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-navy-400">
+              <span className="quiz-option-meta absolute right-3 top-1/2 -translate-y-1/2 font-medium sm:right-4">
                 м²
               </span>
             </div>
-            {/* Быстрые пресеты */}
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
               {[40, 60, 80, 100, 120].map((v) => (
-                <button
+                <Chip
                   key={v}
-                  type="button"
+                  active={state.area === v}
                   onClick={() => onChange({ ...state, area: v })}
-                  className={`press rounded-full px-3.5 py-1.5 text-sm transition-[background-color,color,transform] duration-120 ease-out ${
-                    state.area === v
-                      ? 'bg-brand-500 text-white'
-                      : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-                  }`}
                 >
-                  {v} м²
-                </button>
+                  {v}
+                </Chip>
               ))}
             </div>
           </div>
 
-          {/* Степень загрязнения */}
           <div>
-            <FieldLabel required>Степень загрязнения</FieldLabel>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <FieldLabel required hint="Влияет на цену за м²">
+              Степень загрязнения
+            </FieldLabel>
+            <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
               {DIRT_LEVELS.map((d) => (
                 <OptionCard
                   key={d.id}
@@ -159,7 +156,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                   title={d.title}
                   subtitle={
                     type
-                      ? `${type.prices[d.id]} ${CURRENCY} / м² · ${d.hint}`
+                      ? `${type.prices[d.id]} ${CURRENCY}/м² · ${d.hint}`
                       : d.hint
                   }
                 />
@@ -167,10 +164,9 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
             </div>
           </div>
 
-          {/* Доп. услуги */}
           <div>
-            <FieldLabel>Дополнительные услуги</FieldLabel>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <FieldLabel hint="Необязательно">Дополнительные услуги</FieldLabel>
+            <div className="divide-y divide-navy-100 overflow-hidden rounded-lg border border-navy-200 bg-white">
               {pricing.extras.map((s) => {
                 const qty = state.extras[s.id] ?? 0;
                 const active = qty > 0;
@@ -187,63 +183,52 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                         toggleExtra(s.id, !active);
                       }
                     }}
-                    /* min-w-0: без него ячейка сетки держит ширину по самому
-                       длинному названию услуги и распирает всю форму.
-
-                       Отклика на нажатие (press) у плитки нет намеренно: внутри
-                       живут кнопки «+»/«−», и сжималась бы вся плитка — человек
-                       решил бы, что снял услугу, а не изменил количество.
-                       Выбор и без того виден сразу: заливка, рамка и галочка. */
-                    className={`flex h-[70px] min-w-0 cursor-pointer items-center gap-2.5 rounded-2xl border px-3 transition-[background-color,border-color,box-shadow] duration-120 ease-out ${
-                      active
-                        ? 'border-navy-500 bg-navy-50 ring-1 ring-navy-300'
-                        : 'border-navy-200 bg-white hover:border-navy-400 hover:bg-navy-50'
+                    className={`flex min-h-[2.75rem] min-w-0 cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors duration-120 ease-out sm:min-h-[3rem] sm:gap-3 sm:px-3.5 sm:py-2.5 ${
+                      active ? 'bg-brand-50/80' : 'hover:bg-mist/50'
                     }`}
                   >
                     <span
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors duration-120 ease-out ${
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
                         active
-                          ? 'border-navy-500 bg-brand-500 text-white'
+                          ? 'border-brand-500 bg-brand-500 text-white'
                           : 'border-navy-300 text-transparent'
                       }`}
                     >
-                      <IconCheck className="h-3.5 w-3.5" />
+                      <IconCheck className="h-3 w-3" />
                     </span>
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy-600">
-                      {Icon && <Icon className="h-[18px] w-[18px]" />}
-                    </span>
+                    {Icon && (
+                      <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md bg-mist text-navy-600 sm:flex">
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold leading-tight text-navy-900">
-                        {s.title}
-                      </div>
-                      <div className="whitespace-nowrap text-xs text-navy-500">
+                      <div className="quiz-option-title truncate">{s.title}</div>
+                      <div className="quiz-option-meta">
                         +{s.price} {CURRENCY}
                         {s.hasQuantity && s.unit ? ` / ${s.unit}` : ''}
                       </div>
                     </div>
-
-                    {/* Счётчик количества — всегда виден для услуг с qty */}
                     {s.hasQuantity && (
                       <div
-                        className="flex shrink-0 items-center gap-1"
+                        className="flex shrink-0 items-center gap-0.5 sm:gap-1"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           type="button"
                           onClick={() => setQty(s.id, qty - 1)}
-                          className="press flex h-6 w-6 items-center justify-center rounded-lg bg-navy-100 text-base leading-none text-navy-700 transition-[background-color,opacity,transform] duration-120 ease-out hover:bg-navy-200 disabled:opacity-40"
+                          className="press flex h-7 w-7 items-center justify-center rounded-md border border-navy-200 bg-white text-sm text-navy-700 hover:bg-mist disabled:opacity-40"
                           disabled={qty <= 0}
                           aria-label="Меньше"
                         >
                           −
                         </button>
-                        <span className="w-4 text-center text-sm font-semibold text-navy-900">
+                        <span className="quiz-option-title w-5 text-center tabular-nums">
                           {qty}
                         </span>
                         <button
                           type="button"
                           onClick={() => setQty(s.id, qty + 1)}
-                          className="press flex h-6 w-6 items-center justify-center rounded-lg bg-navy-100 text-base leading-none text-navy-700 transition-[background-color,transform] duration-120 ease-out hover:bg-navy-200"
+                          className="press flex h-7 w-7 items-center justify-center rounded-md border border-navy-200 bg-white text-sm text-navy-700 hover:bg-mist"
                           aria-label="Больше"
                         >
                           +
@@ -258,9 +243,8 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
         </>
       )}
 
-      <p className="text-center text-xs text-navy-400">
-        * Итоговая сумма предварительная. Точную стоимость подтвердит менеджер
-        после оформления заявки. Минимальный заказ — {formatPrice(MIN_ORDER_PRICE)}.
+      <p className="quiz-hint">
+        Сумма предварительная. Минимум — {formatPrice(MIN_ORDER_PRICE)}.
       </p>
     </div>
   );

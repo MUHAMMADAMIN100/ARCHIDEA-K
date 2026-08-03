@@ -17,9 +17,8 @@ import type {
   QuizState,
 } from '../../types';
 
-const STEP_TITLES = ['Параметры уборки', 'Детали заказа', 'Контакты'];
+const STEP_TITLES = ['Параметры', 'Детали', 'Контакты'];
 
-/** Сегодняшняя дата в формате YYYY-MM-DD (для min календаря) */
 function todayISO(): string {
   const d = new Date();
   const tz = d.getTimezoneOffset() * 60000;
@@ -27,19 +26,16 @@ function todayISO(): string {
 }
 
 export function QuizForm() {
-  // куда прокрутить после отправки — к экрану благодарности, а не к подвалу
   const doneRef = useRef<HTMLDivElement>(null);
-  const [step, setStep] = useState(0); // 0,1,2
+  const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
-  // null — ответа от сервера ещё нет; false — заявка не дошла
   const [delivered, setDelivered] = useState<boolean | null>(null);
 
-  // при загрузке — дослать заявки, которые не ушли в прошлый раз (сбой сети)
   useEffect(() => {
     flushPendingOrders();
   }, []);
 
-  const pricing = usePricing(); // живые цены из CRM (с резервом)
+  const pricing = usePricing();
   const [calc, setCalc] = useState<CalculatorState>({
     area: DEFAULTS.area,
     cleaningTypeId: DEFAULTS.cleaningTypeId,
@@ -63,7 +59,6 @@ export function QuizForm() {
   const [contactErrors, setContactErrors] = useState<
     Partial<Record<keyof ContactState, boolean>>
   >({});
-  // Honeypot — скрытое поле-ловушка для ботов (люди его не видят и не заполняют)
   const [honeypot, setHoneypot] = useState('');
 
   const breakdown = useMemo(
@@ -72,8 +67,8 @@ export function QuizForm() {
   );
   const minDate = useMemo(() => todayISO(), []);
   const isFurniture = calc.cleaningTypeId === 'furniture';
+  const selectedType = pricing.types.find((t) => t.id === calc.cleaningTypeId);
 
-  // --- Валидация по шагам ---
   const canNext = useMemo(() => {
     if (step === 0)
       return (
@@ -88,19 +83,8 @@ export function QuizForm() {
 
   const validateContacts = () => {
     const errs: Partial<Record<keyof ContactState, boolean>> = {
-      // имя — только буквы: раньше в заявку проходило «Тест клиент1й21»
       name: !PERSON_NAME_RE.test(contact.name.trim()),
-      phone: contact.phone.replace(/\D/g, '').length < 12, // 992 + 9 цифр
-      /*
-       * Запасной номер НЕОБЯЗАТЕЛЕН (решение владельца).
-       *
-       * Пока он был обязательным, человек с одним телефоном не мог отправить
-       * заявку вовсе — форма его не выпускала. Это прямая потеря заказов
-       * ради поля «на всякий случай».
-       *
-       * Проверяем только то, что уже введено: недописанный номер и копия
-       * первого — ошибки, а пустое поле пропускаем.
-       */
+      phone: contact.phone.replace(/\D/g, '').length < 12,
       phone2:
         contact.phone2.replace(/\D/g, '').length > 3 &&
         (contact.phone2.replace(/\D/g, '').length < 12 ||
@@ -119,19 +103,13 @@ export function QuizForm() {
 
   const handleSubmit = () => {
     if (!validateContacts()) return;
-    /*
-     * Оптимистично: экран «Заявка отправлена» показываем сразу, отправка идёт
-     * в фоне. Но результат обязательно дожидаемся: если заявка не дошла,
-     * экран сменится на «позвоните нам». Раньше человек в любом случае видел
-     * успех и ждал звонка, которого не будет, — обращения в CRM попросту нет.
-     */
     submitOrderOptimistic(
       {
         calculator: calc,
         quiz,
         contact,
         total: breakdown.total,
-        breakdown, // расчёт по живым ценам — для консистентного текста заявки
+        breakdown,
       },
       honeypot,
       (ok) => setDelivered(ok),
@@ -139,23 +117,6 @@ export function QuizForm() {
     setDone(true);
   };
 
-  /*
-   * Экран благодарности встаёт по центру экрана.
-   *
-   * Форма высокая, кнопка отправки — у её нижнего края. Короткий экран
-   * «Заявка отправлена» на её месте резко укорачивал страницу, браузер
-   * поджимал прокрутку — и человек оказывался перед подвалом сайта, будто
-   * ничего не произошло. Прокрутки к началу формы не хватало: она тоже
-   * упиралась в конец страницы.
-   *
-   * Теперь блок держит высоту в три четверти экрана и центрирует карточку,
-   * а прокрутка ставит её в середину поля зрения — подвалу взяться неоткуда.
-   * Карточку выше экрана (узкий телефон) показываем от её начала: центр
-   * срезал бы и заголовок, и кнопки.
-   *
-   * Эффект, а не requestAnimationFrame: он выполняется после того, как экран
-   * благодарности уже в разметке, — и меряет настоящую высоту карточки.
-   */
   useEffect(() => {
     if (!done) return;
     const el = doneRef.current;
@@ -166,7 +127,7 @@ export function QuizForm() {
 
   if (done) {
     return (
-      <div className="flex min-h-[90vh] items-center justify-center">
+      <div className="flex min-h-[70vh] items-center justify-center sm:min-h-[90vh]">
         <div ref={doneRef} className="w-full">
           <SuccessScreen
             total={breakdown.total}
@@ -179,22 +140,84 @@ export function QuizForm() {
     );
   }
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-      {/*
-        Левая часть — шаги формы (светлая карточка).
+  const summaryLines = (
+    <>
+      <Row
+        label={
+          isFurniture
+            ? `${selectedType?.title ?? 'Мебель'} · ${calc.seats} мест`
+            : `${selectedType?.title ?? 'Уборка'} · ${calc.area} м²`
+        }
+        value={formatPrice(breakdown.base)}
+      />
+      {breakdown.extras.map((e) => (
+        <Row key={e.title} label={e.title} value={formatPrice(e.sum)} muted />
+      ))}
+      {breakdown.extras.length === 0 && (
+        <p className="text-xs text-white/40">Без доп. услуг</p>
+      )}
+    </>
+  );
 
-        min-w-0 обязателен. Ячейка сетки по умолчанию не даёт содержимому
-        сжаться уже своей «естественной» ширины, и карточка раздувалась до
-        361 пикселя из-за длинных названий доп. услуг. На экране 320 px она
-        вылезала за правый край: обрезались подсказки под полями, текст
-        согласия и сумма. Ноль разрешает ячейке сузиться, а длинные названия
-        и без того укорачиваются многоточием.
-      */}
-      <div className="card-light min-w-0 p-6 text-navy-900 sm:p-8">
-        {/* Honeypot — невидимая ловушка для ботов.
-            Имя поля НЕ должно совпадать с реальным (company/email/name),
-            иначе браузер автозаполнит его и заявка ошибочно уйдёт в спам. */}
+  const nextLabel =
+    step === 0 ? 'Далее' : step === 1 ? 'Далее' : 'Отправить';
+
+  return (
+    <div className="quiz-layout grid items-start gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(15rem,0.95fr)] md:gap-5 lg:gap-6">
+      {/* Итого сверху на mobile/tablet — не нужно скроллить вниз */}
+      <aside className="order-1 min-w-0 md:order-2 md:sticky md:top-20 md:self-start lg:top-24">
+        <div className="overflow-hidden rounded-xl border border-navy-800 bg-ink text-white shadow-card sm:rounded-2xl">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4">
+            <h3 className="quiz-sum-title">Ваш расчёт</h3>
+            <motion.span
+              key={breakdown.total}
+              initial={{ opacity: 0.5 }}
+              animate={{ opacity: 1 }}
+              className="text-lg font-bold tabular-nums tracking-[-0.02em] md:hidden"
+            >
+              {formatPrice(breakdown.total)}
+            </motion.span>
+          </div>
+
+          <div className="quiz-sum-row space-y-2 border-t border-white/10 px-4 py-3 sm:space-y-2.5 sm:px-5 sm:py-4">
+            {summaryLines}
+          </div>
+
+          <div className="border-t border-white/10 bg-white/[0.04] px-4 py-3.5 sm:px-5 sm:py-5">
+            <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+              <span className="quiz-sum-row text-white/55">Итого</span>
+              <motion.span
+                key={`t-${breakdown.total}`}
+                initial={{ opacity: 0.5, y: 3 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18 }}
+                className="quiz-sum-total text-xl sm:text-2xl"
+              >
+                {formatPrice(breakdown.total)}
+              </motion.span>
+            </div>
+            <p className="quiz-sum-note mt-1.5 hidden sm:block">
+              Предварительно. Менеджер подтвердит после заявки.
+            </p>
+          </div>
+        </div>
+
+        <ul className="quiz-trust mt-3 hidden space-y-1.5 px-0.5 md:block">
+          {[
+            'Без предоплаты',
+            'Оплата после уборки',
+            'Можно отменить заранее',
+          ].map((t) => (
+            <li key={t} className="flex items-center gap-2">
+              <IconCheck className="h-3.5 w-3.5 shrink-0 text-brand-500" />
+              {t}
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* Форма */}
+      <div className="order-2 relative min-w-0 overflow-hidden rounded-xl border border-navy-100 bg-white shadow-card sm:rounded-2xl md:order-1">
         <input
           type="text"
           name="hp_contact_field"
@@ -207,19 +230,26 @@ export function QuizForm() {
           onChange={(e) => setHoneypot(e.target.value)}
           className="absolute left-[-9999px] h-0 w-0 opacity-0"
         />
-        <Stepper current={step} titles={STEP_TITLES} />
 
-        <div className="mt-7">
+        <div className="border-b border-navy-100 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+          <Stepper current={step} titles={STEP_TITLES} />
+        </div>
+
+        <div className="quiz-form-body px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
               {step === 0 && (
-                <CalculatorStep state={calc} onChange={setCalc} pricing={pricing} />
+                <CalculatorStep
+                  state={calc}
+                  onChange={setCalc}
+                  pricing={pricing}
+                />
               )}
               {step === 1 && (
                 <SpecificsStep
@@ -239,98 +269,47 @@ export function QuizForm() {
           </AnimatePresence>
         </div>
 
-        {/*
-          Навигация.
-          flex-wrap: на экране 320 px «Назад» и «Отправить заявку» в одну
-          строку не помещались, и кнопка отправки на треть вылезала за край
-          карточки. При нехватке места она уходит на свою строку.
-        */}
-        <div className="mt-8 flex flex-wrap items-center gap-3">
+        {/* Футер: sticky на mobile чтобы CTA и итог всегда видны */}
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t border-navy-100 bg-white px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)] sm:static sm:gap-3 sm:bg-mist/40 sm:px-6 sm:py-4 sm:shadow-none lg:px-8">
           {step > 0 && (
-            <button type="button" onClick={goBack} className="btn-outline-dark">
+            <button
+              type="button"
+              onClick={goBack}
+              className="btn-outline-dark !px-4 !py-2.5 text-sm"
+            >
               <IconArrowLeft className="h-4 w-4" />
-              Назад
+              <span className="hidden xs:inline sm:inline">Назад</span>
             </button>
           )}
-          {step < 2 ? (
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={!canNext}
-              className="btn-primary ml-auto"
-            >
-              {step === 0 ? 'Оформить заявку' : 'Далее'}
-              <IconArrowRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="btn-primary ml-auto"
-            >
-              Отправить заявку
-              <IconCheck className="h-5 w-5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Правая часть — «Итого» (тёмная панель, sticky) */}
-      <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-        <div className="overflow-hidden rounded-3xl bg-navy-gradient text-white shadow-card">
-          <div className="border-b border-white/10 bg-white/5 px-6 py-4">
-            <h3 className="font-bold">Ваш расчёт</h3>
-            <p className="text-xs text-white/50">Обновляется автоматически</p>
-          </div>
-
-          <div className="space-y-3 px-6 py-5 text-sm">
-            <Row
-              label={
-                isFurniture
-                  ? `Мягкая мебель · ${calc.seats} мест`
-                  : `Уборка · ${calc.area} м²`
-              }
-              value={formatPrice(breakdown.base)}
-            />
-            {breakdown.extras.map((e) => (
-              <Row key={e.title} label={e.title} value={formatPrice(e.sum)} muted />
-            ))}
-            {breakdown.extras.length === 0 && (
-              <p className="text-xs text-white/40">Доп. услуги не выбраны</p>
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none sm:gap-3">
+            <div className="min-w-0 text-right md:hidden">
+              <p className="text-[0.625rem] text-navy-400">Итого</p>
+              <p className="truncate text-sm font-bold tabular-nums text-navy-900">
+                {formatPrice(breakdown.total)}
+              </p>
+            </div>
+            {step < 2 ? (
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={!canNext}
+                className="btn-primary !px-5 !py-2.5 text-sm"
+              >
+                {nextLabel}
+                <IconArrowRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="btn-primary !px-5 !py-2.5 text-sm"
+              >
+                Отправить
+                <IconCheck className="h-4 w-4" />
+              </button>
             )}
           </div>
-
-          <div className="border-t border-white/10 px-6 py-5">
-            {/*
-              На узком экране «Итого» и крупная сумма в одну строку не
-              помещались: сумма переносилась и наезжала на подпись. Теперь
-              при нехватке места сумма уходит на свою строку целиком.
-            */}
-            <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-              <span className="text-white/60">Итого</span>
-              <motion.span
-                key={breakdown.total}
-                initial={{ scale: 0.94, opacity: 0.6 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.18 }}
-                className="ml-auto whitespace-nowrap text-2xl font-extrabold text-white sm:text-3xl"
-              >
-                {formatPrice(breakdown.total)}
-              </motion.span>
-            </div>
-          </div>
         </div>
-
-        <ul className="mt-4 space-y-2 px-2 text-xs text-navy-500">
-          {['Без предоплаты', 'Оплата после уборки', 'Можно отменить заранее'].map(
-            (t) => (
-              <li key={t} className="flex items-center gap-2">
-                <IconCheck className="h-3.5 w-3.5 text-navy-600" />
-                {t}
-              </li>
-            ),
-          )}
-        </ul>
       </div>
     </div>
   );
@@ -346,9 +325,13 @@ function Row({
   muted?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className={muted ? 'text-white/50' : 'text-white/80'}>{label}</span>
-      <span className="shrink-0 font-semibold text-white">{value}</span>
+    <div className="quiz-sum-row flex items-start justify-between gap-3">
+      <span className={`min-w-0 break-words ${muted ? 'text-white/45' : 'text-white/75'}`}>
+        {label}
+      </span>
+      <span className="shrink-0 font-semibold tabular-nums text-white">
+        {value}
+      </span>
     </div>
   );
 }

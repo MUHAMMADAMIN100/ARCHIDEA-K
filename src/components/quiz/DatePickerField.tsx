@@ -55,7 +55,7 @@ export function DatePickerField({ value, onChange, minDate }: Props) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-navy-200 bg-white px-4 py-3 text-left transition-colors hover:border-navy-400 focus:border-navy-600 focus:outline-none focus:ring-2 focus:ring-navy-200"
+        className="quiz-input flex w-full items-center justify-between gap-2 rounded-lg border border-navy-200 bg-white px-4 py-3 text-left transition-colors duration-120 ease-out hover:border-navy-300 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
       >
         <span className={selected ? 'text-navy-900' : 'text-navy-300'}>
           {selected ? fmt(selected) : 'Выберите дату'}
@@ -78,7 +78,7 @@ export function DatePickerField({ value, onChange, minDate }: Props) {
         <div
           /* Календарь оторван от формы и перекрывает её — отсюда тень четвёртого
              уровня и короткий выезд из-под поля: видно, откуда он взялся. */
-          className="animate-pop-in absolute left-0 z-40 mt-2 origin-top rounded-2xl border border-navy-100 bg-white p-2 shadow-pop"
+          className="animate-pop-in absolute left-0 z-40 mt-2 origin-top rounded-xl border border-navy-100 bg-white p-2 shadow-pop"
           style={rdpVars}
         >
           <DayPicker

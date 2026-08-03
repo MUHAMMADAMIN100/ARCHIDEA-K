@@ -3,25 +3,25 @@ import { QuizForm } from '../quiz/QuizForm';
 
 export function Calculator() {
   return (
-    <section id="calculator" className="relative bg-navy-50 py-24 text-navy-900">
-      <div className="container-px relative">
+    <section
+      id="calculator"
+      className="section-pad bg-mist max-[900px]:py-14 sm:max-[900px]:py-16"
+    >
+      <div className="container-px">
         <Reveal>
-          <div className="text-center">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-accent">
-              Калькулятор и заявка
-            </p>
-            <h2 className="section-title mx-auto max-w-2xl">
-              Рассчитайте стоимость и оформите заявку
+          <div className="max-w-2xl">
+            <p className="section-eyebrow">Оформление заявки</p>
+            <h2 className="section-title">
+              Рассчитайте стоимость и оставьте заявку
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-navy-600">
-              Укажите параметры — увидите цену сразу. Затем заполните детали
-              заказа. Это займёт меньше минуты.
+            <p className="section-lead">
+              Три коротких шага: параметры → детали → контакты. Без предоплаты.
             </p>
           </div>
         </Reveal>
 
-        <Reveal delay={0.1}>
-          <div id="request" className="mt-12">
+        <Reveal delay={0.06}>
+          <div id="request" className="mt-8 sm:mt-10">
             <QuizForm />
           </div>
         </Reveal>

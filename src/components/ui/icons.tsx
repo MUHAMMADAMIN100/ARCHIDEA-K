@@ -132,3 +132,21 @@ export const IconMapPin = (p: IconProps) => (
     <circle cx="12" cy="10" r="2.5" />
   </svg>
 );
+
+export const IconMenu = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </svg>
+);
+
+export const IconClose = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+export const IconChevronDown = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);
