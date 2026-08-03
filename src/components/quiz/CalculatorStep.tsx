@@ -218,7 +218,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                       </div>
                       <div className="whitespace-nowrap text-xs text-navy-500">
                         +{s.price} {CURRENCY}
-                        {s.hasQuantity ? ` / ${s.unit}` : ''}
+                        {s.hasQuantity && s.unit ? ` / ${s.unit}` : ''}
                       </div>
                     </div>
 

@@ -43,7 +43,7 @@ export function calculatePrice(
         const sum = service.price * qty;
         extras.push({
           title: service.hasQuantity
-            ? `${service.title} (${qty} ${service.unit})`
+            ? `${service.title} (${qty} ${service.unit || 'шт'})`
             : service.title,
           qty,
           sum,

@@ -66,6 +66,20 @@ const KEY_TO_ID: Record<string, string> = {
 /** Описание базовых услуг оставляем из конфигурации — оно продающее */
 const STATIC_BY_ID = new Map(CLEANING_TYPES.map((t) => [t.id, t]));
 
+/*
+ * Единица измерения доп. услуги.
+ *
+ * В CRM её попросту нет: у доп. услуги хранится только признак «считается
+ * количеством». Поэтому берём единицу из конфигурации сайта, а для услуги,
+ * заведённой в CRM позже, подставляем «шт» — считают именно штуки (окна,
+ * духовки). Без этого на карточке печаталось «+50 сомони / undefined», и та
+ * же строка уходила в заявку: «Мытьё окон (3 undefined)».
+ */
+const STATIC_EXTRA_UNIT = new Map(
+  EXTRA_SERVICES.map((e) => [e.id, e.unit] as const),
+);
+const DEFAULT_EXTRA_UNIT = 'шт';
+
 async function fetchLive(): Promise<Pricing | null> {
   /*
    * Свой домен: адрес CRM знает только сервер (api/tariffs.js). Раньше здесь
@@ -132,6 +146,7 @@ async function fetchLive(): Promise<Pricing | null> {
         title: e.title,
         price: Number(e.price),
         hasQuantity: e.hasQty === true,
+        unit: STATIC_EXTRA_UNIT.get(e.key) || DEFAULT_EXTRA_UNIT,
       }));
 
     /*
