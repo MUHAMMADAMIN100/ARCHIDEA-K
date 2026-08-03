@@ -644,17 +644,24 @@ export function OrderModal({
         preferredDate: editPreferredDate,
         preferredTime: editPreferredTime,
       });
-      // ФИО, телефон, статус и теги принадлежат клиенту, а не заказу
-      if (clientTouched) {
-        await api.patch(`/clients/${order.clientId}`, {
-          fullName: clientName.trim(),
-          phone: normalizePhone(clientPhone) ?? clientPhone,
-          extraPhones: clientExtraPhones
-            .map((p) => normalizePhone(p))
-            .filter((p): p is string => !!p),
-          tags: clientTags,
-        });
-      }
+      /*
+       * ФИО, телефон и статус принадлежат клиенту, а не заказу.
+       *
+       * Запрос уходит ПАРАЛЛЕЛЬНО с заказом, а не после него: это разные
+       * записи, и выстраивать их в очередь незачем. Раньше сохранение было
+       * цепочкой из четырёх запросов подряд — на медленной связи карточка
+       * обновлялась через пару секунд.
+       */
+      const clientRequest = clientTouched
+        ? api.patch(`/clients/${order.clientId}`, {
+            fullName: clientName.trim(),
+            phone: normalizePhone(clientPhone) ?? clientPhone,
+            extraPhones: clientExtraPhones
+              .map((p) => normalizePhone(p))
+              .filter((p): p is string => !!p),
+            tags: clientTags,
+          })
+        : null;
       if (cleanersChangedFlag) {
         await api.patch(`/orders/${order.id}/cleaners`, {
           cleanerIds: selectedCleaners,
@@ -674,6 +681,8 @@ export function OrderModal({
        * «Сменах», оплата — черновик ведомости. Их кэш надо забыть, иначе при
        * переходе туда человек увидит прежнее состояние до фонового обновления.
        */
+      // дожидаемся карточки клиента вместе с остальным — она шла параллельно
+      if (clientRequest) await clientRequest;
       invalidateOrderRelated();
       onUpdated();
     } catch (e: any) {
@@ -897,13 +906,29 @@ export function OrderModal({
                           key={t}
                           type="button"
                           onClick={() => {
-                            markTouched('client');
-                            setClientTags((prev) =>
-                              prev.includes(t)
-                                ? prev.filter((x) => x !== t)
-                                : // статус у клиента один: новый заменяет прежний
-                                  [t],
-                            );
+                            /*
+                             * Статус сохраняется сразу по нажатию, не дожидаясь
+                             * кнопки «Сохранить»: раньше он уходил в общей
+                             * очереди из четырёх запросов, и метка на карточке
+                             * появлялась через пару секунд после закрытия окна.
+                             * Так же работает статус в карточке клиента.
+                             */
+                            const next: ClientTag[] = clientTags.includes(t)
+                              ? []
+                              : [t]; // статус один: новый заменяет прежний
+                            setClientTags(next);
+                            if (!order) return;
+                            onOptimistic?.(order.id, {
+                              client: order.client
+                                ? { ...order.client, tags: next }
+                                : order.client,
+                            } as Partial<Order>);
+                            api
+                              .patch(`/clients/${order.clientId}`, { tags: next })
+                              .catch(() => {
+                                toast.error('Не удалось сохранить статус клиента');
+                                onUpdated();
+                              });
                           }}
                           className={`press rounded-lg px-2.5 py-1 text-xs font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-120 ease-out ${
                             clientTags.includes(t)

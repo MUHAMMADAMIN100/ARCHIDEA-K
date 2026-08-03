@@ -135,9 +135,24 @@ export default async function handler(req, res) {
      * лог: без него «заявка не дошла» неотличимо от «CRM ответила отказом», и
      * потерю заявок можно заметить только вручную, сверяя сайт с воронкой.
      */
+    /*
+     * Причина отказа передаётся наружу.
+     *
+     * Раньше сайт показывал «связь прервалась» на любой отказ CRM, и понять,
+     * что именно не так — не заполнено поле, слишком частая отправка,
+     * неверный ключ, — было нельзя ни посетителю, ни поддержке. Сообщения
+     * CRM написаны для людей («Заполните адрес»), секретов в них нет.
+     */
+    let message = null;
     if (!upstream.ok) {
+      try {
+        const body = await upstream.clone().json();
+        message = typeof body?.message === 'string' ? body.message : null;
+      } catch {
+        message = null;
+      }
       console.error(
-        `[lead] CRM отклонила заявку: ${upstream.status} ${upstream.statusText}`,
+        `[lead] CRM отклонила заявку: ${upstream.status} ${upstream.statusText} ${message ?? ''}`,
       );
     }
     // reason нужен поддержке, чтобы отличить неверный ключ от недоступной CRM
@@ -146,7 +161,7 @@ export default async function handler(req, res) {
       .json(
         upstream.ok
           ? { ok: true }
-          : { ok: false, reason: `upstream_${upstream.status}` },
+          : { ok: false, reason: `upstream_${upstream.status}`, message },
       );
   } catch (e) {
     console.error('[lead] CRM недоступна:', e?.message || e);
