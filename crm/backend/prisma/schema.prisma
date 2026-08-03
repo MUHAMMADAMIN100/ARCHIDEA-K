@@ -218,6 +218,8 @@ model User {
   duties       String? // должностные обязанности (список, по строке на пункт)
   mainTask     String? // основная задача сотрудника
   acceptsLeads Boolean  @default(true) // участвует в авто-распределении заявок с сайта
+  /// Владелец компании: единственный, кто может удалять сотрудников
+  isOwner      Boolean  @default(false)
   canManageOps Boolean  @default(false) // расширенный доступ: как директор, но без финансов
   /// ТЗ 1.2 — полный доступ к модулю задач: видит, создаёт, назначает и правит
   /// ВСЕ задачи компании, а не только свои (у Ироды)
@@ -1058,6 +1060,8 @@ model Reminder {
   createdByName String
 
   sentAt    DateTime?
+  /// Когда предупредили за час до срока — чтобы не слать это дважды
+  preNotifiedAt DateTime?
   doneAt    DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

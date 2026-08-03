@@ -60,6 +60,8 @@ export interface AuthUser {
   canSeeTrash?: boolean;
   /** персональный запрет на финансы — сильнее роли */
   noFinance?: boolean;
+  /** владелец компании: единственный, кто может удалять сотрудников */
+  isOwner?: boolean;
 }
 
 /**

@@ -29,6 +29,7 @@ function user(overrides: Partial<AuthUser> = {}): AuthUser {
     canManageTasks: false,
     canSeeTrash: false,
     noFinance: false,
+    isOwner: false,
     ...overrides,
   };
 }

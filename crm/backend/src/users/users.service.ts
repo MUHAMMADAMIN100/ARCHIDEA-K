@@ -49,6 +49,8 @@ const SAFE_SELECT = {
   telegramChatId: true,
   telegramEnabled: true,
   acceptsLeads: true,
+  /** Владелец компании — только он удаляет сотрудников */
+  isOwner: true,
   isActive: true,
   createdAt: true,
 };
@@ -473,6 +475,23 @@ export class UsersService {
 
   /** Удаление сотрудника (директор). Нельзя удалить свой аккаунт. */
   async remove(requester: AuthUser, id: string) {
+    /*
+     * Удалять сотрудников может только владелец компании (решение владельца).
+     *
+     * Раньше это мог любой руководитель, а их несколько. Запрет по должности
+     * не годится — он задел бы и самого владельца, поэтому право именное:
+     * флаг isOwner в карточке. Отключить сотрудника (снять доступ, оставив
+     * историю) по-прежнему может любой руководитель — это не удаление.
+     */
+    const me = await this.prisma.user.findUnique({
+      where: { id: requester.id },
+      select: { isOwner: true },
+    });
+    if (!me?.isOwner) {
+      throw new ForbiddenException(
+        'Удалять сотрудников может только владелец. Вы можете отключить сотрудника — доступ пропадёт, а история останется',
+      );
+    }
     if (requester.id === id) {
       throw new BadRequestException('Нельзя удалить свой аккаунт');
     }

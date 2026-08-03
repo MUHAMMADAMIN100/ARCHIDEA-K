@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Inbox,
@@ -13,6 +13,7 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Skeleton, PageHeader, ErrorState } from '../components/ui';
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
+import { TaskModal } from '../components/TaskModal';
 import { formatDate, formatPrice, formatVolume } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import type { Order, Task } from '../types';
@@ -34,7 +35,18 @@ export function Dashboard() {
   const { data: orders } = useFetch<Order[]>('/orders?stage=NEW', {
     pollMs: 15000,
   });
-  const { data: tasks } = useFetch<Task[]>('/tasks', { pollMs: 20000 });
+  const {
+    data: tasks,
+    setData: setTasks,
+    reload: reloadTasks,
+  } = useFetch<Task[]>('/tasks', { pollMs: 20000 });
+  /*
+   * Задача открывается прямо здесь, а не уводит в раздел «Задачи».
+   * Раньше нажатие меняло страницу: человек терял сводку и возвращался
+   * назад руками — ради одного взгляда на задачу.
+   */
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const taskFlight = useRef(0);
   const [drill, setDrill] = useState<{
     title: string;
     subtitle?: string;
@@ -256,10 +268,11 @@ export function Dashboard() {
               искать её заново в списке.
             */}
             {openTasks.map((t) => (
-              <Link
+              <button
                 key={t.id}
-                to={`/tasks?task=${t.id}`}
-                className="press flex items-center justify-between gap-3 rounded-xl border border-navy-100 px-3 py-2.5 hover:bg-navy-50"
+                type="button"
+                onClick={() => setEditTask(t)}
+                className="press flex w-full items-center justify-between gap-3 rounded-xl border border-navy-100 px-3 py-2.5 text-left hover:bg-navy-50"
               >
                 <div className="min-w-0 truncate text-sm font-medium text-navy-800">
                   {t.title}
@@ -268,7 +281,7 @@ export function Dashboard() {
                   {t.deadline ? new Date(t.deadline).toLocaleDateString('ru-RU') : ''}
                   <ChevronRight className="h-4 w-4 text-navy-400" />
                 </span>
-              </Link>
+              </button>
             ))}
             {openTasks.length === 0 && (
               <div className="py-6 text-center text-sm text-navy-600">
@@ -278,6 +291,26 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {editTask && (
+        <TaskModal
+          key={editTask.id}
+          mode="edit"
+          task={(tasks ?? []).find((t) => t.id === editTask.id) ?? editTask}
+          onClose={() => setEditTask(null)}
+          onCreate={() => {}}
+          onPatch={(id, patch) =>
+            setTasks((list) =>
+              list ? list.map((t) => (t.id === id ? { ...t, ...patch } : t)) : list,
+            )
+          }
+          onDeleted={(id) =>
+            setTasks((list) => (list ? list.filter((t) => t.id !== id) : list))
+          }
+          onReload={reloadTasks}
+          inFlightRef={taskFlight}
+        />
+      )}
 
       {drill && (
         <OrdersDrilldownModal

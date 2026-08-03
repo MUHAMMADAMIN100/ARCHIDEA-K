@@ -33,7 +33,9 @@ const RELATED: Partial<Record<ChangedResource, ChangedResource[]>> = {
  * по таймеру — до десяти секунд ожидания на ровном месте.
  */
 const ALIAS: Record<string, ChangedResource> = {
-  leads: 'clients',
+  // заявка с сайта — это прежде всего НОВЫЙ ЗАКАЗ в воронке: доска слушает
+  // именно «orders», а клиенты и уведомления подтянутся как связанные
+  leads: 'orders',
 };
 
 /**

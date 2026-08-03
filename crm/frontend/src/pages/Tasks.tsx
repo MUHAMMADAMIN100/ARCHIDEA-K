@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useRef, useState } from 'react';
 import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
@@ -63,24 +62,10 @@ export function Tasks() {
   const [editTask, setEditTask] = useState<Task | null>(null);
 
   /*
-   * Открытие задачи по адресу /tasks?task=<id>.
-   *
-   * Так строка на дашборде открывает саму задачу, а не просто приводит в
-   * раздел. Признак из адреса убираем сразу после открытия: иначе обновление
-   * страницы или возврат назад снова распахивали бы окно.
+   * Раньше сюда можно было прийти по адресу /tasks?task=<id> — так задачу
+   * открывал дашборд. Теперь он открывает её у себя, не уводя со сводки,
+   * и разбор адреса больше не нужен.
    */
-  const [params, setParams] = useSearchParams();
-  const wanted = params.get('task');
-  useEffect(() => {
-    if (!wanted || !data) return;
-    const found = data.find((t) => t.id === wanted);
-    if (found) setEditTask(found);
-    const next = new URLSearchParams(params);
-    next.delete('task');
-    setParams(next, { replace: true });
-    // params и setParams меняются на каждый рендер — следим за самим признаком
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wanted, data]);
 
   const patchTask = (id: string, patch: Partial<Task>) =>
     setData((tasks) =>

@@ -124,6 +124,8 @@ const DIRECTOR_NAV: NavItem[] = [
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
   { to: '/funnel', label: 'Воронка', icon: Filter },
   { to: '/clients', label: 'Клиенты', icon: Users },
+  // календарь поднят из «Ещё»: по нему планируют день, а не заглядывают раз в неделю
+  { to: '/calendar', label: 'Календарь', icon: CalendarRange },
   { to: '/reports', label: 'Ведомости', icon: FileText, moneyBan: true },
 ];
 
@@ -133,7 +135,6 @@ const MORE_GROUPS: NavGroup[] = [
     title: 'Операции',
     items: [
       { to: '/tasks', label: 'Задачи', icon: CheckSquare },
-      { to: '/calendar', label: 'Календарь', icon: CalendarRange },
       { to: '/team', label: 'Команда', icon: UsersRound },
       { to: '/shifts', label: 'Смены и выезды', icon: Wallet },
       { to: '/checklists', label: 'Чек-листы', icon: ListChecks },

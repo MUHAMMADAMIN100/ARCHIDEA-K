@@ -108,21 +108,54 @@ export function NotificationsBell() {
     };
   }, [open]);
 
-  const openAndRead = () => {
-    const willOpen = !open;
-    setOpen(willOpen);
-    if (willOpen && unread > 0) {
-      // оптимистично гасим счётчик и помечаем прочитанными, запрос в фоне
-      setUnread(0);
-      setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      api.patch('/notifications/read-all').catch(() => {});
+  /*
+   * Открытие списка НИЧЕГО не помечает.
+   *
+   * Раньше сам факт открытия гасил счётчик и помечал всё прочитанным: человек
+   * заглядывал одним глазом, а система считала, что он всё разобрал — и
+   * непрочитанное было уже не найти. Прочитанным уведомление становится
+   * только по действию: нажали кнопку «Прочитать все» или само уведомление.
+   */
+  const toggle = () => setOpen((o) => !o);
+
+  /** Прочитать всё разом — оптимистично, запрос в фоне */
+  const readAll = () => {
+    if (unread === 0) return;
+    const before = items;
+    setUnread(0);
+    setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    api.patch('/notifications/read-all').catch(() => {
+      setItems(before);
+      load();
+    });
+  };
+
+  /**
+   * Нажали на уведомление: помечаем прочитанным и открываем то, о чём оно.
+   *
+   * Помечаем и тогда, когда открывать нечего (запись удалили): нажатие всё
+   * равно значит «увидел», и счётчик не должен висеть вечно — решение
+   * владельца.
+   */
+  const openItem = (n: NotificationItem) => {
+    const target = notificationTarget(n);
+    if (!n.isRead) {
+      setUnread((c) => Math.max(0, c - 1));
+      setItems((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)),
+      );
+      api.patch(`/notifications/${n.id}/read`).catch(() => load());
+    }
+    if (target) {
+      setOpen(false);
+      navigate(target);
     }
   };
 
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={openAndRead}
+        onClick={toggle}
         className="press relative rounded-xl border border-navy-200 bg-white p-2.5 text-navy-600 hover:bg-navy-50"
       >
         <Bell className="h-5 w-5" />
@@ -151,8 +184,17 @@ export function NotificationsBell() {
             innerClassName="max-h-[70vh] overscroll-contain"
             label="Уведомления"
           >
-          <div className="px-3 py-2 text-sm font-bold text-navy-900">
-            Уведомления
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            <span className="text-sm font-bold text-navy-900">Уведомления</span>
+            {unread > 0 && (
+              <button
+                type="button"
+                onClick={readAll}
+                className="press rounded-lg px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50"
+              >
+                Прочитать все
+              </button>
+            )}
           </div>
           {items.length === 0 && (
             <div className="px-3 py-6 text-center text-sm text-navy-600">
@@ -165,17 +207,19 @@ export function NotificationsBell() {
               <button
                 key={n.id}
                 type="button"
-                disabled={!target}
-                onClick={() => {
-                  if (!target) return;
-                  setOpen(false);
-                  navigate(target);
-                }}
-                className={`block w-full rounded-xl px-3 py-2.5 text-left ${
-                  target ? 'press cursor-pointer hover:bg-navy-50' : 'cursor-default'
+                onClick={() => openItem(n)}
+                title={target ? 'Открыть' : 'Отметить прочитанным'}
+                className={`press block w-full cursor-pointer rounded-xl px-3 py-2.5 text-left hover:bg-navy-50 ${
+                  n.isRead ? '' : 'bg-brand-50/60'
                 }`}
               >
-                <div className="text-sm font-semibold text-navy-800">
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-navy-800">
+                  {!n.isRead && (
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500"
+                      aria-label="Не прочитано"
+                    />
+                  )}
                   {n.title}
                 </div>
                 <div className="text-sm text-navy-600">{n.message}</div>

@@ -50,6 +50,61 @@ export class RemindersScheduler {
         this.logger.error(`Не удалось обработать напоминание ${reminder.id}`, e as Error);
       }
     }
+
+    /*
+     * Предупреждение за час до срока (решение владельца: слать дважды).
+     *
+     * Напоминание в сам срок часто застаёт врасплох: человек уже занят
+     * другим делом. За час можно спланировать звонок. Отметка preNotifiedAt
+     * нужна, чтобы предупреждение ушло один раз: планировщик просыпается
+     * каждые пять минут.
+     */
+    const soon = await this.prisma.reminder.findMany({
+      where: {
+        status: ReminderStatus.PENDING,
+        preNotifiedAt: null,
+        remindAt: { gt: new Date(), lte: new Date(Date.now() + 60 * 60 * 1000) },
+        deletedAt: null,
+      },
+      include: dueReminderInclude,
+      orderBy: { remindAt: 'asc' },
+      take: BATCH_SIZE,
+    });
+    for (const reminder of soon) {
+      try {
+        await this.warn(reminder);
+      } catch (e) {
+        this.logger.error(
+          `Не удалось предупредить о напоминании ${reminder.id}`,
+          e as Error,
+        );
+      }
+    }
+  }
+
+  /** «Через час» — только исполнителю, в рабочий чат это не выносим */
+  private async warn(reminder: DueReminder): Promise<void> {
+    const phoneLine = reminder.client.phone
+      ? ` — ${escapeHtml(reminder.client.phone)}`
+      : '';
+    const text =
+      `<b>Через час: перезвонить</b>\n` +
+      `${escapeHtml(reminder.client.fullName)}${phoneLine}\n` +
+      `${escapeHtml(reminder.title)}\n` +
+      `Срок: ${formatDateTime(reminder.remindAt)}`;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.reminder.update({
+        where: { id: reminder.id },
+        data: { preNotifiedAt: new Date() },
+      });
+      await this.telegram.enqueueToUser(
+        reminder.assigneeId,
+        text,
+        { kind: 'reminder-soon', refId: reminder.id },
+        tx,
+      );
+    });
   }
 
   private async fire(reminder: DueReminder): Promise<void> {
