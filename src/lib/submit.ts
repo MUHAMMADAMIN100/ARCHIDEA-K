@@ -31,10 +31,16 @@ export interface SubmitResult {
  * (серверных функций у vite dev нет).
  */
 /** @returns true — успех, false — ошибка, null — CRM не настроена */
+/**
+ * Итог одной попытки: отправлено, отказ по существу или сбой связи.
+ * «rejected» повторять бессмысленно — сервер ответил и объяснил, что не так.
+ */
+type SendResult = true | false | 'rejected' | null;
+
 async function sendToCrm(
   order: OrderPayload,
   honeypot: string,
-): Promise<boolean | null> {
+): Promise<SendResult> {
   const payload = JSON.stringify({ ...order, company: honeypot });
 
   // dev: прямой вызов бэкенда с локальным ключом
@@ -61,7 +67,24 @@ async function sendToCrm(
       body: payload,
     });
     if (res.status === 503) return null; // CRM не подключена на сервере
-    return res.ok;
+    if (res.ok) return true;
+    /*
+     * Отказ по существу: проверка полей (400) или слишком частая отправка
+     * (429). Сервер ответил и объяснил причину — повторять нечего.
+     * Всё остальное (502, 504, обрыв) — временная неполадка, повторим.
+     */
+    if (res.status === 400 || res.status === 403 || res.status === 429) {
+      return 'rejected';
+    }
+    try {
+      const body = await res.json();
+      if (typeof body?.reason === 'string' && body.reason.startsWith('upstream_4')) {
+        return 'rejected';
+      }
+    } catch {
+      /* тело не разобрать — считаем сбоем связи и повторим */
+    }
+    return false;
   } catch (e) {
     console.warn('[CRM] Не удалось отправить заявку в CRM:', e);
     return false;
@@ -73,9 +96,32 @@ async function sendToCrm(
  * null означает «CRM не подключена на сервере» — в этом случае считать заявку
  * потерянной нельзя, но и доставленной тоже: кладём её в очередь на повтор.
  */
+/** Пауза между попытками отправки */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Отправка с повтором.
+ *
+ * Сервер иногда недоступен считанные секунды — например, пока выкатывается
+ * обновление. Одной неудачной попытки хватало, чтобы человек увидел «Не
+ * удалось отправить заявку» и ушёл, хотя через три секунды всё работало.
+ * Поэтому пробуем трижды с нарастающей паузой и только потом сдаёмся;
+ * заявка при этом всё равно остаётся в очереди и уйдёт при следующем
+ * открытии страницы.
+ *
+ * Повторяем ТОЛЬКО отказ по связи или сбой сервера. Если сервер сказал
+ * «заполните адрес» или «слишком частые заявки», повтор ничего не изменит.
+ */
 async function trySend(order: OrderPayload, honeypot: string): Promise<boolean> {
-  const crm = await sendToCrm(order, honeypot);
-  return crm === true;
+  const delays = [0, 2500, 6000];
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt]);
+    const crm = await sendToCrm(order, honeypot);
+    if (crm === true) return true;
+    // отказ по существу (проверка полей, лимит) — повторять бессмысленно
+    if (crm === 'rejected') return false;
+  }
+  return false;
 }
 
 // ── Очередь повторной отправки (чтобы НЕ терять заявки при сбое сети) ──
