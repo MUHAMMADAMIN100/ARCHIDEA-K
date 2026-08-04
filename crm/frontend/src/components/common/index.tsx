@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, Skeleton, SkeletonList } from '../ui';
 import { ScrollArea } from '../ScrollArea';
 import { DatePicker } from '../DatePicker';
 import { useFetch } from '../../api/hooks';
+import { COMPANY, companyContacts } from '../../lib/company';
 import {
   PERIOD_LABEL,
   PeriodPreset,
@@ -688,6 +689,18 @@ export function PrintSheet({
       <div className="mb-5 border-b border-navy-100 pb-4">
         <div className="text-lg font-semibold text-navy-900">{title}</div>
         {subtitle && <div className="mt-1 text-sm text-navy-600">{subtitle}</div>}
+        {/*
+          Реквизиты компании прямо в шапке листа (ТЗ, п. 4). На экране они
+          лишние — там и так понятно, чья это система, — а на бумаге документ
+          без телефонов и Instagram бесполезен: клиенту некуда позвонить.
+        */}
+        <div className="mt-2 hidden text-xs leading-relaxed text-navy-700 print:block">
+          <div className="font-semibold">
+            {COMPANY.name} · {COMPANY.city}
+          </div>
+          <div>{companyContacts()}</div>
+          <div>Работаем {COMPANY.workingHours}</div>
+        </div>
       </div>
       {children}
     </div>

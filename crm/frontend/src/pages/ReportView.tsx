@@ -8,6 +8,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
+import { COMPANY, companyContacts } from '../lib/company';
 import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, Badge } from '../components/ui';
@@ -178,6 +179,13 @@ export function ReportView() {
 
       {/* ── Ведомость (печатается) ── */}
       <div className="print-sheet card p-6 sm:p-8">
+        {/* Реквизиты компании на печатной форме акта (ТЗ, п. 4) */}
+        <div className="mb-4 hidden border-b border-navy-100 pb-3 text-xs leading-relaxed text-navy-700 print:block">
+          <div className="font-semibold">
+            {COMPANY.name} · {COMPANY.city}
+          </div>
+          <div>{companyContacts()}</div>
+        </div>
         <div className="mb-1 flex items-center justify-between">
           <div className="text-xl font-extrabold tracking-wide text-navy-900">
             ARCHIDEA <span className="font-medium text-navy-600">· Платёжная ведомость</span>
