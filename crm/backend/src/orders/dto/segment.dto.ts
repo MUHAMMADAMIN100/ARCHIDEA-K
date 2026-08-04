@@ -1,7 +1,8 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -16,7 +17,11 @@ import { SegmentKind } from '@prisma/client';
 
 /** Помещение — нижний уровень разбивки */
 export class RoomDto {
-  @IsString() @MinLength(1) @MaxLength(120) title: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title: string;
 
   /** Площадь помещения, м² */
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000) area?: number;
@@ -27,7 +32,11 @@ export class RoomDto {
 
 /** Этаж: набор помещений */
 export class FloorDto {
-  @IsString() @MinLength(1) @MaxLength(120) title: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title: string;
 
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000) area?: number;
   @IsOptional() @IsString() @MaxLength(500) note?: string;
@@ -42,7 +51,11 @@ export class FloorDto {
 
 /** Блок объекта: корпус, подъезд, здание */
 export class BlockDto {
-  @IsString() @MinLength(1) @MaxLength(120) title: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title: string;
 
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000) area?: number;
   @IsOptional() @IsString() @MaxLength(500) note?: string;
@@ -75,7 +88,7 @@ export class ReplaceSegmentsDto {
    * По умолчанию нет: площадь заказа — это то, за что выставлен счёт, и
    * менять её молча при правке структуры нельзя.
    */
-  @IsOptional() applyArea?: boolean;
+  @IsOptional() @IsBoolean() applyArea?: boolean;
 }
 
 /** Уровень — на случай, если понадобится точечная правка узла */

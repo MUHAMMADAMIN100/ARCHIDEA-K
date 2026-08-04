@@ -58,6 +58,10 @@ export const MASKED_FIELDS = new Set([
 
 /** Человеческие названия полей — журнал читают люди, а не разработчики */
 export const FIELD_LABELS: Record<string, string> = {
+  // состав работ у услуги (ТЗ: объём работ) — по нему решают споры с клиентом
+  includedWorks: 'Что входит в услугу',
+  excludedWorks: 'Что не входит',
+  outputPerDay: 'Выработка за смену',
   fullName: 'ФИО',
   phone: 'Телефон',
   email: 'Почта',

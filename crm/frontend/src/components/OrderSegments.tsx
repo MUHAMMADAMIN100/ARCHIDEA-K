@@ -105,6 +105,15 @@ export function OrderSegments({
       ),
     0,
   );
+  /*
+   * Как только считать нечего, галочку снимаем, а не просто гасим. Раньше
+   * состояние оставалось включённым: человек ставил галочку, потом стирал
+   * площади — и в заказ уезжал ноль вместо прежней площади.
+   */
+  useEffect(() => {
+    if (total === 0 && applyArea) setApplyArea(false);
+  }, [total, applyArea]);
+
   const rooms = blocks.reduce(
     (n, b) => n + b.floors.reduce((fn, f) => fn + f.rooms.length, 0),
     0,

@@ -52,7 +52,9 @@ export class LoadService {
       select: {
         date: true,
         address: true,
-        members: { select: { id: true } },
+        // cleanerId нужен, чтобы не посчитать одного человека дважды:
+        // у него может быть два выезда в один день
+        members: { select: { id: true, cleanerId: true } },
       },
       orderBy: { date: 'asc' },
     });
@@ -66,6 +68,13 @@ export class LoadService {
     });
 
     const byDate = new Map<string, LoadDay>();
+    /*
+     * Людей считаем по головам, а не по строкам состава: один и тот же клинер
+     * может стоять в двух выездах одного дня, и тогда «5 из 3 человек»
+     * выглядело бы арифметической ошибкой. Разовые (без cleanerId) считаются
+     * каждый за себя — их отличает только строка состава.
+     */
+    const peopleByDate = new Map<string, Set<string>>();
     for (const g of groups) {
       const key = dayKey(g.date);
       const day = byDate.get(key) ?? {
@@ -74,7 +83,10 @@ export class LoadService {
         visits: 0,
         addresses: [],
       };
-      day.booked += g.members.length;
+      const people = peopleByDate.get(key) ?? new Set<string>();
+      for (const m of g.members) people.add(m.cleanerId ?? `guest:${m.id}`);
+      peopleByDate.set(key, people);
+      day.booked = people.size;
       day.visits += 1;
       if (g.address && !day.addresses.includes(g.address)) {
         day.addresses.push(g.address);

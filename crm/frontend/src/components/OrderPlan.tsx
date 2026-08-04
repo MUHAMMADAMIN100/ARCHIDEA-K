@@ -32,6 +32,8 @@ interface PlanResponse {
   volume: number;
   perDay?: number;
   totalDays: number;
+  /** Помещения без указанной площади — в графике есть, норму не расходуют */
+  roomsWithoutArea?: number;
   days: PlanDay[];
 }
 
@@ -133,9 +135,18 @@ export function OrderPlan({
               </table>
             </div>
 
+            {!!plan.roomsWithoutArea && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                У {plan.roomsWithoutArea} помещений не указана площадь — они
+                стоят в графике, но в срок не заложены. Проставьте метраж в
+                разбивке объекта, иначе срок занижен.
+              </p>
+            )}
+
             <p className="text-xs text-navy-500">
               Неполный день считается днём: бригада не выезжает на полсмены.
-              Даты проставлены от даты уборки в заказе.
+              Даты проставлены от даты уборки в заказе. Помещение больше дневной
+              нормы разбивается на части.
             </p>
           </>
         )}

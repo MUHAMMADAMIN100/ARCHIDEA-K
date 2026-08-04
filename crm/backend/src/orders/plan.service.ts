@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, seesAll } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
 import { dayKey } from '../common/time/dushanbe';
+import { billableUnits } from './order-pricing';
 
 /** Одна часть объекта, попавшая в дневную выработку */
 interface PlanPiece {
@@ -75,8 +76,25 @@ export class PlanService {
       : null;
 
     const perPersonPerDay = tariff?.outputPerDay ?? 0;
-    const perSeat = (tariff?.unit ?? 'м²') !== 'м²';
-    const volume = perSeat ? (order.seats ?? 0) : (order.area ?? 0);
+    /*
+     * Объём берём той же функцией, что и расчёт цены. Повтори мы её логику
+     * здесь своими словами — срок и сумма однажды разошлись бы: у одной
+     * услуги объём считается площадью, у другой посадочными местами.
+     */
+    const volume = billableUnits(
+      { serviceKey: key, area: order.area, seats: order.seats },
+      tariff
+        ? {
+            key,
+            unit: tariff.unit,
+            hasLevels: false,
+            priceLight: 0,
+            priceMedium: 0,
+            priceHeavy: 0,
+            pricePerSqm: 0,
+          }
+        : null,
+    );
 
     // разовые сотрудники считаются наравне со штатными — работают-то они вместе
     const guests = Array.isArray(order.guestCleaners)
@@ -107,10 +125,17 @@ export class PlanService {
     const perDay = perPersonPerDay * people;
     const totalDays = Math.max(1, Math.ceil(volume / perDay));
 
-    // помещения из разбивки объекта — план по ним нагляднее, чем по метрам
+    /*
+     * Помещения из разбивки объекта — план по ним нагляднее, чем по метрам.
+     *
+     * Помещения без указанной площади в план тоже входят: раньше они молча
+     * выпадали, и бригада просто не знала, что туда надо зайти. Дневную норму
+     * они не расходуют (метража нет), но в списке дня стоят.
+     */
     const rooms = order.segments
-      .filter((s) => s.kind === 'ROOM' && (s.area ?? 0) > 0)
-      .map((s) => ({ title: s.title, area: s.area as number }));
+      .filter((s) => s.kind === 'ROOM')
+      .map((s) => ({ title: s.title, area: Math.max(0, s.area ?? 0) }));
+    const roomsWithoutArea = rooms.filter((r) => r.area === 0).length;
 
     const days: PlanDay[] = [];
     const start = order.scheduledDate ? new Date(order.scheduledDate) : null;
@@ -126,31 +151,50 @@ export class PlanService {
        * Раскладываем помещения по дням: помещение целиком уходит в один день,
        * пока дневная норма не выбрана. Делить комнату между днями бессмысленно
        * — бригада не уходит из середины кабинета.
+       *
+       * Исключение — помещение больше дневной нормы: зал на 500 м² при норме
+       * 100 нельзя показывать как один день. Такое помещение раскладывается на
+       * столько дней, сколько реально нужно, и в каждом дне подписано частью.
+       * Иначе план выдавал бы правдоподобный, но заниженный срок — это хуже,
+       * чем не показать ничего.
        */
       let current: PlanPiece[] = [];
       let currentArea = 0;
-      for (const room of rooms) {
-        if (currentArea > 0 && currentArea + room.area > perDay) {
-          days.push({
-            day: days.length + 1,
-            date: dateOf(days.length),
-            area: currentArea,
-            pieces: current,
-          });
-          current = [];
-          currentArea = 0;
-        }
-        current.push(room);
-        currentArea += room.area;
-      }
-      if (current.length) {
+      const closeDay = () => {
+        if (!current.length) return;
         days.push({
           day: days.length + 1,
           date: dateOf(days.length),
           area: currentArea,
           pieces: current,
         });
+        current = [];
+        currentArea = 0;
+      };
+
+      for (const room of rooms) {
+        if (room.area > perDay) {
+          closeDay();
+          const parts = Math.ceil(room.area / perDay);
+          let left = room.area;
+          for (let i = 1; i <= parts && days.length < 400; i += 1) {
+            const chunk = Math.min(perDay, left);
+            days.push({
+              day: days.length + 1,
+              date: dateOf(days.length),
+              area: chunk,
+              pieces: [{ title: `${room.title} (часть ${i} из ${parts})`, area: chunk }],
+            });
+            left -= chunk;
+          }
+          continue;
+        }
+        if (currentArea > 0 && currentArea + room.area > perDay) closeDay();
+        current.push(room);
+        currentArea += room.area;
+        if (days.length >= 400) break;
       }
+      closeDay();
     } else {
       // разбивки нет — план по объёму: столько-то единиц в день
       let left = volume;
@@ -176,6 +220,12 @@ export class PlanService {
       volume,
       perDay,
       totalDays: days.length || totalDays,
+      /*
+       * Помещения без метража попадают в график, но норму не расходуют.
+       * Говорим об этом прямо: иначе срок выглядит точным, хотя часть объёма
+       * в нём просто не учтена.
+       */
+      roomsWithoutArea,
       days,
     };
   }

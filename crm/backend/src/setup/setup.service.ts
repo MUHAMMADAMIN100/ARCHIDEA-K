@@ -324,7 +324,7 @@ export class SetupService implements OnApplicationBootstrap {
     try {
       const existing = await this.prisma.proposalTemplate.findMany({
         where: { deletedAt: null },
-        select: { id: true, body: true },
+        select: { id: true, body: true, intro: true, conditions: true },
       });
 
       if (existing.length === 0) {
@@ -336,22 +336,25 @@ export class SetupService implements OnApplicationBootstrap {
       }
 
       /*
-       * Шаблон уже есть. Дополняем его новыми блоками ТОЛЬКО если текст в
-       * точности совпадает с прежней нашей версией — то есть его никто не
-       * правил. Иначе в шаблоне живут правки руководителя, и переписывать их
-       * система не вправе.
+       * Шаблон уже есть. Дополняем его новыми блоками ТОЛЬКО если ВСЕ три
+       * части текста в точности совпадают с прежней нашей версией — то есть
+       * шаблон никто не правил.
+       *
+       * Сверять один лишь основной текст мало: руководитель скорее всего
+       * поправит как раз приветствие — там телефоны и Instagram. Проверяй мы
+       * только body, при следующем рестарте его правка молча вернулась бы к
+       * заводской, и клиент получил бы КП со старым телефоном.
        */
-      const untouched = existing.filter((t) =>
-        PREVIOUS_PROPOSAL_BODIES.includes(t.body),
+      const untouched = existing.filter(
+        (t) =>
+          PREVIOUS_PROPOSAL_BODIES.includes(t.body) &&
+          (t.intro ?? '') === DEFAULT_PROPOSAL_TEMPLATE.intro &&
+          (t.conditions ?? '') === DEFAULT_PROPOSAL_TEMPLATE.conditions,
       );
       for (const t of untouched) {
         await this.prisma.proposalTemplate.update({
           where: { id: t.id },
-          data: {
-            body: DEFAULT_PROPOSAL_TEMPLATE.body,
-            intro: DEFAULT_PROPOSAL_TEMPLATE.intro,
-            conditions: DEFAULT_PROPOSAL_TEMPLATE.conditions,
-          },
+          data: { body: DEFAULT_PROPOSAL_TEMPLATE.body },
         });
         this.logger.log('Базовый шаблон КП дополнен составом работ');
       }

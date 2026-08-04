@@ -295,7 +295,7 @@ export class TariffsService implements OnModuleInit {
         isSystem: false,
         includedWorks: cleanWorks(dto.includedWorks),
         excludedWorks: cleanWorks(dto.excludedWorks),
-        outputPerDay: dto.outputPerDay ?? null,
+        outputPerDay: dto.outputPerDay || null,
       },
     });
 
@@ -386,6 +386,15 @@ export class TariffsService implements OnModuleInit {
         'priceHeavy',
         'sortOrder',
         'isActive',
+        /*
+         * Состав работ и выработка — ради них фича и делалась: правку «что
+         * входит в услугу» надо уметь показать в истории. Иначе пункт «мытьё
+         * окон» можно тихо убрать задним числом, и спорить с клиентом будет
+         * нечем — а именно этот спор список и должен закрывать.
+         */
+        'includedWorks',
+        'excludedWorks',
+        'outputPerDay',
       ]),
     });
     return after;
