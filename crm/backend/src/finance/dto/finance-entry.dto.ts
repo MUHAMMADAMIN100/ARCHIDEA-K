@@ -9,7 +9,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { FinanceCategory, FinanceKind, FinanceSource } from '@prisma/client';
+import {
+  FinanceCategory,
+  FinanceKind,
+  FinanceSource,
+  PaymentMethod,
+} from '@prisma/client';
 
 // Ниже int32 (Prisma Int) — чтобы огромное число давало 400, а не 500 при записи
 const MAX_AMOUNT = 2_000_000_000;
@@ -25,6 +30,7 @@ export class CreateFinanceEntryDto {
   @IsString() @MaxLength(200) title: string;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
   @IsOptional() @IsString() orderId?: string;
+
   @IsOptional() @IsString() clientId?: string;
   @IsOptional() @IsString() shiftGroupId?: string;
 }
@@ -37,6 +43,7 @@ export class UpdateFinanceEntryDto {
   @IsOptional() @IsString() @MaxLength(200) title?: string;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
   @IsOptional() @IsString() orderId?: string;
+
   @IsOptional() @IsString() clientId?: string;
   @IsOptional() @IsString() shiftGroupId?: string;
 }
@@ -48,6 +55,16 @@ export class ListFinanceEntryDto {
   @IsOptional() @Matches(DATE_RE, { message: DATE_MESSAGE }) from?: string;
   @IsOptional() @Matches(DATE_RE, { message: DATE_MESSAGE }) to?: string;
   @IsOptional() @IsString() orderId?: string;
+
+  /*
+   * Канал поступления (ТЗ 3.1): «чем заплатили».
+   *
+   * Два отдельных параметра, а не один: method отвечает на вопрос «наличные
+   * или банк», bankId — «какой именно банк». Свести их в одно поле значило бы
+   * либо потерять сводку по всей безналичке, либо по конкретному банку.
+   */
+  @IsOptional() @IsEnum(PaymentMethod) method?: PaymentMethod;
+  @IsOptional() @IsString() bankId?: string;
 
   /*
    * 500, а не 200: расшифровка «Доход за период» берёт операции целого

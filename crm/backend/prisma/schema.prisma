@@ -145,6 +145,13 @@ enum FinanceSource {
   MANUAL // внесена вручную
 }
 
+/// Чем заплатил клиент (ТЗ 3.1). Конкретный банк хранится отдельно —
+/// справочником PaymentBank, чтобы новый банк заводился без правки кода.
+enum PaymentMethod {
+  CASH // наличные
+  BANK // безналичный расчёт / перевод
+}
+
 /// Статья доходов и расходов (ТЗ 7.1)
 enum FinanceCategory {
   ORDER_PAYMENT // оплата заказа
@@ -208,41 +215,41 @@ enum ReportStatus {
 
 /// Пользователь системы (Руководитель или Менеджер)
 model User {
-  id           String   @id @default(cuid())
-  login        String   @unique
-  passwordHash String
-  fullName     String
-  role         Role     @default(MANAGER)
-  phone        String?
-  position     String? // должность («Операционный управляющий», «Логист»…)
-  duties       String? // должностные обязанности (список, по строке на пункт)
-  mainTask     String? // основная задача сотрудника
-  acceptsLeads Boolean  @default(true) // участвует в авто-распределении заявок с сайта
+  id             String   @id @default(cuid())
+  login          String   @unique
+  passwordHash   String
+  fullName       String
+  role           Role     @default(MANAGER)
+  phone          String?
+  position       String? // должность («Операционный управляющий», «Логист»…)
+  duties         String? // должностные обязанности (список, по строке на пункт)
+  mainTask       String? // основная задача сотрудника
+  acceptsLeads   Boolean  @default(true) // участвует в авто-распределении заявок с сайта
   /// Владелец компании: единственный, кто может удалять сотрудников
-  isOwner      Boolean  @default(false)
-  canManageOps Boolean  @default(false) // расширенный доступ: как директор, но без финансов
+  isOwner        Boolean  @default(false)
+  canManageOps   Boolean  @default(false) // расширенный доступ: как директор, но без финансов
   /// ТЗ 1.2 — полный доступ к модулю задач: видит, создаёт, назначает и правит
   /// ВСЕ задачи компании, а не только свои (у Ироды)
-  canManageTasks Boolean @default(false)
+  canManageTasks Boolean  @default(false)
   /// Доступ к корзине — персональное право, а НЕ следствие роли.
   /// Руководителей несколько, а разбирать удалённое доверено не всем.
-  canSeeTrash  Boolean  @default(false)
+  canSeeTrash    Boolean  @default(false)
   /// Персональный запрет на финансы — СИЛЬНЕЕ роли.
   /// Руководителей в компании несколько, но деньги компании владелец
   /// открывает не каждому: этот сотрудник сохраняет управление людьми и
   /// операциями, но не видит доходов, расходов, выплат, премий и выручки.
-  noFinance    Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  noFinance      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // ── Уведомления в Telegram (ТЗ 10) ──
   /// Личный chat_id — заполняется сам, когда сотрудник жмёт «Старт» у бота
-  telegramChatId  String?
-  telegramEnabled Boolean @default(true)
+  telegramChatId      String?
+  telegramEnabled     Boolean   @default(true)
   /// Как зовут человека в Telegram — показываем в профиле, чтобы было видно,
   /// к какому именно аккаунту подключён бот
-  telegramName    String?
+  telegramName        String?
   /// Одноразовый код привязки: кнопка «Подключить Telegram» кладёт его сюда
   /// и даёт ссылку t.me/бот?start=код. Код живёт сутки и сгорает при первом
   /// использовании — по чужой ссылке подключиться нельзя.
@@ -264,38 +271,38 @@ model User {
   sessionEpoch Int       @default(0)
 
   // связи
-  clients       Client[]        @relation("ManagerClients")
-  orders        Order[]         @relation("ManagerOrders")
-  cleaners      Cleaner[] // клинеры в команде менеджера
-  tasksAssigned Task[]           @relation("TaskAssignee")
-  tasksCreated  Task[]           @relation("TaskCreator")
+  clients         Client[]         @relation("ManagerClients")
+  orders          Order[]          @relation("ManagerOrders")
+  cleaners        Cleaner[] // клинеры в команде менеджера
+  tasksAssigned   Task[]           @relation("TaskAssignee")
+  tasksCreated    Task[]           @relation("TaskCreator")
   taskAssignments TaskAssignment[] @relation("TaskAssignments")
-  notifications Notification[]
-  reports       Report[]        @relation("ReportManager")
+  notifications   Notification[]
+  reports         Report[]         @relation("ReportManager")
 
   @@index([deletedAt])
 }
 
 /// Клинер — член бригады. НЕ имеет доступа в CRM.
 model Cleaner {
-  id        String   @id @default(cuid())
-  fullName  String
-  phone     String?
-  rate      Int      @default(230) // ставка, сомони за смену (бригадир — 330)
-  duties    String? // обязанности (для бригадиров)
-  isActive  Boolean  @default(true)
-  manager   User?    @relation(fields: [managerId], references: [id], onDelete: SetNull)
-  managerId String?
-  brigade   Brigade? @relation("BrigadeMembers", fields: [brigadeId], references: [id], onDelete: SetNull)
-  brigadeId String?
-  leaderOf   Brigade?       @relation("BrigadeLeader")
-  orders     Order[]        @relation("OrderCleaners")
-  shifts     Shift[]
-  fines      Fine[]
-  reportRows ReportWorker[]
+  id               String             @id @default(cuid())
+  fullName         String
+  phone            String?
+  rate             Int                @default(230) // ставка, сомони за смену (бригадир — 330)
+  duties           String? // обязанности (для бригадиров)
+  isActive         Boolean            @default(true)
+  manager          User?              @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  managerId        String?
+  brigade          Brigade?           @relation("BrigadeMembers", fields: [brigadeId], references: [id], onDelete: SetNull)
+  brigadeId        String?
+  leaderOf         Brigade?           @relation("BrigadeLeader")
+  orders           Order[]            @relation("OrderCleaners")
+  shifts           Shift[]
+  fines            Fine[]
+  reportRows       ReportWorker[]
   groupMemberships ShiftGroupMember[] // участие в выездах (ТЗ 4)
-  bonuses    Bonus[] // премии (ТЗ 7.2)
-  createdAt  DateTime       @default(now())
+  bonuses          Bonus[] // премии (ТЗ 7.2)
+  createdAt        DateTime           @default(now())
 
   // ── Корзина (ТЗ 6) ──
   deletedAt    DateTime?
@@ -321,16 +328,16 @@ model Brigade {
 /// двойного начисления и на него опирается reports.service (skipDuplicates).
 /// Состав и адрес выезда живут в ShiftGroup — выездов за день может быть несколько.
 model Shift {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   date      DateTime // день смены (00:00 UTC)
-  cleaner   Cleaner  @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  cleaner   Cleaner     @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
   cleanerId String
   rate      Int // ставка на момент смены (снапшот — не меняется задним числом)
   note      String? // объект/комментарий
   /// Выезд, который породил эту оплачиваемую смену (ТЗ 4)
   group     ShiftGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   groupId   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 
   @@unique([cleanerId, date])
   @@index([date])
@@ -340,11 +347,11 @@ model Shift {
 /// Выезд бригады на объект: адрес, время, состав группы, ответственный менеджер.
 /// Отвечает на вопрос ТЗ 4 «куда выезжали, когда и с кем».
 model ShiftGroup {
-  id      String           @id @default(cuid())
-  date    DateTime // календарный день выезда (00:00 UTC)
-  address String // точный адрес объекта — обязателен
-  order   Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  orderId String?
+  id        String           @id @default(cuid())
+  date      DateTime // календарный день выезда (00:00 UTC)
+  address   String // точный адрес объекта — обязателен
+  order     Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId   String?
   startTime String? // «09:30» — местное время Душанбе
   endTime   String?
   status    ShiftGroupStatus @default(PLANNED)
@@ -420,36 +427,36 @@ model Fine {
 
 /// Клиент — ядро базы. Фиксируется КАЖДОЕ обращение.
 model Client {
-  id            String      @id @default(cuid())
-  fullName      String
-  phone         String      @unique // защита от дублей по телефону
+  id           String      @id @default(cuid())
+  fullName     String
+  phone        String      @unique // защита от дублей по телефону
   /// Запасные номера «на всякий случай» — второй, третий и т.д.
-  extraPhones   String[]    @default([])
+  extraPhones  String[]    @default([])
   /// «От кого» — рекомендатель или партнёр («От Анисы», «От Ибодат»)
-  sourceDetail  String?
+  sourceDetail String?
   /// Адрес клиента — спрашивается при заведении и подставляется в новые заказы
-  address       String?
-  email         String?
-  source        LeadSource  @default(SITE)
-  tags          ClientTag[] @default([])
-  notes         String? // комментарии и заметки менеджера
+  address      String?
+  email        String?
+  source       LeadSource  @default(SITE)
+  tags         ClientTag[] @default([])
+  notes        String? // комментарии и заметки менеджера
   /// Постоянная скидка клиента в сомони — подставляется в новые заказы
-  discount      Int         @default(0)
+  discount     Int         @default(0)
   /// ТЗ 10.2 — постоянные предпочтения клиента (без запаха хлорки, есть кот, обувь снимать…)
-  preferences   String?
+  preferences  String?
 
   // ── Холодные звонки ──
   /// Каким вышел последний разговор: холодный, нейтральный, горячий
-  callType   CallType?
+  callType      CallType?
   /// Когда перезвонить: на этот день и час в календаре встаёт отметка «позвонить»
-  callbackAt DateTime?
+  callbackAt    DateTime?
   /// Степень заинтересованности: «Перезвоню», «Подумаю», «Посоветуюсь» и свои
   /// варианты. Свободный текст: справочник собирается из уже использованных
   /// значений — так же, как теги клиента.
   interestLevel String?
 
-  lastContactAt DateTime    @default(now())
-  manager       User?       @relation("ManagerClients", fields: [managerId], references: [id], onDelete: SetNull)
+  lastContactAt DateTime   @default(now())
+  manager       User?      @relation("ManagerClients", fields: [managerId], references: [id], onDelete: SetNull)
   managerId     String?
   orders        Order[]
   proposals     Proposal[] // коммерческие предложения (ТЗ 9)
@@ -462,22 +469,22 @@ model Client {
   paidOrdersCount Int       @default(0)
   lastOrderAt     DateTime?
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // ── Корзина (ТЗ 6) ──
   deletedAt    DateTime?
   deletedById  String?
   deleteReason String?
+  // @@index([phone]) убран: @unique на phone уже создаёт индекс.
+  // @unique СОХРАНЁН намеренно: клиент из корзины с тем же телефоном
+  // восстанавливается вместе со своей историей, а не дублируется.
 
   @@index([managerId])
   @@index([isRepeat])
   @@index([deletedAt])
   // календарь спрашивает перезвоны за месяц — по дате, а не перебором клиентов
   @@index([callbackAt])
-  // @@index([phone]) убран: @unique на phone уже создаёт индекс.
-  // @unique СОХРАНЁН намеренно: клиент из корзины с тем же телефоном
-  // восстанавливается вместе со своей историей, а не дублируется.
 }
 
 /// Заказ / обращение — движется по воронке. История заказов клиента.
@@ -507,28 +514,31 @@ model Order {
   preferences    String? // предпочтения клиента по этому заказу (заполняет менеджер)
 
   // данные анкеты с сайта
-  preferredDate DateTime?
-  preferredTime String?
-  hasUtilities  Boolean?
-  accessMethod  AccessMethod?
-  comment       String?
-  extras        Json? // выбранные доп. услуги: ключ → количество
+  preferredDate      DateTime?
+  preferredTime      String?
+  hasUtilities       Boolean?
+  accessMethod       AccessMethod?
+  comment            String?
+  extras             Json? // выбранные доп. услуги: ключ → количество
   /// Дополнительные ОСНОВНЫЕ услуги заявки (мульти-выбор): снапшот строк
   /// {key, title, unit, qty, pricePerUnit, total} — история не зависит от
   /// последующих правок справочника
   additionalServices Json?
   /// «От кого» пришла заявка — рекомендатель или партнёр
-  sourceDetail  String?
+  sourceDetail       String?
   /// Скидка по заказу в сомони. Вычитается из суммы работ и доп. услуг.
-  discount      Int              @default(0)
+  discount           Int            @default(0)
   /// Разовые сотрудники, привлечённые под этот заказ (ТЗ): массив
   /// {fullName, rate} — кого позвали на один раз и сколько ему отдали.
   /// В штат и в выплаты не попадают: это запись о наличных на руки.
-  guestCleaners Json?
-  /// Сколько клиент уже заплатил, сомони. Остаток = итог − эта сумма.
-  /// Учёт долга по заказу; в книгу доходов сумма по-прежнему попадает
-  /// один раз — при переводе заказа в «Оплачено / Закрыто».
-  paidAmount    Int              @default(0)
+  guestCleaners      Json?
+  /// Сколько клиент уже заплатил, сомони — сумма всех взносов по заказу.
+  /// Поле оставлено денормализованным: по нему считаются долг на карточке,
+  /// сумма этапа в воронке и аналитика, и пересчитывается оно сервером при
+  /// любом изменении платежей (см. payments.service.ts).
+  paidAmount         Int            @default(0)
+  /// Взносы по заказу (ТЗ 3.1, 3.2): чем, когда и сколько заплатили
+  payments           OrderPayment[]
 
   // этапы воронки
   inspectionDate  DateTime? // 3. осмотр
@@ -536,16 +546,16 @@ model Order {
   rejectionReason String? // 9. причина отказа
   isLarge         Boolean   @default(false) // крупный заказ (для уведомления руководителю)
 
-  cleaners  Cleaner[] @relation("OrderCleaners") // назначенная команда
-  reports   Report[]
+  cleaners       Cleaner[]       @relation("OrderCleaners") // назначенная команда
+  reports        Report[]
   shiftGroups    ShiftGroup[] // выезды по этому заказу (ТЗ 4)
   checklist      OrderChecklist? // чек-лист качества (ТЗ 8)
   proposals      Proposal[] // коммерческие предложения (ТЗ 9)
   reminders      Reminder[] // напоминания (ТЗ 10.1)
   financeEntries FinanceEntry[] // доходы и расходы по заказу (ТЗ 7.1)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  closedAt  DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  closedAt       DateTime?
 
   // ── Корзина (ТЗ 6) ──
   deletedAt    DateTime?
@@ -696,11 +706,11 @@ model ReportWorker {
   cleaner   Cleaner? @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
   cleanerId String?
   fullName  String // снапшот ФИО
-  role      String  @default("Клинер") // «Бригадир» / «Клинер»
-  days      Int     @default(1) // дней/смен
+  role      String   @default("Клинер") // «Бригадир» / «Клинер»
+  days      Int      @default(1) // дней/смен
   rate      Int // ставка за день (снапшот)
-  fine      Int     @default(0) // штраф
-  extra     Int     @default(0) // доп. услуги (сумма)
+  fine      Int      @default(0) // штраф
+  extra     Int      @default(0) // доп. услуги (сумма)
   // сумма к выплате = days × rate − fine + extra (вычисляется)
 
   @@index([reportId])
@@ -800,6 +810,69 @@ model AuditLog {
 //  ТЗ 7 — Финансовый учёт
 // ═══════════════════════════════════════════════════════════
 
+/// Банк или платёжный сервис (ТЗ 3.1).
+///
+/// Справочник, а не перечисление в коде: завтра компания начнёт принимать
+/// переводы через Эсхату — руководитель заведёт её сам, как заводит услугу.
+model PaymentBank {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  title     String
+  /// Базовые записи (Алиф, Душанбе Сити, «другой банк») — удалению не подлежат
+  isSystem  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  payments       OrderPayment[]
+  financeEntries FinanceEntry[]
+
+  @@index([isActive, sortOrder])
+  @@index([deletedAt])
+}
+
+/// Взнос клиента по заказу (ТЗ 3.1, 3.2).
+///
+/// Раньше оплата была одним числом в заказе: система знала СКОЛЬКО получено,
+/// но не знала чем, когда и сколькими частями. Теперь каждый взнос — своя
+/// строка, и «смешанная оплата» — это просто несколько строк с разными
+/// способами, а не отдельная сущность.
+model OrderPayment {
+  id      String         @id @default(cuid())
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+  amount  Int
+  /// Пусто только у записей, перенесённых из прежнего учёта: тогда способ
+  /// оплаты не спрашивали, и придумывать его задним числом нельзя
+  method  PaymentMethod?
+  bank    PaymentBank?   @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  bankId  String?
+  /// Уточнение: номер перевода, «другой банк — Эсхата» и подобное
+  note    String?
+  /// Когда деньги фактически получены — по этой дате взнос попадает в доходы
+  paidAt  DateTime       @default(now())
+
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // ── Корзина (ТЗ 6) ──
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([orderId])
+  @@index([paidAt])
+  @@index([deletedAt])
+}
+
 /// Единая книга доходов и расходов компании (ТЗ 7.1)
 model FinanceEntry {
   id       String          @id @default(cuid())
@@ -823,6 +896,13 @@ model FinanceEntry {
   reportId     String?
   bonusId      String?
 
+  /// Чем получены деньги (ТЗ 3.1): наличные или банк. У расходов и старых
+  /// записей пусто — способ тогда не спрашивали.
+  paymentMethod PaymentMethod?
+  /// Конкретный банк из справочника — по нему сводят поступления
+  bank          PaymentBank?   @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  bankId        String?
+
   createdById   String?
   createdByName String?
   createdAt     DateTime @default(now())
@@ -836,6 +916,7 @@ model FinanceEntry {
   @@index([kind, date])
   @@index([category, date])
   @@index([orderId])
+  @@index([bankId])
   @@index([deletedAt])
 }
 
@@ -938,15 +1019,15 @@ model OrderChecklist {
 }
 
 model OrderChecklistItem {
-  id          String         @id @default(cuid())
-  checklist   OrderChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  id          String          @id @default(cuid())
+  checklist   OrderChecklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   checklistId String
   title       String
   hint        String?
   section     String?
-  required    Boolean        @default(false)
-  sortOrder   Int            @default(0)
-  isDone      Boolean        @default(false)
+  required    Boolean         @default(false)
+  sortOrder   Int             @default(0)
+  isDone      Boolean         @default(false)
   /// Оценка загрязнения по пункту (только для чек-листов приёма объекта)
   level       DirtAssessment?
   /// Отмечает менеджер или бригадир со своего аккаунта в CRM
@@ -1059,12 +1140,12 @@ model Reminder {
   createdById   String
   createdByName String
 
-  sentAt    DateTime?
+  sentAt        DateTime?
   /// Когда предупредили за час до срока — чтобы не слать это дважды
   preNotifiedAt DateTime?
-  doneAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  doneAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   deletedAt    DateTime?
   deletedById  String?

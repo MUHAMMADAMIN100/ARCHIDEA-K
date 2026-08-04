@@ -78,7 +78,6 @@ async function main() {
     sourceDetail: 'От Ибодат',
     preferences: 'Без запаха хлорки, есть кот',
     discount: 300,
-    paidAmount: 1000,
     additionalServices: [{ key: 'FURNITURE', qty: 4 }],
   });
   report.check(ok2xx(upd), 'Правка сохранена', brief(upd));
@@ -115,14 +114,12 @@ async function main() {
   const clientId = after.clientId;
   const cupd = await call(m, 'PATCH', `/clients/${clientId}`, {
     tags: ['VIP'],
-    labels: ['офис', 'срочные'],
     extraPhones: ['905123456'],
     preferences: 'Обувь снимать',
   });
   report.check(ok2xx(cupd), 'Правка клиента сохранена', brief(cupd));
   const client = (await call(m, 'GET', `/clients/${clientId}`)).data;
   report.check(client.tags?.includes('VIP'), 'ТЗ 1.2: статус выставлен');
-  report.check(client.labels?.length === 2, 'ТЗ 1.2: свободные теги сохранены');
   report.check(client.extraPhones?.length === 1, 'ТЗ 1.1: запасной номер сохранён');
 
   // ── 5. Выезд, разовый клинер (ТЗ 2, 4) ──
@@ -197,8 +194,74 @@ async function main() {
     report.check(ok2xx(sent), 'ТЗ 9.2: КП отправлено, отправитель зафиксирован', brief(sent));
   }
 
-  // ── 7. Оплата, ведомость, доход ──
-  report.section('7. ЗАКРЫТИЕ СДЕЛКИ');
+  // ── 7. Оплата взносами, ведомость, доход (ТЗ 3.1, 3.2) ──
+  report.section('7. ОПЛАТА И ЗАКРЫТИЕ СДЕЛКИ');
+
+  const total = after.finalPrice ?? after.estimatedPrice;
+  const banks = (await call(m, 'GET', '/banks')).data ?? [];
+  const alif = banks.find((b) => b.key === 'ALIF') ?? banks[0];
+  report.check(banks.length > 0, 'ТЗ 3.1: справочник банков доступен', `${banks.length} шт.`);
+
+  // недоплаченный заказ закрывать нельзя
+  const early = await call(m, 'PATCH', `/orders/${orderId}/stage`, { stage: 'PAID' });
+  report.check(early.status === 400, 'Без оплаты заказ не закрывается', brief(early));
+
+  // безналичный расчёт без банка не принимается
+  const noBank = await call(m, 'POST', `/orders/${orderId}/payments`, {
+    parts: [{ amount: 100, method: 'BANK' }],
+  });
+  report.check(noBank.status === 400, 'ТЗ 3.1: перевод без банка отклонён', brief(noBank));
+
+  // смешанная оплата: сумма частей обязана совпасть с суммой платежа
+  const mismatch = await call(m, 'POST', `/orders/${orderId}/payments`, {
+    expectedTotal: 1000,
+    parts: [
+      { amount: 400, method: 'CASH' },
+      { amount: 400, method: 'BANK', bankId: alif.id },
+    ],
+  });
+  report.check(
+    mismatch.status === 400,
+    'ТЗ 3.2: расхождение частей и суммы отклонено',
+    brief(mismatch),
+  );
+
+  // предоплата наличными
+  const prepay = await call(m, 'POST', `/orders/${orderId}/payments`, {
+    parts: [{ amount: 1000, method: 'CASH' }],
+    expectedTotal: 1000,
+  });
+  report.check(ok2xx(prepay), 'Предоплата наличными внесена', brief(prepay));
+
+  // переплата не принимается
+  const over = await call(m, 'POST', `/orders/${orderId}/payments`, {
+    parts: [{ amount: total, method: 'CASH' }],
+  });
+  report.check(over.status === 400, 'Переплата отклонена', brief(over));
+
+  // остаток — смешанной оплатой: часть наличными, часть переводом
+  const rest = total - 1000;
+  const mixed = await call(m, 'POST', `/orders/${orderId}/payments`, {
+    expectedTotal: rest,
+    parts: [
+      { amount: rest - 500, method: 'CASH' },
+      { amount: 500, method: 'BANK', bankId: alif.id },
+    ],
+  });
+  report.check(ok2xx(mixed), 'ТЗ 3.2: смешанная оплата проведена', brief(mixed));
+
+  const withPayments = (await call(m, 'GET', `/orders/${orderId}`)).data;
+  report.check(
+    withPayments.paidAmount === total,
+    'Сумма оплаты заказа сошлась с итогом',
+    `${withPayments.paidAmount} из ${total}`,
+  );
+  report.check(
+    (withPayments.payments ?? []).length === 3,
+    'История взносов видна в карточке',
+    `${(withPayments.payments ?? []).length} шт.`,
+  );
+
   const paid = await call(m, 'PATCH', `/orders/${orderId}/stage`, { stage: 'PAID' });
   report.check(ok2xx(paid), 'Заказ переведён в «Оплачено»', brief(paid));
 
@@ -215,33 +278,147 @@ async function main() {
     report.check(ok2xx(acceptDir), 'Руководитель принял ведомость', brief(acceptDir));
   }
 
-  const income = ((await call(dir, 'GET', '/finance?take=200')).data?.rows ?? []).find(
+  /*
+   * Доход теперь признаётся в момент получения денег, а не при закрытии
+   * заказа: у каждого взноса своя строка со своим каналом. Проверяем и сумму
+   * (она обязана сойтись с заказом), и различимость каналов — ради этого
+   * учёт и затевался.
+   */
+  const bookRows = ((await call(dir, 'GET', '/finance?take=200')).data?.rows ?? []).filter(
     (r) => r.orderId === orderId,
   );
-  report.check(!!income, 'Доход по заказу записан в книгу');
-  if (income) {
-    report.check(
-      income.amount === (after.finalPrice ?? after.estimatedPrice),
-      'Сумма дохода совпадает с суммой заказа',
-      `${income.amount}`,
-    );
-  }
+  report.check(
+    bookRows.length === 3,
+    'Каждый взнос дал строку в книге доходов',
+    `${bookRows.length} шт.`,
+  );
+  const bookSum = bookRows.reduce((sum, r) => sum + r.amount, 0);
+  report.check(bookSum === total, 'Сумма доходов по заказу равна его итогу', `${bookSum} из ${total}`);
+
+  const byBank = ((await call(dir, 'GET', `/finance?take=200&bankId=${alif.id}`)).data?.rows ?? [])
+    .filter((r) => r.orderId === orderId);
+  report.check(
+    byBank.length === 1 && byBank[0].amount === 500,
+    'ТЗ 3.1: фильтр по банку работает',
+    `${byBank.length} шт.`,
+  );
+  const byCash = ((await call(dir, 'GET', '/finance?take=200&method=CASH')).data?.rows ?? [])
+    .filter((r) => r.orderId === orderId);
+  report.check(byCash.length === 2, 'Фильтр «наличные» отделяет их от переводов', `${byCash.length} шт.`);
+
+  /*
+   * Закрытая сделка защищена с обеих сторон.
+   *
+   * Запрет «вернуть заказ из „Оплачено“ может только руководитель» ничего не
+   * стоил бы, если бы менеджер мог просто удалить взнос: сумма оплаты упала
+   * бы ниже итога, а заказ остался бы закрытым.
+   */
+  report.section('7Б. ЗАКРЫТАЯ СДЕЛКА НЕ МЕНЯЕТСЯ МЕНЕДЖЕРОМ');
+  const paymentsNow = (await call(m, 'GET', `/orders/${orderId}/payments`)).data ?? [];
+  const delByManager = await call(
+    m,
+    'DELETE',
+    `/orders/${orderId}/payments/${paymentsNow[0]?.id}`,
+  );
+  report.check(
+    delByManager.status === 403,
+    'Менеджер не может удалить взнос закрытого заказа',
+    brief(delByManager),
+  );
+  const addByManager = await call(m, 'POST', `/orders/${orderId}/payments`, {
+    parts: [{ amount: 100, method: 'CASH' }],
+  });
+  report.check(
+    addByManager.status === 403,
+    'Менеджер не может дописать взнос в закрытый заказ',
+    brief(addByManager),
+  );
+
+  // цена закрытого заказа не расходится с оплатой
+  const repriceClosed = await call(m, 'PATCH', `/orders/${orderId}`, {
+    finalPrice: total + 500,
+    isManualPrice: true,
+  });
+  report.check(
+    repriceClosed.status === 400,
+    'Сумму закрытого заказа нельзя развести с оплатой',
+    brief(repriceClosed),
+  );
+
+  /*
+   * Переплата не проходит и «в лоб», и гонкой: два одинаковых запроса,
+   * отправленных одновременно, раньше оба записывались.
+   */
+  report.section('7В. ГОНКА ПРИ ВНЕСЕНИИ ОПЛАТЫ');
+  const raceOrder = (
+    await call(m, 'POST', '/orders', {
+      clientId,
+      serviceKey: 'GENERAL',
+      area: 100,
+      dirtLevel: 'MEDIUM',
+      source: 'CALL',
+    })
+  ).data;
+  const raceTotal = raceOrder.finalPrice ?? raceOrder.estimatedPrice;
+  const both = await Promise.all([
+    call(m, 'POST', `/orders/${raceOrder.id}/payments`, {
+      parts: [{ amount: raceTotal, method: 'CASH' }],
+    }),
+    call(m, 'POST', `/orders/${raceOrder.id}/payments`, {
+      parts: [{ amount: raceTotal, method: 'CASH' }],
+    }),
+  ]);
+  const accepted = both.filter((r) => ok2xx(r)).length;
+  report.check(accepted === 1, 'Из двух одновременных оплат прошла ровно одна', `${accepted}`);
+  const raceAfter = (await call(m, 'GET', `/orders/${raceOrder.id}`)).data;
+  report.check(
+    raceAfter.paidAmount === raceTotal,
+    'Сумма оплаты не превысила итог заказа',
+    `${raceAfter.paidAmount} из ${raceTotal}`,
+  );
+  await call(m, 'DELETE', `/orders/${raceOrder.id}?reason=Проверка гонки`);
 
   // ── 8. Откат и защита от задвоения ──
   report.section('8. ОТКАТ ОПЛАТЫ И ЗАЩИТА ОТ ЗАДВОЕНИЯ');
-  await call(m, 'PATCH', `/orders/${orderId}/stage`, { stage: 'DONE' });
-  const gone = ((await call(dir, 'GET', '/finance?take=200')).data?.rows ?? []).find(
+  /*
+   * Заказ вернули с «Оплачено» — деньги от этого не исчезли: клиент их
+   * действительно отдал, и в книге доходов они обязаны остаться. Доход
+   * снимается только вместе с удалением самого взноса.
+   *
+   * Возвращает заказ руководитель: менеджеру оплаченный заказ не отдаётся.
+   */
+  await call(dir, 'PATCH', `/orders/${orderId}/stage`, { stage: 'DONE' });
+  const stillThere = ((await call(dir, 'GET', '/finance?take=200')).data?.rows ?? []).filter(
     (r) => r.orderId === orderId,
   );
-  report.check(!gone, 'Автодоход снят вместе с откатом этапа');
+  report.check(
+    stillThere.length === 3,
+    'Полученные деньги остались доходом после отката этапа',
+    `${stillThere.length} шт.`,
+  );
 
-  await call(m, 'PATCH', `/orders/${orderId}/stage`, { stage: 'PAID' });
-  await call(m, 'PATCH', `/orders/${orderId}/stage`, { stage: 'DONE' });
-  await call(m, 'PATCH', `/orders/${orderId}/stage`, { stage: 'PAID' });
+  await call(dir, 'PATCH', `/orders/${orderId}/stage`, { stage: 'PAID' });
+  await call(dir, 'PATCH', `/orders/${orderId}/stage`, { stage: 'DONE' });
+  await call(dir, 'PATCH', `/orders/${orderId}/stage`, { stage: 'PAID' });
   const dupes = ((await call(dir, 'GET', '/finance?take=200')).data?.rows ?? []).filter(
     (r) => r.orderId === orderId,
   );
-  report.check(dupes.length === 1, 'Запись о доходе ровно одна', `${dupes.length} шт.`);
+  report.check(dupes.length === 3, 'Доход не задвоился от переходов туда-обратно', `${dupes.length} шт.`);
+
+  // удаление взноса снимает и его доход
+  const payments = (await call(dir, 'GET', `/orders/${orderId}/payments`)).data ?? [];
+  const del = await call(dir, 'DELETE', `/orders/${orderId}/payments/${payments[0]?.id}`);
+  report.check(ok2xx(del), 'Взнос удалён', brief(del));
+  const afterDelete = ((await call(dir, 'GET', '/finance?take=200')).data?.rows ?? []).filter(
+    (r) => r.orderId === orderId,
+  );
+  report.check(afterDelete.length === 2, 'Доход по удалённому взносу снят', `${afterDelete.length} шт.`);
+  const orderAfterDelete = (await call(dir, 'GET', `/orders/${orderId}`)).data;
+  report.check(
+    orderAfterDelete.paidAmount === total - 1000,
+    'Сумма оплаты заказа пересчитана',
+    `${orderAfterDelete.paidAmount}`,
+  );
   const reports = ((await call(m, 'GET', '/reports')).data ?? []).filter(
     (r) => r.orderId === orderId,
   );

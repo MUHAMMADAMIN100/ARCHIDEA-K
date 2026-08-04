@@ -303,6 +303,30 @@ export interface Client {
   deletedAt?: string | null;
 }
 
+/** Чем заплатил клиент (ТЗ 3.1). null — старые записи, тогда способ не спрашивали */
+export type PaymentMethod = 'CASH' | 'BANK';
+
+/** Один взнос по заказу */
+export interface OrderPayment {
+  id: string;
+  amount: number;
+  method: PaymentMethod | null;
+  note?: string | null;
+  paidAt: string;
+  createdByName?: string | null;
+  bank?: { id: string; title: string } | null;
+}
+
+/** Банк из справочника — для безналичной оплаты */
+export interface PaymentBank {
+  id: string;
+  key: string;
+  title: string;
+  isSystem: boolean;
+  isActive: boolean;
+  sortOrder?: number;
+}
+
 export interface Order {
   id: string;
   clientId: string;
@@ -334,8 +358,10 @@ export interface Order {
   extras?: Record<string, number> | null;
   /** Скидка по заказу в сомони */
   discount?: number;
-  /** Сколько клиент уже заплатил, сомони. Остаток = итог − эта сумма */
+  /** Сколько клиент уже заплатил, сомони. Считается из взносов, вручную не задаётся */
   paidAmount?: number;
+  /** Внесённые оплаты: чем, когда и сколько (ТЗ 3.1) */
+  payments?: OrderPayment[];
   /** Разовые сотрудники под заказ: кого позвали и сколько отдали */
   guestCleaners?: { fullName: string; rate: number }[] | null;
   /** Дополнительные основные услуги заявки (мульти-выбор) — снапшот строк */
@@ -640,6 +666,9 @@ export interface FinanceEntry {
   createdByName?: string | null;
   createdAt: string;
   order?: { id: string; client?: { fullName: string } | null } | null;
+  /** Чем получены деньги (ТЗ 3.1). У расходов и старых записей пусто */
+  paymentMethod?: PaymentMethod | null;
+  bank?: { id: string; title: string } | null;
 }
 
 export interface FinanceSummary {

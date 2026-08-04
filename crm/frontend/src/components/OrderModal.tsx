@@ -17,6 +17,7 @@ import { formatDateTz, formatDateTimeTz, toDateTimeInput } from '../lib/date';
 import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
 import { ReminderModal } from './ReminderModal';
+import { OrderPayments } from './OrderPayments';
 import {
   TAG_COLOR,
   TAG_LABEL,
@@ -170,8 +171,6 @@ export function OrderModal({
   const [discount, setDiscount] = useState('');
   // скидка подставлена из карточки клиента, а не задана у самого заказа
   const [discountFromClient, setDiscountFromClient] = useState(false);
-  // сколько клиент уже заплатил — остаток считаем от итога
-  const [paidAmount, setPaidAmount] = useState('');
   // данные заявки: раньше блок был только для чтения
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -276,8 +275,16 @@ export function OrderModal({
 
   const workSum =
     Math.round(Number(pricePerSqm) || 0) * unitsNow + addSum;
-  // оплата клиента: больше итога не считаем, остаток не уходит в минус
-  const paidRaw = Math.max(0, Math.round(Number(paidAmount) || 0));
+  /*
+   * Сколько уже получено — сумма взносов (ТЗ 3.1).
+   *
+   * Раньше это было поле формы, и оно молча обрезалось по итогу заказа:
+   * менеджер вписывал 3000, видел 2500 и не понимал, куда делись деньги.
+   * Теперь сумма приходит из проведённых платежей, а переплату сервер
+   * не принимает вовсе и говорит об этом прямо.
+   */
+  const orderPayments = order?.payments ?? [];
+  const paidRaw = orderPayments.reduce((sum, p) => sum + p.amount, 0);
   // сколько всего отдали разовым сотрудникам по этому заказу
   const guestsTotal = guests.reduce(
     (sum, g) => sum + Math.max(0, Math.round(Number(g.rate) || 0)),
@@ -367,9 +374,6 @@ export function OrderModal({
           rate: String(g.rate ?? ''),
         })),
       );
-    }
-    if (!skip('paidAmount')) {
-      setPaidAmount(o.paidAmount ? String(o.paidAmount) : '');
     }
     if (!skip('client')) {
       setClientName(o.client?.fullName ?? '');
@@ -623,7 +627,6 @@ export function OrderModal({
         // данные заявки — правятся прямо в карточке
         source: editSource,
         sourceDetail: editSourceDetail.trim(),
-        paidAmount: paidSum,
         guestCleaners: guests
           .map((g) => ({
             fullName: g.fullName.trim(),
@@ -1461,23 +1464,42 @@ export function OrderModal({
                     )}
 
                     {/*
-                      Сколько клиент уже заплатил. Из итога вычитается и
-                      показывается остаток — это учёт долга по заказу; в книгу
-                      доходов сумма попадает один раз, при переводе заказа
-                      в «Оплачено / Закрыто».
+                      Оплаты (ТЗ 3.1 и 3.2): чем заплатили, каким банком и
+                      сколькими частями. Сохраняются сразу, отдельно от формы
+                      заказа — деньги не должны зависеть от того, дошло ли
+                      сохранение остальных полей.
                     */}
-                    <label className="label mt-3">Оплатил клиент, сомони</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="input"
-                      value={paidAmount}
-                      onChange={(ev) => {
-                        markTouched('paidAmount');
-                        setPaidAmount(ev.target.value);
-                      }}
-                      placeholder="0"
-                    />
+                    {order && (
+                      <div className="mt-3">
+                        <OrderPayments
+                          orderId={order.id}
+                          payments={orderPayments}
+                          /*
+                            Остаток считаем от СОХРАНЁННОЙ суммы заказа —
+                            ровно от той, по которой сервер проверяет
+                            переплату. Возьми мы цифру из формы, менеджер
+                            увидел бы «можно внести 5000», а сервер отказал
+                            бы: правку цены он ещё не сохранил.
+                          */
+                          total={order.finalPrice ?? order.estimatedPrice ?? 0}
+                          /*
+                            У закрытой сделки оплату меняет только
+                            руководитель — тем же правилом, что и возврат
+                            заказа в работу. Иначе запрет обходится с другой
+                            стороны: удалил взнос — и оплаченный заказ молча
+                            стал недоплаченным.
+                          */
+                          readOnly={
+                            !editing ||
+                            (order.stage === 'PAID' && !userSeesFinance(user))
+                          }
+                          onChanged={() => {
+                            loadDetail(order.id);
+                            onUpdated();
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                   {/* Итог: видно, из чего он сложился, сколько вычли и сколько ещё должны */}
                   <div className="rounded-xl bg-navy-50 px-3 py-2 text-sm">

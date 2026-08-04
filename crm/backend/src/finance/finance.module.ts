@@ -3,6 +3,8 @@ import { FinanceService } from './finance.service';
 import { FinanceController } from './finance.controller';
 import { BonusesService } from './bonuses.service';
 import { BonusesController } from './bonuses.controller';
+import { BanksService } from './banks.service';
+import { BanksController } from './banks.controller';
 
 /**
  * Финансы: доходы/расходы и премии (ТЗ 7).
@@ -15,8 +17,8 @@ import { BonusesController } from './bonuses.controller';
  * явный импорт FinanceModule нагляднее показывает эту зависимость.
  */
 @Module({
-  controllers: [FinanceController, BonusesController],
-  providers: [FinanceService, BonusesService],
+  controllers: [FinanceController, BonusesController, BanksController],
+  providers: [FinanceService, BonusesService, BanksService],
   exports: [FinanceService, BonusesService],
 })
 export class FinanceModule {}

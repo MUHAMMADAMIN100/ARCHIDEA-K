@@ -137,11 +137,49 @@ export class LeadsService {
     // или переполняющую int32 цену/площадь (иначе ошибка БД).
     const clamp = (v: unknown) =>
       Math.min(Math.max(0, Math.round(Number(v) || 0)), 2_000_000_000);
-    const cleaningType = TYPE_MAP[dto.calculator?.cleaningTypeId ?? ''] ?? CleaningType.GENERAL;
-    const dirtLevel =
-      cleaningType === CleaningType.FURNITURE
-        ? null
-        : DIRT_MAP[dto.calculator?.dirtLevel ?? ''] ?? null;
+    /*
+     * Какая услуга выбрана на сайте.
+     *
+     * Раньше здесь был словарь из четырёх строк, и всё, чего в нём нет,
+     * превращалось в генеральную уборку. С тех пор руководитель заводит
+     * услуги сам (ТЗ 1.1), сайт их показывает — и заявка на «Мойку окон»
+     * приходила в CRM генеральной уборкой по её цене. Поэтому ключ ищем в
+     * справочнике услуг: он единственный знает, какие услуги существуют.
+     *
+     * cleaningType остаётся ради старых заказов и отчётов: для услуг вне
+     * перечисления пишем GENERAL, но serviceKey хранит настоящий ключ — по
+     * нему считаются цена и объём.
+     */
+    const rawTypeId = (dto.calculator?.cleaningTypeId ?? '').trim();
+    const catalogService = rawTypeId
+      ? await this.prisma.tariff.findFirst({
+          where: {
+            ...NOT_DELETED,
+            isActive: true,
+            key: { equals: rawTypeId, mode: 'insensitive' },
+          },
+          select: { key: true, unit: true },
+        })
+      : null;
+
+    const serviceKey = catalogService?.key ?? TYPE_MAP[rawTypeId] ?? CleaningType.GENERAL;
+    const cleaningType =
+      (Object.values(CleaningType) as string[]).includes(serviceKey)
+        ? (serviceKey as CleaningType)
+        : TYPE_MAP[rawTypeId] ?? CleaningType.GENERAL;
+
+    /*
+     * Объём считается местами, а не квадратными метрами, если так сказано в
+     * справочнике. Привязка к одной лишь мебели была верна, пока услуг было
+     * три: у новой услуги «за место» посадочные места терялись.
+     */
+    const perSeat = catalogService
+      ? (catalogService.unit ?? 'м²') !== 'м²'
+      : cleaningType === CleaningType.FURNITURE;
+
+    const dirtLevel = perSeat
+      ? null
+      : DIRT_MAP[dto.calculator?.dirtLevel ?? ''] ?? null;
 
     /*
      * Цена за единицу берётся из справочника услуг — из того же места, по
@@ -155,7 +193,7 @@ export class LeadsService {
      * вырастала ровно на стоимость допов, и никто не понимал почему.
      */
     const tariff = await this.prisma.tariff.findFirst({
-      where: { key: cleaningType },
+      where: { key: serviceKey },
       select: {
         key: true,
         unit: true,
@@ -185,16 +223,10 @@ export class LeadsService {
         stage: 'NEW',
         source: LeadSource.SITE,
         cleaningType,
-        serviceKey: cleaningType,
+        serviceKey,
         dirtLevel,
-        area:
-          cleaningType === CleaningType.FURNITURE
-            ? 0
-            : clamp(dto.calculator?.area),
-        seats:
-          cleaningType === CleaningType.FURNITURE
-            ? clamp(dto.calculator?.seats)
-            : null,
+        area: perSeat ? 0 : clamp(dto.calculator?.area),
+        seats: perSeat ? clamp(dto.calculator?.seats) : null,
         estimatedPrice: clamp(dto.total),
         // цена за единицу (м² или место) — чтобы было видно, из чего сложилась цена
         pricePerSqm: perUnit,
@@ -221,10 +253,7 @@ export class LeadsService {
               ? AccessMethod.ONSITE
               : null,
         comment: dto.quiz?.comment,
-        extras:
-          cleaningType === CleaningType.FURNITURE
-            ? undefined
-            : dto.calculator?.extras ?? undefined,
+        extras: perSeat ? undefined : (dto.calculator?.extras ?? undefined),
         isLarge: (dto.total ?? 0) >= 2000,
       },
     });
@@ -236,10 +265,9 @@ export class LeadsService {
      * распределении: руководитель о новом обращении не знал. Ссылку кладём
      * и на клиента, и на заказ — по клику открывается карточка клиента.
      */
-    const volume =
-      cleaningType === CleaningType.FURNITURE
-        ? `${dto.calculator?.seats ?? 0} мест`
-        : `${dto.calculator?.area ?? 0} м²`;
+    const volume = perSeat
+      ? `${dto.calculator?.seats ?? 0} мест`
+      : `${dto.calculator?.area ?? 0} м²`;
     await this.notifications.notifyEveryone({
       type: NotificationType.NEW_LEAD,
       title: 'Новая заявка с сайта',

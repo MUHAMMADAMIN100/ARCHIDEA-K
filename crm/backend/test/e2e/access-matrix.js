@@ -156,20 +156,44 @@ async function main() {
   );
   report.check(foreign.length === 0, 'Чужих записей в ленте нет', `${foreign.length} шт.`);
 
-  report.section('ЗАДАЧИ — ТОЛЬКО СЕБЕ');
+  /*
+   * Задачи. Правило изменилось по решению владельца: поручать работу коллеге
+   * может любой сотрудник — управляющий отделом продаж не мог поставить
+   * обзвон никому, кроме себя. Закрытым осталось другое: ЧУЖИЕ задачи
+   * менеджер не видит, если не он их поставил и не он исполнитель.
+   */
+  report.section('ЗАДАЧИ — ПОРУЧАТЬ МОЖНО, ЧУЖИЕ НЕ ВИДНЫ');
   const assignable = (await call(mgr, 'GET', '/users/assignable')).data ?? [];
   report.check(
-    assignable.length === 1 && assignable[0].id === mgr.user.id,
-    'В списке исполнителей менеджер видит только себя',
+    assignable.length > 1 && assignable.some((u) => u.id === dir.user.id),
+    'В списке исполнителей есть коллеги, а не только он сам',
     `${assignable.length} чел.`,
   );
   const foreignTask = await call(mgr, 'POST', '/tasks', {
-    title: 'Проверка: задача чужому',
+    title: 'Проверка: задача коллеге',
     type: 'CALL',
     priority: 'MEDIUM',
     assigneeIds: [dir.user.id],
   });
-  report.check(foreignTask.status === 403, 'Задачу чужому поставить нельзя', String(foreignTask.status));
+  report.check(
+    foreignTask.status === 201,
+    'Задачу коллеге поставить можно',
+    String(foreignTask.status),
+  );
+
+  // задача, которую менеджер не ставил и не исполняет, в его списке не появляется
+  const dirTask = await call(dir, 'POST', '/tasks', {
+    title: 'Проверка: личная задача руководителя',
+    type: 'PERSONAL',
+    priority: 'LOW',
+    assigneeIds: [dir.user.id],
+  });
+  const mgrTasks = (await call(mgr, 'GET', '/tasks')).data ?? [];
+  report.check(
+    !mgrTasks.some((t) => t.id === dirTask.data?.id),
+    'Чужая задача в списке менеджера не появляется',
+    `${mgrTasks.length} задач`,
+  );
 
   report.section('ПОВЫШЕНИЕ СЕБЯ В ПРАВАХ');
   const promote = await call(mgr, 'PATCH', `/users/${mgr.user.id}`, {

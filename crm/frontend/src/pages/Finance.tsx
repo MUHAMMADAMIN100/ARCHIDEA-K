@@ -48,6 +48,7 @@ import type {
   Cleaner,
   FinanceCategory,
   FinanceEntry,
+  PaymentBank,
   FinanceKind,
   FinanceSummary,
   Manager,
@@ -141,6 +142,21 @@ function EntriesTab() {
   const [period, setPeriod] = useState<Period>(() => rangeOf('month'));
   const [kindFilter, setKindFilter] = useState<FinanceKind | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<FinanceCategory | ''>('');
+  /*
+   * Канал поступления (ТЗ 3.1). Значение фильтра одно, а параметров на
+   * сервере два: «CASH» — наличные, «BANK» — вся безналичка, «bank:<id>» —
+   * конкретный банк. Так один селект отвечает и на «сколько всего пришло
+   * переводом», и на «сколько именно через Алиф».
+   */
+  const [channelFilter, setChannelFilter] = useState('');
+  const [banks, setBanks] = useState<PaymentBank[]>([]);
+
+  useEffect(() => {
+    api
+      .get<PaymentBank[]>('/banks')
+      .then((r) => setBanks(r.data))
+      .catch(() => {});
+  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FinanceEntry | null>(null);
@@ -174,9 +190,14 @@ function EntriesTab() {
     if (period.to) q.set('to', period.to);
     if (kindFilter) q.set('kind', kindFilter);
     if (categoryFilter) q.set('category', categoryFilter);
+    if (channelFilter === 'CASH' || channelFilter === 'BANK') {
+      q.set('method', channelFilter);
+    } else if (channelFilter.startsWith('bank:')) {
+      q.set('bankId', channelFilter.slice(5));
+    }
     q.set('take', '200'); // компания небольшая — за период умещается в одну страницу
     return q.toString();
-  }, [period.from, period.to, kindFilter, categoryFilter]);
+  }, [period.from, period.to, kindFilter, categoryFilter, channelFilter]);
 
   const {
     data,
@@ -355,6 +376,19 @@ function EntriesTab() {
           {row.comment && <div className="mt-0.5 text-xs text-navy-600">{row.comment}</div>}
         </div>
       ),
+    },
+    {
+      key: 'channel',
+      title: 'Чем',
+      hideOnMobile: true,
+      render: (row) =>
+        row.paymentMethod ? (
+          <span className="whitespace-nowrap text-xs text-navy-600">
+            {row.paymentMethod === 'CASH' ? 'Наличные' : (row.bank?.title ?? 'Банк')}
+          </span>
+        ) : (
+          <span className="text-xs text-navy-300">—</span>
+        ),
     },
     {
       key: 'amount',
@@ -588,11 +622,27 @@ function EntriesTab() {
               </option>
             ))}
           </select>
+          {/* Чем пришли деньги — наличные, вся безналичка или конкретный банк */}
+          <select
+            className="input max-w-[200px]"
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value)}
+          >
+            <option value="">Все каналы</option>
+            <option value="CASH">Наличные</option>
+            <option value="BANK">Безналичный расчёт</option>
+            {banks.map((b) => (
+              <option key={b.id} value={`bank:${b.id}`}>
+                {b.title}
+              </option>
+            ))}
+          </select>
           <FilterReset
-            show={!!kindFilter || !!categoryFilter}
+            show={!!kindFilter || !!categoryFilter || !!channelFilter}
             onReset={() => {
               changeKindFilter('');
               setCategoryFilter('');
+              setChannelFilter('');
             }}
           />
         </div>

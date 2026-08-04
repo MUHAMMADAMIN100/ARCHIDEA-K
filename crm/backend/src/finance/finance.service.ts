@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditAction, FinanceCategory, FinanceKind, FinanceSource, Prisma } from '@prisma/client';
+import {
+  AuditAction,
+  FinanceCategory,
+  FinanceKind,
+  FinanceSource,
+  PaymentMethod,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
@@ -104,6 +111,9 @@ export class FinanceService {
     if (q.category) where.category = q.category;
     if (q.source) where.source = q.source;
     if (q.orderId) where.orderId = q.orderId;
+    // канал поступления: наличные / безнал целиком / конкретный банк (ТЗ 3.1)
+    if (q.method) where.paymentMethod = q.method;
+    if (q.bankId) where.bankId = q.bankId;
     if (q.from || q.to) where.date = momentRange(q.from, q.to);
 
     const take = Math.min(q.take ?? DEFAULT_TAKE, MAX_TAKE);
@@ -115,6 +125,8 @@ export class FinanceService {
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
         take,
         skip,
+        // банк — чтобы в списке было видно, каким каналом пришли деньги
+        include: { bank: { select: { id: true, title: true } } },
       }),
       this.prisma.financeEntry.count({ where }),
       this.prisma.financeEntry.groupBy({ by: ['kind'], where, _sum: { amount: true } }),
@@ -352,6 +364,18 @@ export class FinanceService {
     const amount = order.finalPrice ?? order.estimatedPrice ?? 0;
     if (amount <= 0) return; // нулевую/некорректную сумму в книгу доходов не пишем
 
+    /*
+     * Деньги приходят взносами (ТЗ 3.1): каждый взнос уже записан в книгу
+     * доходов своей строкой — с каналом и датой получения. Общая строка по
+     * заказу поверх них удвоила бы выручку, поэтому при наличии взносов её
+     * не создаём. Ветка ниже осталась для заказов без взносов — например
+     * закрытых до перехода на учёт оплат.
+     */
+    const payments = await db.orderPayment.count({
+      where: { orderId: order.id, deletedAt: null },
+    });
+    if (payments > 0) return;
+
     const autoKey = `order:${order.id}:income`;
     const date = order.closedAt ?? new Date();
 
@@ -404,6 +428,117 @@ export class FinanceService {
       entityTitle: this.entryTitle(entry),
       action: existing ? AuditAction.UPDATE : AuditAction.CREATE,
       summary: 'Автодоход по оплате заказа',
+    });
+  }
+
+  /**
+   * Доход по конкретному взносу клиента (ТЗ 3.2).
+   *
+   * Раньше по заказу создавалась одна запись — в момент перехода в
+   * «Оплачено». Предоплата в книге доходов не появлялась вовсе, а смешанную
+   * оплату нечем было разделить по каналам. Теперь каждый взнос даёт свою
+   * запись с указанием способа и банка, а ключ идемпотентности привязан к
+   * платежу, поэтому правка взноса обновляет ту же строку, а не плодит новые.
+   */
+  async recordPaymentIncome(
+    db: FinanceDb,
+    payment: {
+      id: string;
+      orderId: string;
+      amount: number;
+      paidAt: Date;
+      method: PaymentMethod | null;
+      bankId: string | null;
+      bank?: { title: string } | null;
+    },
+    clientId: string,
+    user: AuthUser | null,
+  ): Promise<void> {
+    if (payment.amount <= 0) return;
+    const autoKey = `payment:${payment.id}`;
+    const channel = !payment.method
+      ? 'способ не указан'
+      : payment.method === 'CASH'
+        ? 'наличные'
+        : (payment.bank?.title ?? 'банк');
+    const title = `Оплата заказа — ${channel}`;
+
+    const existing = await db.financeEntry.findUnique({ where: { autoKey } });
+    // менеджер правил запись руками — сумму из платежа не навязываем
+    if (existing && existing.source === FinanceSource.MANUAL) {
+      if (existing.deletedAt) {
+        await db.financeEntry.update({
+          where: { id: existing.id },
+          data: { deletedAt: null, deletedById: null, deleteReason: null },
+        });
+      }
+      return;
+    }
+
+    const entry = await db.financeEntry.upsert({
+      where: { autoKey },
+      create: {
+        kind: FinanceKind.INCOME,
+        category: FinanceCategory.ORDER_PAYMENT,
+        amount: payment.amount,
+        date: payment.paidAt,
+        title,
+        source: FinanceSource.AUTO,
+        autoKey,
+        orderId: payment.orderId,
+        clientId,
+        paymentMethod: payment.method,
+        bankId: payment.bankId,
+        createdById: user?.id ?? null,
+        createdByName: user?.fullName ?? null,
+      },
+      update: {
+        amount: payment.amount,
+        date: payment.paidAt,
+        title,
+        paymentMethod: payment.method,
+        bankId: payment.bankId,
+        deletedAt: null,
+        deletedById: null,
+        deleteReason: null,
+      },
+    });
+
+    await this.audit.log(db, {
+      user,
+      entity: 'FINANCE',
+      entityId: entry.id,
+      entityTitle: this.entryTitle(entry),
+      action: existing ? AuditAction.UPDATE : AuditAction.CREATE,
+      summary: `Оплата по заказу — ${channel}`,
+    });
+  }
+
+  /** Снятие дохода по удалённому взносу */
+  async removePaymentIncome(
+    db: FinanceDb,
+    paymentId: string,
+    user: AuthUser | null = null,
+  ): Promise<void> {
+    const autoKey = `payment:${paymentId}`;
+    const entry = await db.financeEntry.findUnique({ where: { autoKey } });
+    if (!entry || entry.deletedAt) return;
+    if (entry.source === FinanceSource.MANUAL) return; // правили руками — не трогаем
+    await db.financeEntry.update({
+      where: { id: entry.id },
+      data: {
+        deletedAt: new Date(),
+        deletedById: user?.id ?? null,
+        deleteReason: 'Взнос по заказу удалён',
+      },
+    });
+    await this.audit.log(db, {
+      user,
+      entity: 'FINANCE',
+      entityId: entry.id,
+      entityTitle: this.entryTitle(entry),
+      action: AuditAction.DELETE,
+      summary: 'Снят доход по удалённому взносу',
     });
   }
 

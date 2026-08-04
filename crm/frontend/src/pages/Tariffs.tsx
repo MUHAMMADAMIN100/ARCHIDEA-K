@@ -20,12 +20,19 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
+import { useAuth } from '../auth/AuthContext';
+import { userSeesFinance } from '../types';
 import { Skeleton, PageHeader, Modal, Badge, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Tabs } from '../components/common';
 import { HistoryPanel } from '../components/HistoryPanel';
-import type { ExtraService, Tariff, Tariffs as TariffsData } from '../types';
+import type {
+  ExtraService,
+  PaymentBank,
+  Tariff,
+  Tariffs as TariffsData,
+} from '../types';
 
 /**
  * Ключ услуги теперь произвольная строка (ТЗ 1.1 — директор заводит новые
@@ -75,6 +82,7 @@ type ExtraModalState = { item: ExtraService | null } | null;
 export function Tariffs() {
   const toast = useToast();
   const dialog = useDialog();
+  const { user } = useAuth();
   // /tariffs/manage — полный список, включая скрытые (для страницы управления);
   // калькулятор лендинга продолжает ходить в публичный /tariffs
   const { data, loading, error, reload, setData } = useFetch<TariffsData>('/tariffs/manage');
@@ -322,7 +330,18 @@ export function Tariffs() {
                       <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Скрыта</Badge>
                     )}
                   </div>
-                  {meta.desc && <p className="mt-0.5 text-xs text-navy-600">{meta.desc}</p>}
+                  {/*
+                    Сначала описание из справочника, и только потом заготовка
+                    из кода. Раньше показывалась одна заготовка: руководитель
+                    правил описание в карточке услуги, на сайте оно менялось,
+                    а в CRM оставался прежний текст — у своих услуг его не было
+                    вовсе.
+                  */}
+                  {(t.description || meta.desc) && (
+                    <p className="mt-0.5 text-xs text-navy-600">
+                      {t.description || meta.desc}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -565,6 +584,13 @@ export function Tariffs() {
         })}
       </div>
 
+      {/*
+        Банки для безналичной оплаты (ТЗ 3.1). Раздел про деньги компании:
+        название банка подписывает каналы поступления в книге доходов,
+        поэтому ведёт его тот же, кто ведёт саму книгу.
+      */}
+      {userSeesFinance(user) && <BanksSection />}
+
       {tariffModal && (
         <TariffModal
           tariff={tariffModal.item}
@@ -592,6 +618,150 @@ export function Tariffs() {
           <HistoryPanel entity="SERVICE" entityId={historyKey.key} />
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Банки для безналичной оплаты (ТЗ 3.1)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Справочник банков.
+ *
+ * В ТЗ названы Алиф и Душанбе Сити, но список банков в городе меняется —
+ * поэтому он лежит в базе, а не в коде. Три базовых записи скрываются, но не
+ * удаляются: на них ссылаются уже проведённые платежи.
+ */
+function BanksSection() {
+  const toast = useToast();
+  const dialog = useDialog();
+  const { data, loading, reload } = useFetch<PaymentBank[]>('/banks/manage');
+  const [title, setTitle] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const banks = data ?? [];
+
+  const add = async () => {
+    const value = title.trim();
+    if (value.length < 2) {
+      toast.error('Укажите название банка');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post('/banks', { title: value });
+      setTitle('');
+      reload();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось добавить банк');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = async (b: PaymentBank) => {
+    try {
+      await api.patch(`/banks/${b.id}`, { isActive: !b.isActive });
+      reload();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось изменить банк');
+    }
+  };
+
+  const remove = async (b: PaymentBank) => {
+    const ok = await dialog.confirm({
+      title: `Удалить банк «${b.title}»?`,
+      message: 'Он исчезнет из списка при внесении оплаты.',
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/banks/${b.id}`);
+      reload();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось удалить банк');
+    }
+  };
+
+  return (
+    <div className="mt-8">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-600">
+        Банки для безналичной оплаты
+      </h3>
+      <div className="card p-5">
+        <p className="mb-3 text-sm text-navy-600">
+          Эти банки предлагаются при внесении оплаты по заказу. Скрытый банк не
+          показывается в новых платежах, но остаётся в уже проведённых.
+        </p>
+
+        {loading && banks.length === 0 ? (
+          <Skeleton className="h-20" />
+        ) : (
+          <ul className="space-y-1.5">
+            {banks.map((b) => (
+              <li
+                key={b.id}
+                className={`flex items-center justify-between gap-2 rounded-lg bg-navy-50 px-3 py-2 ${
+                  b.isActive ? '' : 'opacity-60'
+                }`}
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="truncate font-medium text-navy-900">{b.title}</span>
+                  {b.isSystem && (
+                    <Badge className="border border-navy-200 bg-white text-navy-600">
+                      Базовый
+                    </Badge>
+                  )}
+                  {!b.isActive && (
+                    <Badge className="border border-amber-200 bg-amber-50 text-amber-700">
+                      Скрыт
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-navy-600 hover:bg-white"
+                    onClick={() => toggle(b)}
+                  >
+                    {b.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {b.isActive ? 'Скрыть' : 'Показать'}
+                  </button>
+                  {!b.isSystem && (
+                    <button
+                      type="button"
+                      className="press inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                      onClick={() => remove(b)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Удалить
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input
+            className="input flex-1 min-w-[12rem]"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={60}
+            placeholder="Название банка"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') add();
+            }}
+          />
+          <button className="btn-primary" onClick={add} disabled={saving}>
+            <Plus className="h-4 w-4" />
+            Добавить банк
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

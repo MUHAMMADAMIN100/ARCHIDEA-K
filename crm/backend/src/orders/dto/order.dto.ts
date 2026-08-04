@@ -86,13 +86,6 @@ export class CreateOrderDto {
   @Max(MAX_INT)
   discount?: number;
 
-  /** Сколько клиент уже заплатил, сомони. Остаток = итог − эта сумма */
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(MAX_INT)
-  paidAmount?: number;
-
   /** Разовые сотрудники под этот заказ */
   @IsOptional()
   @IsArray()
@@ -162,8 +155,6 @@ export class UpdateOrderDto {
   @IsOptional() @IsObject() extras?: Record<string, number>;
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) discount?: number;
-  /** Сколько клиент уже заплатил, сомони */
-  @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) paidAmount?: number;
   /** Разовые сотрудники под этот заказ */
   @IsOptional()
   @IsArray()

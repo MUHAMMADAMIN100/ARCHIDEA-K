@@ -91,6 +91,21 @@ const orderDetailInclude = {
       paidOrdersCount: true,
     },
   },
+  // Внесённые оплаты (ТЗ 3.1): приходят вместе с заказом, чтобы карточка
+  // показывала историю взносов без второго запроса
+  payments: {
+    where: NOT_DELETED,
+    orderBy: { paidAt: 'asc' as const },
+    select: {
+      id: true,
+      amount: true,
+      method: true,
+      note: true,
+      paidAt: true,
+      createdByName: true,
+      bank: { select: { id: true, title: true } },
+    },
+  },
   shiftGroups: {
     where: NOT_DELETED,
     orderBy: { date: 'desc' as const },
@@ -501,7 +516,8 @@ export class OrdersService {
           comment: dto.comment,
           sourceDetail: dto.sourceDetail?.trim() || null,
           discount,
-          paidAmount: dto.paidAmount ?? 0,
+          // оплата вносится взносами (ТЗ 3.1) — новый заказ всегда неоплачен
+          paidAmount: 0,
           ...(dto.guestCleaners
             ? {
                 guestCleaners:
@@ -675,8 +691,12 @@ export class OrdersService {
     );
     if (dto.extras !== undefined) data.extras = dto.extras;
     if (dto.discount !== undefined) data.discount = dto.discount;
-    // Оплата клиента — учёт долга по заказу, на расчёт цены не влияет
-    if (dto.paidAmount !== undefined) data.paidAmount = dto.paidAmount;
+    /*
+     * Сумма оплаты сюда больше не приходит: с появлением взносов (ТЗ 3.1)
+     * она считается из них — POST /orders/:id/payments. Прямая запись поля
+     * развела бы карточку с книгой доходов: деньги в заказе были бы, а
+     * канала и строки дохода — нет.
+     */
     if (dto.guestCleaners !== undefined) {
       data.guestCleaners =
         dto.guestCleaners as unknown as Prisma.InputJsonValue;
@@ -722,6 +742,33 @@ export class OrdersService {
       before.estimatedPrice ??
       0;
     data.isLarge = effectivePrice >= LARGE_ORDER_THRESHOLD;
+
+    /*
+     * У закрытого заказа сумма не может разойтись с оплатой.
+     *
+     * «Оплачено» означает ровно одно: клиент рассчитался полностью. Стоит
+     * поменять цену уже закрытого заказа — и это перестаёт быть правдой:
+     * подняли цену — образовался долг у сделки, которая числится закрытой;
+     * опустили — клиент оказывается переплатившим, а переплату система не
+     * принимает даже при внесении денег.
+     *
+     * Раньше расхождение подтягивалось автоматически: доход в книге просто
+     * переписывался под новую сумму заказа. С появлением взносов так делать
+     * нельзя — в книге лежат реально полученные деньги по каналам, и
+     * переписывать их «под цену» значит выдумывать поступления.
+     *
+     * Поэтому цену закрытого заказа меняют так: руководитель возвращает его
+     * в работу, правит и снова закрывает — с тем же контролем, что и всегда.
+     */
+    if (before.stage === FunnelStage.PAID) {
+      const paid = before.paidAmount ?? 0;
+      if (effectivePrice !== paid) {
+        throw new BadRequestException(
+          `Заказ закрыт и оплачен на ${paid} сомони — новая сумма ${effectivePrice} с ней не сходится. ` +
+            'Верните заказ в работу, измените сумму и закройте снова',
+        );
+      }
+    }
 
     const after = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
