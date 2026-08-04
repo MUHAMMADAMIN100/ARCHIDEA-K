@@ -34,6 +34,10 @@ interface PlanResponse {
   totalDays: number;
   /** Помещения без указанной площади — в графике есть, норму не расходуют */
   roomsWithoutArea?: number;
+  /** Сколько дней уместилось в таблицу */
+  daysShown?: number;
+  /** График показан не целиком */
+  truncated?: boolean;
   days: PlanDay[];
 }
 
@@ -134,6 +138,13 @@ export function OrderPlan({
                 </tbody>
               </table>
             </div>
+
+            {plan.truncated && (
+              <p className="rounded-xl bg-navy-50 px-3 py-2 text-sm text-navy-700">
+                Работы занимают {plan.totalDays} дн., в таблице показаны первые{' '}
+                {plan.daysShown ?? plan.days.length}. Срок посчитан полностью.
+              </p>
+            )}
 
             {!!plan.roomsWithoutArea && (
               <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">

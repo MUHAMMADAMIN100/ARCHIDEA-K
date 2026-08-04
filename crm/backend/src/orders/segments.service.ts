@@ -11,6 +11,9 @@ import { AuthUser, seesAll } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
 import { BlockDto, ReplaceSegmentsDto } from './dto/segment.dto';
 
+/** Потолок площади — тот же, что у полей цены и площади в заказе */
+const MAX_AREA = 2_000_000_000;
+
 /** Узел дерева объекта в том виде, в каком он уходит на экран */
 export interface SegmentNode {
   id: string;
@@ -118,7 +121,12 @@ export class SegmentsService {
       const inner = this.totalArea(node.children);
       sum += inner > 0 ? inner : (node.area ?? 0);
     }
-    return sum;
+    /*
+     * Верхняя граница — та же, что у площади заказа. Без неё сумма сотен
+     * помещений по миллиону метров выходила за целое поле базы, и запрос
+     * падал пятисотой ошибкой вместо понятного отказа.
+     */
+    return Math.min(sum, MAX_AREA);
   }
 
   async list(user: AuthUser, orderId: string) {

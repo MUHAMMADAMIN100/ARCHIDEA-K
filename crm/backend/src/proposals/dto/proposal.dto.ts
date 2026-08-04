@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -60,6 +61,9 @@ export class ProposalItemDto {
 export class ProposalOverridesDto {
   @IsOptional()
   @IsArray()
+  // смета на две сотни строк уже нечитаема, а без предела в неё можно
+  // отправить всё, что влезет в тело запроса
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => ProposalItemDto)
   items?: ProposalItemDto[];
@@ -94,6 +98,9 @@ export class UpdateProposalDto {
 
   @IsOptional()
   @IsArray()
+  // смета на две сотни строк уже нечитаема, а без предела в неё можно
+  // отправить всё, что влезет в тело запроса
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => ProposalItemDto)
   items?: ProposalItemDto[];

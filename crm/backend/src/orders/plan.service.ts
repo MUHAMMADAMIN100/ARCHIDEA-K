@@ -22,6 +22,14 @@ export interface PlanDay {
 }
 
 /**
+ * Сколько дней помещается в печатный график.
+ *
+ * Ограничение чисто про удобочитаемость: простыню на пять тысяч строк никто
+ * не читает. Срок работ при этом считается полностью и не обрезается.
+ */
+const MAX_PLAN_DAYS = 400;
+
+/**
  * План производства работ и срок по заказу (ТЗ: планирование).
  *
  * Считается, а не хранится. Причина простая: план целиком выводится из уже
@@ -33,6 +41,7 @@ export interface PlanDay {
  * «на полдня», а клиенту важно, когда работы закончатся, а не сколько
  * человеко-часов потрачено.
  */
+
 @Injectable()
 export class PlanService {
   constructor(private prisma: PrismaService) {}
@@ -177,7 +186,7 @@ export class PlanService {
           closeDay();
           const parts = Math.ceil(room.area / perDay);
           let left = room.area;
-          for (let i = 1; i <= parts && days.length < 400; i += 1) {
+          for (let i = 1; i <= parts && days.length < MAX_PLAN_DAYS; i += 1) {
             const chunk = Math.min(perDay, left);
             days.push({
               day: days.length + 1,
@@ -192,13 +201,13 @@ export class PlanService {
         if (currentArea > 0 && currentArea + room.area > perDay) closeDay();
         current.push(room);
         currentArea += room.area;
-        if (days.length >= 400) break;
+        if (days.length >= MAX_PLAN_DAYS) break;
       }
       closeDay();
     } else {
       // разбивки нет — план по объёму: столько-то единиц в день
       let left = volume;
-      while (left > 0 && days.length < 400) {
+      while (left > 0 && days.length < MAX_PLAN_DAYS) {
         const chunk = Math.min(perDay, left);
         days.push({
           day: days.length + 1,
@@ -210,6 +219,12 @@ export class PlanService {
       }
     }
 
+    /*
+     * График обрезан, если упёрся в предел строк: тогда дней работ больше,
+     * чем мы показали, и об этом надо сказать прямо.
+     */
+    const truncated = days.length >= MAX_PLAN_DAYS && days.length < totalDays;
+
     return {
       canPlan: true,
       reason: null,
@@ -219,7 +234,23 @@ export class PlanService {
       people,
       volume,
       perDay,
-      totalDays: days.length || totalDays,
+      /*
+       * Срок — это расчёт, а не длина показанного списка.
+       *
+       * График обрезается на 400 днях: печатать простыню на пять тысяч строк
+       * бессмысленно. Но раньше обрезанная длина и подставлялась как срок —
+       * заказ на 2000 дней показывал «400 дней». Цифра выглядела достоверной
+       * и была враньём, а срок клиенту называют именно по ней.
+       *
+       * Когда график НЕ обрезан, честнее взять его длину: помещения
+       * укладываются по дням не идеально, и дней может выйти больше, чем даёт
+       * деление объёма на норму.
+       */
+      totalDays: truncated ? totalDays : days.length || totalDays,
+      /** Сколько дней уместилось в показанный график */
+      daysShown: days.length,
+      /** График показан не целиком — работ больше, чем строк в таблице */
+      truncated,
       /*
        * Помещения без метража попадают в график, но норму не расходуют.
        * Говорим об этом прямо: иначе срок выглядит точным, хотя часть объёма

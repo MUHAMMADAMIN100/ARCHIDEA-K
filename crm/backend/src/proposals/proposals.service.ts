@@ -36,9 +36,24 @@ import {
   ProposalTemplateValues,
   computeProposalTotal,
   formatItemsList,
+  itemAmount,
   renderProposalBody,
 } from './template-render';
 import { itemsFromOrder } from './proposal-items';
+
+/**
+ * Позиции сметы с пересчитанной суммой.
+ *
+ * Строка КП должна сходиться сама с собой: «2 × 500 = 1000», а не «2 × 500 =
+ * 999 999». Сумму считаем там, где есть объём и цена, и только «позиции по
+ * договорённости» оставляем как прислали.
+ */
+function normalizeItems(
+  items: ProposalItemInput[] | null | undefined,
+): ProposalItemInput[] | null {
+  if (!items || !items.length) return null;
+  return items.map((i) => ({ ...i, amount: itemAmount(i) }));
+}
 
 /** Прибавка нужных данных к списку/карточке КП без раскрытия лишних полей */
 const proposalInclude = {
@@ -394,7 +409,7 @@ export class ProposalsService {
      * «площадь × цена» и молча теряло всё остальное: клиент видел одну сумму,
      * CRM — другую.
      */
-    let items: ProposalItemInput[] | null = overrides?.items ?? null;
+    let items: ProposalItemInput[] | null = normalizeItems(overrides?.items);
     if (!items && order) {
       const [tariffs, extrasCatalog] = await Promise.all([
         this.prisma.tariff.findMany({ where: NOT_DELETED }),
@@ -490,8 +505,9 @@ export class ProposalsService {
     const area = dto.area ?? proposal.area;
     const pricePerSqm = dto.pricePerSqm ?? proposal.pricePerSqm;
     const discount = dto.discount ?? proposal.discount;
-    const items: ProposalItemInput[] | null =
-      dto.items ?? (proposal.items as unknown as ProposalItemInput[] | null);
+    const items: ProposalItemInput[] | null = dto.items
+      ? normalizeItems(dto.items)
+      : (proposal.items as unknown as ProposalItemInput[] | null);
     const validUntil = dto.validUntil ? parseDate(dto.validUntil) : proposal.validUntil;
 
     const affectsTotal =

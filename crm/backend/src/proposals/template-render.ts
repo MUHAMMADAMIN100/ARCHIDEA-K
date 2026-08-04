@@ -54,6 +54,23 @@ export function renderProposalBody(
   return parts.join('\n\n');
 }
 
+/**
+ * Сумма позиции сметы.
+ *
+ * Если заданы объём и цена за единицу — считаем сами. Раньше сумма бралась
+ * из запроса как есть, и в КП уходила строка «1 × 1 сомони = 999 999 сомони»:
+ * опечатка в одном поле превращалась в цену для клиента.
+ *
+ * Когда объёма или цены нет (позиция «по договорённости»), остаётся заданная
+ * сумма — считать там нечего.
+ */
+export function itemAmount(item: ProposalItemInput): number {
+  const volume = Number(item.volume ?? 0);
+  const price = Number(item.unitPrice ?? 0);
+  if (volume > 0 && price > 0) return Math.round(volume * price);
+  return Math.max(0, Math.round(Number(item.amount ?? 0)));
+}
+
 /** Одна позиция сметы КП (снапшот) */
 export interface ProposalItemInput {
   title: string;
@@ -131,7 +148,7 @@ export function computeProposalTotal(params: {
   const discount = params.discount ?? 0;
   let base: number;
   if (params.items && params.items.length > 0) {
-    base = params.items.reduce((sum, i) => sum + (i.amount ?? 0), 0);
+    base = params.items.reduce((sum, i) => sum + itemAmount(i), 0);
   } else if (
     /*
      * Именно > 0, а не != null. У заказа поле площади — Int со значением по
