@@ -56,6 +56,13 @@ type ProposalTemplateSource = {
   validDays: number;
 };
 
+/** Блок состава работ для текста КП: заголовок и пункты, либо пусто */
+function worksBlock(title: string, works?: string[] | null): string {
+  const rows = (works ?? []).map((w) => w.trim()).filter(Boolean);
+  if (!rows.length) return '';
+  return [title, ...rows.map((w) => `• ${w}`)].join('\n');
+}
+
 @Injectable()
 export class ProposalsService {
   constructor(
@@ -113,6 +120,8 @@ export class ProposalsService {
     managerName: string;
     validUntil?: Date | null;
     items?: ProposalItemInput[] | null;
+    included?: string[] | null;
+    excluded?: string[] | null;
   }): Partial<ProposalTemplateValues> {
     return {
       client: params.clientName,
@@ -126,6 +135,36 @@ export class ProposalsService {
       date: formatDate(new Date()),
       validUntil: params.validUntil ? formatDate(params.validUntil) : '',
       items: formatItemsList(params.items ?? null),
+      /*
+       * Заголовок блока входит в само значение, а не стоит в шаблоне.
+       * Иначе у услуги без списка работ в КП оставалась бы висячая строка
+       * «В стоимость входит:» и пустота под ней.
+       */
+      included: worksBlock('В стоимость входит:', params.included),
+      excluded: worksBlock('Не входит и оплачивается отдельно:', params.excluded),
+    };
+  }
+
+  /**
+   * Состав работ по услуге заказа (ТЗ: объём работ).
+   *
+   * Списки «что входит» и «что не входит» живут в справочнике услуг и
+   * печатаются в КП: спор «а окна вы должны были мыть?» решается только тем,
+   * что клиент прочитал заранее.
+   */
+  private async worksOfOrder(
+    order: { serviceKey: string | null; cleaningType: string } | null,
+  ): Promise<{ included: string[]; excluded: string[] }> {
+    if (!order) return { included: [], excluded: [] };
+    const key = order.serviceKey ?? order.cleaningType;
+    if (!key) return { included: [], excluded: [] };
+    const tariff = await this.prisma.tariff.findFirst({
+      where: { key, ...NOT_DELETED },
+      select: { includedWorks: true, excludedWorks: true },
+    });
+    return {
+      included: tariff?.includedWorks ?? [],
+      excluded: tariff?.excludedWorks ?? [],
     };
   }
 
@@ -376,6 +415,7 @@ export class ProposalsService {
       });
     const validUntil = this.validUntilFrom(template.validDays);
 
+    const works = await this.worksOfOrder(order);
     const values = this.buildValues({
       clientName: client.fullName,
       clientPhone: client.phone,
@@ -387,6 +427,8 @@ export class ProposalsService {
       managerName: user.fullName,
       validUntil,
       items,
+      included: works.included,
+      excluded: works.excluded,
     });
     const bodySnapshot = renderProposalBody(template, values);
 
@@ -489,6 +531,15 @@ export class ProposalsService {
             : null);
         // если шаблон уже в корзине — текст оставляем как есть, а не роняем правку
         if (source) {
+          // состав работ берём из услуги того же заказа — иначе при правке
+          // блок «что входит» пропал бы из текста
+          const orderForWorks = proposal.orderId
+            ? await this.prisma.order.findFirst({
+                where: { id: proposal.orderId },
+                select: { serviceKey: true, cleaningType: true },
+              })
+            : null;
+          const works = await this.worksOfOrder(orderForWorks);
           const values = this.buildValues({
             clientName: proposal.clientName,
             clientPhone: proposal.clientPhone,
@@ -500,6 +551,8 @@ export class ProposalsService {
             managerName: proposal.createdByName,
             validUntil,
             items,
+            included: works.included,
+            excluded: works.excluded,
           });
           bodySnapshot = renderProposalBody(source, values);
         }

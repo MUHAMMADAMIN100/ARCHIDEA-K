@@ -539,6 +539,8 @@ model Order {
   paidAmount         Int            @default(0)
   /// Взносы по заказу (ТЗ 3.1, 3.2): чем, когда и сколько заплатили
   payments           OrderPayment[]
+  /// Разбивка объекта: блоки, этажи, помещения
+  segments           OrderSegment[]
 
   // этапы воронки
   inspectionDate  DateTime? // 3. осмотр
@@ -750,6 +752,16 @@ model Tariff {
   sortOrder   Int      @default(0)
   updatedAt   DateTime @updatedAt
 
+  /// Что ВХОДИТ в услугу — построчно. Список нужен не для красоты: спор
+  /// «а мыть окна вы должны были?» решается только тем, что записано заранее.
+  includedWorks String[] @default([])
+  /// Что НЕ входит и оплачивается отдельно
+  excludedWorks String[] @default([])
+
+  /// Выработка: сколько единиц (м², мест) успевает один человек за смену.
+  /// По ней считается срок работ и нужное число людей (ТЗ: планирование).
+  outputPerDay Int?
+
   // ── Корзина (ТЗ 6) ──
   deletedAt    DateTime?
   deletedById  String?
@@ -757,6 +769,42 @@ model Tariff {
 
   @@index([isActive, sortOrder])
   @@index([deletedAt])
+}
+
+/// Уровень разбивки объекта: блок → этаж → помещение
+enum SegmentKind {
+  BLOCK // корпус, блок, подъезд
+  FLOOR // этаж
+  ROOM // помещение
+}
+
+/// Часть объекта в заказе: блок, этаж или помещение.
+///
+/// Большой объект нельзя посчитать одной цифрой площади: бригаде нужно знать,
+/// сколько этажей, какие помещения и сколько метров в каждом. Дерево хранится
+/// плоским списком со ссылкой на родителя — так его легко переписать целиком
+/// одним запросом, не сверяя, что где переставили.
+model OrderSegment {
+  id       String         @id @default(cuid())
+  order    Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId  String
+  parent   OrderSegment?  @relation("SegmentTree", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId String?
+  children OrderSegment[] @relation("SegmentTree")
+
+  kind      SegmentKind
+  title     String
+  /// Площадь части, м². У блока и этажа обычно пусто — она складывается из помещений
+  area      Int?
+  /// Что именно делать в этом помещении — если отличается от общего состава работ
+  note      String?
+  sortOrder Int         @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([parentId])
 }
 
 /// Доп. услуга с фиксированной ценой (полное управление директором, ТЗ 1.1)

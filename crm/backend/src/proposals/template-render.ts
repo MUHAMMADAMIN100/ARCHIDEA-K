@@ -19,6 +19,10 @@ export interface ProposalTemplateValues {
   date: string;
   validUntil: string;
   items: string;
+  /** Что входит в услугу — построчно (ТЗ: объём работ) */
+  included: string;
+  /** Что не входит и оплачивается отдельно */
+  excluded: string;
 }
 
 const PLACEHOLDER = /\{\{\s*(\w+)\s*\}\}/g;

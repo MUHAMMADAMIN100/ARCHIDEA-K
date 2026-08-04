@@ -18,6 +18,7 @@ import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
 import { ReminderModal } from './ReminderModal';
 import { OrderPayments } from './OrderPayments';
+import { OrderSegments } from './OrderSegments';
 import {
   TAG_COLOR,
   TAG_LABEL,
@@ -140,6 +141,8 @@ export function OrderModal({
     if (orderId) setEditing(window.innerWidth >= 640);
   }, [orderId]);
   const [showReminder, setShowReminder] = useState(false);
+  // разбивка объекта на блоки, этажи и помещения (ТЗ: объём работ)
+  const [showSegments, setShowSegments] = useState(false);
 
   const [stage, setStage] = useState<FunnelStage>('NEW');
   const [rejectionReason, setRejectionReason] = useState('');
@@ -1044,6 +1047,21 @@ export function OrderModal({
                       value={editArea}
                       onChange={(e) => onAreaChange(e.target.value)}
                     />
+                    {/*
+                      Большой объект одной цифрой площади не описать: бригаде
+                      нужны корпуса, этажи и помещения с метражом (ТЗ: объём
+                      работ). Кнопка не мешает обычной уборке квартиры —
+                      там разбивка просто не нужна.
+                    */}
+                    {order && (
+                      <button
+                        type="button"
+                        className="mt-1 text-xs font-medium text-brand-600 hover:underline"
+                        onClick={() => setShowSegments(true)}
+                      >
+                        Разбить объект по этажам и помещениям
+                      </button>
+                    )}
                   </div>
                 )}
                 <div>
@@ -1752,6 +1770,24 @@ export function OrderModal({
           clientName={order.client?.fullName}
           orderId={order.id}
           onClose={() => setShowReminder(false)}
+        />
+      )}
+
+      {/* Разбивка объекта: блоки → этажи → помещения (ТЗ: объём работ) */}
+      {showSegments && order && (
+        <OrderSegments
+          orderId={order.id}
+          orderArea={Number(editArea) || order.area || 0}
+          readOnly={!editing}
+          onClose={() => setShowSegments(false)}
+          onSaved={(appliedArea) => {
+            setShowSegments(false);
+            if (appliedArea != null) {
+              markTouched('area');
+              setEditArea(String(appliedArea));
+            }
+            loadDetail(order.id);
+          }}
         />
       )}
     </Modal>

@@ -100,6 +100,17 @@ const EXTRA_DEFAULTS: {
 const SYSTEM_KEYS = TARIFF_DEFAULTS.map((d) => d.key);
 const MAX_PRICE = 2_000_000_000;
 
+/**
+ * Список работ: без пустых строк и без лишних пробелов.
+ *
+ * Пункты приходят из текстового поля, где человек переносит строки как ему
+ * удобно — пустые строки между абзацами не должны превращаться в пустые
+ * пункты сметы.
+ */
+function cleanWorks(list?: string[]): string[] {
+  return (list ?? []).map((v) => v.trim()).filter(Boolean).slice(0, 100);
+}
+
 @Injectable()
 export class TariffsService implements OnModuleInit {
   private readonly logger = new Logger('Tariffs');
@@ -282,6 +293,9 @@ export class TariffsService implements OnModuleInit {
         sortOrder: dto.sortOrder ?? 100,
         isActive: dto.isActive ?? true,
         isSystem: false,
+        includedWorks: cleanWorks(dto.includedWorks),
+        excludedWorks: cleanWorks(dto.excludedWorks),
+        outputPerDay: dto.outputPerDay ?? null,
       },
     });
 
@@ -310,6 +324,15 @@ export class TariffsService implements OnModuleInit {
     }
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.includedWorks !== undefined) {
+      data.includedWorks = cleanWorks(dto.includedWorks);
+    }
+    if (dto.excludedWorks !== undefined) {
+      data.excludedWorks = cleanWorks(dto.excludedWorks);
+    }
+    if (dto.outputPerDay !== undefined) {
+      data.outputPerDay = dto.outputPerDay || null;
+    }
 
     // У базовой услуги единицу измерения менять нельзя: на неё опирается
     // калькулятор лендинга и расчёт всех прошлых заказов

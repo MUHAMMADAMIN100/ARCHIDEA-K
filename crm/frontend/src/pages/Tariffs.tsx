@@ -71,6 +71,16 @@ const LEVELS: { key: 'priceLight' | 'priceMedium' | 'priceHeavy'; label: string 
 
 /** Только цифры, без ведущих нулей; пустая строка допустима */
 const sanitize = (v: string) => v.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+
+/**
+ * Состав работ из текстового поля: по пункту на строку.
+ * Пустые строки между абзацами не должны становиться пустыми пунктами.
+ */
+const splitWorks = (value: string): string[] =>
+  value
+    .split(/\r?\n/)
+    .map((v) => v.trim())
+    .filter(Boolean);
 const toInt = (v: string) => Math.round(Number(v || 0));
 
 type PriceMap = Record<string, { light: string; medium: string; heavy: string }>;
@@ -793,6 +803,20 @@ function TariffModal({
   const [heavy, setHeavy] = useState(String(tariff?.priceHeavy ?? ''));
   const [sortOrder, setSortOrder] = useState(String(tariff?.sortOrder ?? 100));
   const [isActive, setIsActive] = useState(tariff?.isActive ?? true);
+  /*
+   * Состав работ: что входит и что не входит (ТЗ: объём работ).
+   * В поле — по пункту на строку: так его заполняют, читая с бумажного бланка.
+   */
+  const [included, setIncluded] = useState(
+    (tariff?.includedWorks ?? []).join('\n'),
+  );
+  const [excluded, setExcluded] = useState(
+    (tariff?.excludedWorks ?? []).join('\n'),
+  );
+  /** Выработка: сколько единиц успевает один человек за смену */
+  const [outputPerDay, setOutputPerDay] = useState(
+    tariff?.outputPerDay != null ? String(tariff.outputPerDay) : '',
+  );
   const [saving, setSaving] = useState(false);
 
   const canSubmit = title.trim().length >= 2;
@@ -811,6 +835,9 @@ function TariffModal({
       priceHeavy: hasLevels ? toInt(heavy) : mediumNum,
       sortOrder: toInt(sortOrder),
       isActive,
+      includedWorks: splitWorks(included),
+      excludedWorks: splitWorks(excluded),
+      outputPerDay: outputPerDay ? toInt(outputPerDay) : 0,
     };
     /*
      * Окно закрывается сразу, запрос уходит фоном — как и везде в системе.
@@ -898,6 +925,54 @@ function TariffModal({
                 maxLength={500}
                 placeholder="Короткое описание для карточки услуги"
               />
+            </div>
+
+            {/*
+              Состав работ (ТЗ: объём работ). Списки печатаются в КП: спор
+              «а окна вы должны были мыть?» решается только тем, что клиент
+              прочитал заранее.
+            */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Что входит в услугу</label>
+                <textarea
+                  className="input min-h-[110px] resize-none"
+                  value={included}
+                  onChange={(e) => setIncluded(e.target.value)}
+                  placeholder={
+                    'По пункту на строку:\nМытьё полов\nПротирка пыли\nСанузел до блеска'
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Что НЕ входит</label>
+                <textarea
+                  className="input min-h-[110px] resize-none"
+                  value={excluded}
+                  onChange={(e) => setExcluded(e.target.value)}
+                  placeholder={
+                    'По пункту на строку:\nМытьё окон снаружи\nВынос строительного мусора'
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">
+                Выработка: сколько {unit || 'м²'} успевает один человек за смену
+              </label>
+              <input
+                type="number"
+                min={0}
+                className="input"
+                value={outputPerDay}
+                onChange={(e) => setOutputPerDay(e.target.value)}
+                placeholder="Например: 60"
+              />
+              <p className="mt-1 text-xs text-navy-600">
+                По ней система считает срок работ и нужное число людей. Пусто —
+                срок не рассчитывается.
+              </p>
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm text-navy-700">

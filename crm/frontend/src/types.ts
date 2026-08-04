@@ -565,6 +565,11 @@ export interface Tariff {
   unit: string; // «м²», «место», «шт»
   /** базовая услуга: ключ и единицу менять нельзя, удалять нельзя */
   isSystem?: boolean;
+  /** Что входит в услугу и что не входит (ТЗ: объём работ) */
+  includedWorks?: string[];
+  excludedWorks?: string[];
+  /** Выработка: сколько единиц успевает один человек за смену */
+  outputPerDay?: number | null;
   isActive?: boolean;
   sortOrder?: number;
 }

@@ -4,7 +4,10 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHECKLISTS } from './checklist-seed';
-import { DEFAULT_PROPOSAL_TEMPLATE } from './proposal-seed';
+import {
+  DEFAULT_PROPOSAL_TEMPLATE,
+  PREVIOUS_PROPOSAL_BODIES,
+} from './proposal-seed';
 
 /**
  * Первичное наполнение реальными данными компании (идемпотентно):
@@ -319,15 +322,39 @@ export class SetupService implements OnApplicationBootstrap {
    */
   private async ensureProposalTemplate() {
     try {
-      const exists = await this.prisma.proposalTemplate.count({
+      const existing = await this.prisma.proposalTemplate.findMany({
         where: { deletedAt: null },
+        select: { id: true, body: true },
       });
-      if (exists > 0) return;
 
-      await this.prisma.proposalTemplate.create({
-        data: { ...DEFAULT_PROPOSAL_TEMPLATE, isDefault: true, isActive: true },
-      });
-      this.logger.log('Создан базовый шаблон КП с реквизитами компании');
+      if (existing.length === 0) {
+        await this.prisma.proposalTemplate.create({
+          data: { ...DEFAULT_PROPOSAL_TEMPLATE, isDefault: true, isActive: true },
+        });
+        this.logger.log('Создан базовый шаблон КП с реквизитами компании');
+        return;
+      }
+
+      /*
+       * Шаблон уже есть. Дополняем его новыми блоками ТОЛЬКО если текст в
+       * точности совпадает с прежней нашей версией — то есть его никто не
+       * правил. Иначе в шаблоне живут правки руководителя, и переписывать их
+       * система не вправе.
+       */
+      const untouched = existing.filter((t) =>
+        PREVIOUS_PROPOSAL_BODIES.includes(t.body),
+      );
+      for (const t of untouched) {
+        await this.prisma.proposalTemplate.update({
+          where: { id: t.id },
+          data: {
+            body: DEFAULT_PROPOSAL_TEMPLATE.body,
+            intro: DEFAULT_PROPOSAL_TEMPLATE.intro,
+            conditions: DEFAULT_PROPOSAL_TEMPLATE.conditions,
+          },
+        });
+        this.logger.log('Базовый шаблон КП дополнен составом работ');
+      }
     } catch (e) {
       this.logger.warn('Не удалось создать базовый шаблон КП');
     }

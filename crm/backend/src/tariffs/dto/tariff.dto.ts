@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsOptional,
@@ -77,6 +79,34 @@ export class CreateTariffDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /**
+   * Что входит в услугу и что не входит — построчно (ТЗ: объём работ).
+   *
+   * Список нужен не для красоты: спор «а окна вы должны были мыть?» решается
+   * только тем, что записано заранее. Он же печатается в КП.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  includedWorks?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  excludedWorks?: string[];
+
+  /** Выработка: сколько единиц успевает один человек за смену (ТЗ: планирование) */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  outputPerDay?: number;
+
 }
 
 export class UpdateTariffDto {
@@ -135,6 +165,34 @@ export class UpdateTariffDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /**
+   * Что входит в услугу и что не входит — построчно (ТЗ: объём работ).
+   *
+   * Список нужен не для красоты: спор «а окна вы должны были мыть?» решается
+   * только тем, что записано заранее. Он же печатается в КП.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  includedWorks?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  excludedWorks?: string[];
+
+  /** Выработка: сколько единиц успевает один человек за смену (ТЗ: планирование) */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  outputPerDay?: number;
+
 }
 
 export class CreateExtraDto {
