@@ -62,6 +62,7 @@ import {
   isValidPersonName,
   isValidPhone,
   normalizePhone,
+  phoneHref,
 } from '../lib/contact';
 import { isTempId, nowISO, tempId, withRetry } from '../lib/util';
 import type {
@@ -389,7 +390,7 @@ export function ClientCard() {
         action={
           <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
             <a
-              href={`tel:${formatPhone(data.phone)}`}
+              href={`tel:${phoneHref(data.phone)}`}
               className="btn-primary min-w-0 flex-1 basis-[12rem] justify-center text-xs font-medium sm:basis-auto sm:flex-none sm:text-sm"
             >
               <Phone className="h-4 w-4 shrink-0" />

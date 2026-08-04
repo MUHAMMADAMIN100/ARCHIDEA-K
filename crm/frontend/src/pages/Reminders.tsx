@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { PageHeader, Badge } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
+import { formatPhone, phoneHref } from '../lib/contact';
 import { ReminderModal } from '../components/ReminderModal';
 import { Column, DataTable, Period, PeriodFilter, Tabs, UserPicker } from '../components/common';
 import { REMINDER_STATUS_COLOR, REMINDER_STATUS_LABEL } from '../lib/labels';
@@ -138,8 +139,8 @@ export function Reminders() {
         <div>
           <div className="font-medium text-navy-900">{r.client?.fullName ?? '—'}</div>
           {r.client?.phone && (
-            <a href={`tel:${r.client.phone}`} className="text-xs text-brand-600 hover:underline">
-              {r.client.phone}
+            <a href={`tel:${phoneHref(r.client.phone)}`} className="text-xs text-brand-600 hover:underline">
+              {formatPhone(r.client.phone)}
             </a>
           )}
         </div>

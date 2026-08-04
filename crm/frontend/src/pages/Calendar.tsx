@@ -1195,7 +1195,7 @@ export function Calendar() {
                     </span>
                     <span className="block truncate text-xs text-violet-700">
                       {r.client?.fullName ?? 'Напоминание'}
-                      {r.client?.phone ? ` · ${r.client.phone}` : ''}
+                      {r.client?.phone ? ` · ${formatPhone(r.client.phone)}` : ''}
                     </span>
                   </span>
                 </button>

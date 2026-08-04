@@ -4,6 +4,7 @@ import { DetailModal, DetailStats, DetailTable } from './Drilldown';
 import { formatPrice, STAGE_LABEL } from '../lib/labels';
 import { formatDateTz } from '../lib/date';
 import type { AnalyticsDrilldown } from '../types';
+import { formatPhone } from '../lib/contact';
 
 /**
  * Расшифровка любой цифры с экрана аналитики: столбика диаграммы, сектора
@@ -82,7 +83,7 @@ export function OrdersDrilldownModal({
                 cell: (o) => (
                   <div>
                     <div className="font-medium text-navy-900">{o.client.fullName}</div>
-                    <div className="text-xs text-navy-600">{o.client.phone}</div>
+                    <div className="text-xs text-navy-600">{formatPhone(o.client.phone)}</div>
                   </div>
                 ),
               },
