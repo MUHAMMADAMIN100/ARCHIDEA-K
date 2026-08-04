@@ -813,6 +813,10 @@ export interface ProposalItem {
   volume?: number | null;
   unitPrice?: number | null;
   amount?: number | null;
+  /** Раздел сметы: «Работы», «Дополнительные услуги» (ТЗ 9) */
+  section?: string | null;
+  /** Единица объёма: м², место, шт */
+  unit?: string | null;
 }
 
 export interface Proposal {

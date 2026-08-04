@@ -1,8 +1,10 @@
+import { Fragment, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Download,
   Copy,
+  Pencil,
   Send,
   CheckCircle2,
   XCircle,
@@ -22,6 +24,7 @@ import {
 } from '../lib/labels';
 import { formatDateTz, formatDateTimeTz } from '../lib/date';
 import { printDocument } from '../lib/print';
+import { ProposalEditModal } from '../components/ProposalEditModal';
 import type { Proposal, ProposalStatus } from '../types';
 
 /** Строки шапки печатного листа: клиент, адрес, объём и цена, скидка, срок, автор */
@@ -51,6 +54,7 @@ export function OfferView() {
     `/proposals/${id}`,
     { deps: [id] },
   );
+  const [editing, setEditing] = useState(false);
 
   if (loading && !p) return <Spinner />;
   if (error || !p) {
@@ -164,6 +168,14 @@ export function OfferView() {
           <button onClick={() => printDocument(fileName)} className="btn-ghost">
             <Download className="h-4 w-4" />
             Скачать PDF
+          </button>
+          {/*
+            Правка КП (ТЗ 9). Сервер умел это с самого начала, а из интерфейса
+            было невозможно: ошибся в цифре — заводи предложение заново.
+          */}
+          <button onClick={() => setEditing(true)} className="btn-ghost">
+            <Pencil className="h-4 w-4" />
+            Изменить
           </button>
           {p.status === 'DRAFT' && (
             <button onClick={markSent} className="btn-primary">
@@ -284,7 +296,23 @@ export function OfferView() {
                 </thead>
                 <tbody>
                   {items.map((it, i) => (
-                    <tr key={i}>
+                    <Fragment key={i}>
+                      {/*
+                        Заголовок раздела печатается один раз перед его первой
+                        позицией: клиент читает смету блоками — работы отдельно,
+                        доп. услуги отдельно, — а не сплошным списком.
+                      */}
+                      {it.section && it.section !== items[i - 1]?.section && (
+                        <tr className="bg-navy-100/70 print:bg-navy-50">
+                          <td
+                            className="border border-navy-200 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-navy-700"
+                            colSpan={5}
+                          >
+                            {it.section}
+                          </td>
+                        </tr>
+                      )}
+                    <tr>
                       <td className="border border-navy-200 px-2 py-1.5 text-navy-600">
                         {i + 1}
                       </td>
@@ -292,7 +320,9 @@ export function OfferView() {
                         {it.title}
                       </td>
                       <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-700">
-                        {it.volume ?? '—'}
+                        {it.volume != null
+                          ? `${it.volume}${it.unit ? ` ${it.unit}` : ''}`
+                          : '—'}
                       </td>
                       <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-700">
                         {it.unitPrice != null ? formatPrice(it.unitPrice) : '—'}
@@ -301,6 +331,7 @@ export function OfferView() {
                         {it.amount != null ? formatPrice(it.amount) : '—'}
                       </td>
                     </tr>
+                    </Fragment>
                   ))}
                   <tr className="bg-navy-50 font-bold text-navy-900">
                     <td className="border border-navy-200 px-2 py-1.5" colSpan={4}>
@@ -322,6 +353,18 @@ export function OfferView() {
           <div>Подпись ____________________ дата ____________</div>
         </div>
       </PrintSheet>
+
+      {editing && (
+        <ProposalEditModal
+          proposal={p}
+          onClose={() => setEditing(false)}
+          onSaved={(updated) => {
+            setEditing(false);
+            setData(() => updated);
+            invalidate('/proposals');
+          }}
+        />
+      )}
     </div>
   );
 }

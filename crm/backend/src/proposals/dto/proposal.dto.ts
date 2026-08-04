@@ -50,6 +50,10 @@ export class ProposalItemDto {
   @IsOptional() @IsNumber() @Min(0) @Max(MAX_INT) volume?: number;
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) unitPrice?: number;
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) amount?: number;
+  /** Раздел сметы: «Работы», «Дополнительные услуги» и т.п. (ТЗ 9) */
+  @IsOptional() @IsString() @MaxLength(80) section?: string;
+  /** Единица объёма: м², место, шт */
+  @IsOptional() @IsString() @MaxLength(20) unit?: string;
 }
 
 /** Ручные корректировки поверх данных заказа/клиента при создании КП */

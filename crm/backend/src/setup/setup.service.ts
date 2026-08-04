@@ -4,6 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHECKLISTS } from './checklist-seed';
+import { DEFAULT_PROPOSAL_TEMPLATE } from './proposal-seed';
 
 /**
  * Первичное наполнение реальными данными компании (идемпотентно):
@@ -212,6 +213,7 @@ export class SetupService implements OnApplicationBootstrap {
       await this.syncPasswords();
       await this.ensureBrigades();
       await this.ensureChecklists();
+      await this.ensureProposalTemplate();
     } catch (e) {
       this.logger.error('Инициализация данных компании не удалась', e as any);
     }
@@ -309,6 +311,28 @@ export class SetupService implements OnApplicationBootstrap {
    * трогаем, иначе правки, сделанные руками в CRM, откатывались бы при каждом
    * рестарте. Пункты создаются только вместе с новым шаблоном.
    */
+  /**
+   * Базовый шаблон КП (ТЗ 9.1) — если своих шаблонов ещё нет.
+   *
+   * Заводится один раз и больше не трогается: правки руководителя в тексте
+   * КП не должны откатываться при каждом рестарте сервера.
+   */
+  private async ensureProposalTemplate() {
+    try {
+      const exists = await this.prisma.proposalTemplate.count({
+        where: { deletedAt: null },
+      });
+      if (exists > 0) return;
+
+      await this.prisma.proposalTemplate.create({
+        data: { ...DEFAULT_PROPOSAL_TEMPLATE, isDefault: true, isActive: true },
+      });
+      this.logger.log('Создан базовый шаблон КП с реквизитами компании');
+    } catch (e) {
+      this.logger.warn('Не удалось создать базовый шаблон КП');
+    }
+  }
+
   private async ensureChecklists() {
     for (const cl of CHECKLISTS) {
       try {

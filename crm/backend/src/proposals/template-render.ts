@@ -56,22 +56,60 @@ export interface ProposalItemInput {
   volume?: number | null;
   unitPrice?: number | null;
   amount?: number | null;
+  /**
+   * Раздел сметы: «Работы», «Дополнительные услуги» и т.п. (ТЗ 9).
+   * Пусто — позиция идёт без заголовка, как было раньше.
+   */
+  section?: string | null;
+  /** Единица объёма: м², место, шт — чтобы «120» не читалось как штуки */
+  unit?: string | null;
 }
 
-/** Текстовый список позиций для плейсхолдера {{items}} */
+/**
+ * Текстовый список позиций для плейсхолдера {{items}}.
+ *
+ * Позиции с разделом группируются под его заголовком — клиент видит смету
+ * блоками («Работы», «Дополнительные услуги»), а не сплошным перечнем.
+ * Порядок разделов — тот, в котором они встретились.
+ */
 export function formatItemsList(
   items: ProposalItemInput[] | null | undefined,
 ): string {
   if (!items || items.length === 0) return '';
-  return items
-    .map((item) => {
-      const line = [`• ${item.title}`];
-      if (item.volume != null) line.push(`${item.volume}`);
-      if (item.unitPrice != null) line.push(`× ${item.unitPrice} сомони`);
-      if (item.amount != null) line.push(`= ${item.amount} сомони`);
-      return line.join(' ');
+
+  const line = (item: ProposalItemInput): string => {
+    const parts = [`• ${item.title}`];
+    if (item.volume != null) {
+      // единица нужна, чтобы «100» не читалось как сто штук
+      parts.push(item.unit ? `${item.volume} ${item.unit}` : `${item.volume}`);
+    }
+    if (item.unitPrice != null) parts.push(`× ${item.unitPrice} сомони`);
+    if (item.amount != null) parts.push(`= ${item.amount} сомони`);
+    return parts.join(' ');
+  };
+
+  const order: string[] = [];
+  const bySection = new Map<string, string[]>();
+  for (const item of items) {
+    const key = item.section?.trim() || '';
+    if (!bySection.has(key)) {
+      bySection.set(key, []);
+      order.push(key);
+    }
+    bySection.get(key)!.push(line(item));
+  }
+
+  // разделов нет вовсе — печатаем плоским списком, как было раньше
+  if (order.length === 1 && order[0] === '') {
+    return bySection.get('')!.join('\n');
+  }
+
+  return order
+    .map((name) => {
+      const rows = bySection.get(name)!.join('\n');
+      return name ? `${name}:\n${rows}` : rows;
     })
-    .join('\n');
+    .join('\n\n');
 }
 
 /**

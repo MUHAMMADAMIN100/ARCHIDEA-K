@@ -38,6 +38,7 @@ import {
   formatItemsList,
   renderProposalBody,
 } from './template-render';
+import { itemsFromOrder } from './proposal-items';
 
 /** Прибавка нужных данных к списку/карточке КП без раскрытия лишних полей */
 const proposalInclude = {
@@ -337,11 +338,33 @@ export class ProposalsService {
     const template = await this.resolveTemplate(dto.templateId);
 
     const overrides = dto.overrides;
-    const discount = overrides?.discount ?? 0;
+    /*
+     * Скидка по умолчанию — та же, что в заказе. Раньше она обнулялась, и КП
+     * уходило клиенту дороже, чем он договорился.
+     */
+    const discount = overrides?.discount ?? order?.discount ?? 0;
     const area = overrides?.area ?? order?.area ?? null;
     const pricePerSqm = await this.resolvePricePerSqm(order, overrides?.pricePerSqm);
-    const items: ProposalItemInput[] | null = overrides?.items ?? null;
     const address = overrides?.address ?? order?.address ?? null;
+
+    /*
+     * Смета: либо позиции задал менеджер, либо собираем их из заказа.
+     *
+     * Собранная смета — это те же строки, по которым посчитан заказ: работы,
+     * дополнительные работы и доп. услуги. Пока её не было, КП считалось как
+     * «площадь × цена» и молча теряло всё остальное: клиент видел одну сумму,
+     * CRM — другую.
+     */
+    let items: ProposalItemInput[] | null = overrides?.items ?? null;
+    if (!items && order) {
+      const [tariffs, extrasCatalog] = await Promise.all([
+        this.prisma.tariff.findMany({ where: NOT_DELETED }),
+        this.prisma.extraService.findMany({ where: NOT_DELETED }),
+      ]);
+      const built = itemsFromOrder(order, tariffs, extrasCatalog);
+      if (built.length) items = built;
+    }
+
     const total =
       overrides?.total ??
       computeProposalTotal({
