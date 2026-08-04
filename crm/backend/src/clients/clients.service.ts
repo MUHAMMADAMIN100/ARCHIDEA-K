@@ -17,7 +17,7 @@ import { normalizePhone as canonicalPhone } from '../common/validation/contact';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto';
 
 /**
- * Телефон в едином виде — девять цифр без кода страны.
+ * Телефон в едином виде — код страны и номер подряд, только цифры.
  *
  * Правило живёт в common/validation/contact, чтобы номер, пришедший с сайта
  * («992900000001»), и тот же номер, вбитый в CRM руками («90 000 00 01»),
@@ -67,10 +67,20 @@ export class ClientsService {
       // — иначе случайная цифра в имени («Иван2», «UTF8») цепляла бы всех,
       // у кого эта цифра есть в телефоне.
       const isPhoneQuery = /^[\d\s+\-()]+$/.test(term);
-      const digits = normalizePhone(term);
+      /*
+       * По телефону ищем сырыми цифрами, а не приведённым номером.
+       *
+       * Номер хранится вместе с кодом страны, и «900000001» — это кусок
+       * «992900000001». Приводи мы запрос к каноническому виду, поиск по
+       * части номера («9161234») перестал бы работать: короткий обрывок
+       * телефоном не считается и превращался бы в null.
+       */
+      const digits = term.replace(/\D/g, '');
       where.OR = [
         { fullName: { contains: term, mode: 'insensitive' } },
-        ...(isPhoneQuery && digits ? [{ phone: { contains: digits } }] : []),
+        ...(isPhoneQuery && digits.length >= 3
+          ? [{ phone: { contains: digits } }]
+          : []),
       ];
     }
 
@@ -142,7 +152,8 @@ export class ClientsService {
     const phone = canonicalPhone(data.phone);
     if (!phone) {
       throw new BadRequestException(
-        'Укажите корректный номер телефона: 9 цифр, например +992 90 000 00 01',
+        'Укажите корректный номер телефона: для Таджикистана 9 цифр ' +
+          '(+992 90 000 00 01), для другой страны — с её кодом (+7 916 123 45 67)',
       );
     }
     const fullName = (data.fullName || '').trim().slice(0, 120); // ограничение длины

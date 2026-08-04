@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalculatorStep } from './CalculatorStep';
 import { SpecificsStep } from './SpecificsStep';
-import { ContactsStep, samePhones } from './ContactsStep';
+import { ContactsStep, phoneFilled, samePhones } from './ContactsStep';
 import { SuccessScreen } from './SuccessScreen';
 import { Stepper } from './Stepper';
 import { IconArrowLeft, IconArrowRight, IconCheck } from '../ui/icons';
@@ -71,8 +71,8 @@ export function QuizForm() {
   });
   const [contact, setContact] = useState<ContactState>({
     name: '',
-    phone: '+992 ',
-    phone2: '+992 ',
+    phone: '+992',
+    phone2: '',
     address: '',
   });
   const [contactErrors, setContactErrors] = useState<
@@ -103,10 +103,11 @@ export function QuizForm() {
   const validateContacts = () => {
     const errs: Partial<Record<keyof ContactState, boolean>> = {
       name: !PERSON_NAME_RE.test(contact.name.trim()),
-      phone: contact.phone.replace(/\D/g, '').length < 12,
+      // номер проверяем по правилам выбранной страны, а не по длине «как в Таджикистане»
+      phone: !phoneFilled(contact.phone),
       phone2:
         contact.phone2.replace(/\D/g, '').length > 3 &&
-        (contact.phone2.replace(/\D/g, '').length < 12 ||
+        (!phoneFilled(contact.phone2) ||
           samePhones(contact.phone, contact.phone2)),
       address: contact.address.trim().length < 4,
     };

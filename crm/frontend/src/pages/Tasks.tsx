@@ -15,7 +15,7 @@ import {
   TASK_TYPE_LABEL,
   formatDate,
 } from '../lib/labels';
-import { formatPhone } from '../lib/contact';
+import { formatPhone, phoneHref } from '../lib/contact';
 import { tempId, nowISO, withRetry } from '../lib/util';
 import { userManagesTasks } from '../types';
 import type { Task, TaskPriority, TaskStatus, TaskType } from '../types';
@@ -230,7 +230,7 @@ export function Tasks() {
                           {t.client.fullName}
                         </span>
                         <a
-                          href={`tel:+992${t.client.phone}`}
+                          href={`tel:${phoneHref(t.client.phone)}`}
                           onClick={(e) => e.stopPropagation()}
                           className="text-brand-600 hover:underline"
                         >

@@ -1,4 +1,13 @@
 import { FieldLabel, TextInput } from './fields';
+import {
+  COUNTRIES,
+  HOME_CODE,
+  MAX_TOTAL_DIGITS,
+  MIN_TOTAL_DIGITS,
+  formatNational,
+  fullPhone,
+  phoneComplete,
+} from '../../lib/phone';
 import { IconMapPin } from '../ui/icons';
 import type { ContactState } from '../../types';
 
@@ -8,30 +17,105 @@ interface Props {
   errors: Partial<Record<keyof ContactState, boolean>>;
 }
 
-/** Форматирует ввод как +992 XX XXX XX XX, прочно закрепляя префикс +992. */
-export function formatTjPhone(raw: string): string {
-  let digits = raw.replace(/\D/g, '');
-  if (digits.startsWith('992')) digits = digits.slice(3);
-  digits = digits.slice(0, 9); // 9 цифр номера
-  let out = '+992';
-  if (digits.length) out += ' ' + digits.slice(0, 2);
-  if (digits.length > 2) out += ' ' + digits.slice(2, 5);
-  if (digits.length > 5) out += ' ' + digits.slice(5, 7);
-  if (digits.length > 7) out += ' ' + digits.slice(7, 9);
-  return out;
-}
-
-/** Девять цифр номера без кода страны — для сравнения двух полей между собой */
-function phoneDigits(raw: string): string {
-  const d = raw.replace(/\D/g, '');
-  return d.startsWith('992') ? d.slice(3) : d;
+/**
+ * Номер хранится в состоянии формы полностью: «+992900000001», «+79161234567».
+ * Раньше префикс «+992» был вшит в поле намертво, и человек с российским
+ * номером не мог отправить заявку вовсе.
+ */
+export function splitPhone(raw: string): { code: string; national: string } {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (!digits) return { code: HOME_CODE, national: '' };
+  let best: (typeof COUNTRIES)[number] | null = null;
+  for (const c of COUNTRIES) {
+    if (digits.startsWith(c.code) && (!best || c.code.length > best.code.length)) {
+      best = c;
+    }
+  }
+  if (best) return { code: best.code, national: digits.slice(best.code.length) };
+  return { code: digits.slice(0, 3), national: digits.slice(3) };
 }
 
 /** Оба поля заполнены и это один и тот же номер */
 export function samePhones(a: string, b: string): boolean {
-  const x = phoneDigits(a);
-  const y = phoneDigits(b);
-  return x.length === 9 && x === y;
+  const x = (a || '').replace(/\D/g, '');
+  const y = (b || '').replace(/\D/g, '');
+  return x.length >= MIN_TOTAL_DIGITS && x === y;
+}
+
+/** Номер введён полностью — по правилам выбранной страны */
+export function phoneFilled(raw: string): boolean {
+  const { code, national } = splitPhone(raw);
+  return phoneComplete(code, national);
+}
+
+/** Поле телефона с выбором страны */
+function PhoneField({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  invalid?: boolean;
+}) {
+  const { code, national } = splitPhone(value);
+  const known = COUNTRIES.some((c) => c.code === code);
+
+  const push = (nextCode: string, nextNational: string) =>
+    onChange(fullPhone(nextCode, nextNational));
+
+  return (
+    <div className="flex gap-2">
+      <select
+        className="quiz-country"
+        value={known ? code : 'other'}
+        aria-label="Страна номера"
+        onChange={(e) => {
+          if (e.target.value === 'other') {
+            push('', national);
+            return;
+          }
+          push(e.target.value, national);
+        }}
+      >
+        {COUNTRIES.map((c) => (
+          <option key={c.code} value={c.code}>
+            +{c.code} {c.title.split(',')[0]}
+          </option>
+        ))}
+        <option value="other">Другая…</option>
+      </select>
+
+      {!known && (
+        <TextInput
+          type="tel"
+          inputMode="numeric"
+          value={code ? `+${code}` : '+'}
+          aria-label="Код страны"
+          onChange={(e) =>
+            push(e.target.value.replace(/\D/g, '').slice(0, 4), national)
+          }
+          className="!w-24 !px-3"
+        />
+      )}
+
+      <TextInput
+        type="tel"
+        inputMode="numeric"
+        value={formatNational(national, code)}
+        invalid={invalid}
+        onChange={(e) =>
+          push(
+            code,
+            e.target.value.replace(/\D/g, '').slice(0, MAX_TOTAL_DIGITS - code.length),
+          )
+        }
+        placeholder={code === HOME_CODE ? '90 000 00 01' : 'номер телефона'}
+        autoComplete="tel"
+        className="!flex-1"
+      />
+    </div>
+  );
 }
 
 export function ContactsStep({ state, onChange, errors }: Props) {
@@ -56,24 +140,10 @@ export function ContactsStep({ state, onChange, errors }: Props) {
 
       <div>
         <FieldLabel required>Номер телефона</FieldLabel>
-        <TextInput
-          type="tel"
-          inputMode="numeric"
-          value={state.phone || '+992 '}
+        <PhoneField
+          value={state.phone}
           invalid={errors.phone}
-          onChange={(e) => set('phone', formatTjPhone(e.target.value))}
-          onFocus={(e) => {
-            if (!state.phone) set('phone', '+992 ');
-            // курсор в конец
-            requestAnimationFrame(() =>
-              e.target.setSelectionRange(
-                e.target.value.length,
-                e.target.value.length,
-              ),
-            );
-          }}
-          placeholder="+992 __ ___ __ __"
-          autoComplete="tel"
+          onChange={(next) => set('phone', next)}
         />
         {errors.phone && (
           <p className="quiz-hint mt-1.5 !text-red-500">
@@ -89,23 +159,10 @@ export function ContactsStep({ state, onChange, errors }: Props) {
       */}
       <div>
         <FieldLabel>Запасной номер</FieldLabel>
-        <TextInput
-          type="tel"
-          inputMode="numeric"
-          value={state.phone2 || '+992 '}
+        <PhoneField
+          value={state.phone2}
           invalid={errors.phone2}
-          onChange={(e) => set('phone2', formatTjPhone(e.target.value))}
-          onFocus={(e) => {
-            if (!state.phone2) set('phone2', '+992 ');
-            requestAnimationFrame(() =>
-              e.target.setSelectionRange(
-                e.target.value.length,
-                e.target.value.length,
-              ),
-            );
-          }}
-          placeholder="+992 __ ___ __ __"
-          autoComplete="tel"
+          onChange={(next) => set('phone2', next)}
         />
         {errors.phone2 ? (
           <p className="quiz-hint mt-1.5 !text-red-500">

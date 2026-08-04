@@ -3,6 +3,14 @@ import {
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
+import {
+  HOME_CODE,
+  HOME_DIGITS,
+  MAX_TOTAL_DIGITS,
+  MIN_TOTAL_DIGITS,
+  countryOf,
+  groupNational,
+} from './countries';
 
 /**
  * Единые правила для контактных данных во всём проекте.
@@ -12,37 +20,60 @@ import {
  * а не переписывается в каждой форме по-своему.
  */
 
-/** Национальный номер Таджикистана — ровно девять цифр после кода +992 */
-export const PHONE_DIGITS = 9;
-export const COUNTRY_CODE = '992';
+/**
+ * Телефон хранится в одном виде: код страны и номер подряд, только цифры.
+ * «992900000001», «79161234567», «12125550123».
+ *
+ * Почему так: по номеру ловятся дубли клиентов, по нему же ищут в базе и
+ * строят ссылки «позвонить». Держи мы код страны отдельно или храни местные
+ * номера без кода — один и тот же человек завёлся бы дважды, а поиск находил
+ * бы не всё.
+ *
+ * Родная страна проверяется строго (девять цифр), чужие — по длине от 7 до 15
+ * цифр вместе с кодом. Длину номеров всего мира не угадать, а отказать
+ * настоящему клиенту хуже, чем принять непривычный номер.
+ */
+export const PHONE_DIGITS = HOME_DIGITS;
+export const COUNTRY_CODE = HOME_CODE;
 
 /**
- * Приводит любой ввод к каноническому виду: девять цифр без кода страны.
+ * Любой ввод → канонический вид (цифры с кодом страны) либо null.
  *
- * Единый вид важен для защиты от дублей: с сайта номер приходит как
- * «992900000001», а руками его вбивают как «90 000 00 01» — без нормализации
- * это два разных клиента с одним и тем же телефоном.
- * Возвращает null, если номер не похож на таджикский.
+ * Девять цифр без кода по-прежнему считаются таджикским номером: так их
+ * набирают руками, и так они лежат в базе со времён, когда других стран не
+ * было. Ведущая «8» перед местным номером тоже отбрасывается.
  */
 export function normalizePhone(input: string | null | undefined): string | null {
   if (!input) return null;
   let digits = String(input).replace(/\D/g, '');
+  if (!digits) return null;
 
-  // отбрасываем код страны в любом из привычных написаний: +992, 992, 8992
-  if (digits.length > PHONE_DIGITS && digits.startsWith(COUNTRY_CODE)) {
-    digits = digits.slice(COUNTRY_CODE.length);
-  } else if (digits.length === PHONE_DIGITS + 1 && digits.startsWith('0')) {
+  // местный номер без кода страны — дописываем свой код
+  if (digits.length === HOME_DIGITS) digits = HOME_CODE + digits;
+  else if (digits.length === HOME_DIGITS + 1 && digits.startsWith('0')) {
+    digits = HOME_CODE + digits.slice(1);
+  } else if (digits.length === HOME_DIGITS + 4 && digits.startsWith('8' + HOME_CODE)) {
     digits = digits.slice(1);
   }
 
-  return digits.length === PHONE_DIGITS ? digits : null;
+  if (digits.startsWith(HOME_CODE)) {
+    return digits.length === HOME_CODE.length + HOME_DIGITS ? digits : null;
+  }
+
+  if (digits.length < MIN_TOTAL_DIGITS || digits.length > MAX_TOTAL_DIGITS) {
+    return null;
+  }
+  return digits;
 }
 
-/** Человеку показываем номер в привычном виде: +992 90 000 00 01 */
+/** Человеку показываем номер по правилам его страны: +992 90 000 00 01 */
 export function formatPhone(phone: string | null | undefined): string {
   const n = normalizePhone(phone);
   if (!n) return phone ?? '';
-  return `+${COUNTRY_CODE} ${n.slice(0, 2)} ${n.slice(2, 5)} ${n.slice(5, 7)} ${n.slice(7)}`;
+  const country = countryOf(n);
+  if (!country) return `+${n}`;
+  const national = n.slice(country.code.length);
+  return `+${country.code} ${groupNational(national, country.groups)}`;
 }
 
 export function isValidPhone(input: string | null | undefined): boolean {
@@ -64,7 +95,12 @@ export function isValidPersonName(input: string | null | undefined): boolean {
   return NAME_RE.test(v);
 }
 
-/** Номер телефона: ровно девять цифр, код страны можно писать или не писать */
+/**
+ * Номер телефона любой страны.
+ *
+ * Имя оставлено прежним (IsTjPhone) сознательно: декоратор стоит в двух
+ * десятках мест, и переименование ради красоты — лишний повод что-то сломать.
+ */
 export function IsTjPhone(options?: ValidationOptions) {
   return function (object: object, propertyName: string) {
     registerDecorator({
@@ -78,7 +114,11 @@ export function IsTjPhone(options?: ValidationOptions) {
           return typeof value === 'string' && isValidPhone(value);
         },
         defaultMessage(args: ValidationArguments) {
-          return `${args.property}: укажите номер из 9 цифр, например +992 90 000 00 01`;
+          return (
+            `${args.property}: номер не похож на телефон. ` +
+            'Для Таджикистана — 9 цифр (+992 90 000 00 01), ' +
+            'для другой страны — с её кодом, например +7 916 123 45 67'
+          );
         },
       },
     });

@@ -14,6 +14,7 @@ import { useDialog } from '../components/Dialog';
 import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { OrderModal } from '../components/OrderModal';
+import { formatPhone } from '../lib/contact';
 import { AddClientModal, type NewOrderInput } from './Clients';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -133,7 +134,7 @@ function OrderCardBody({
       {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
       {o.client?.phone && (
         <div className="mt-0.5 text-xs font-medium text-brand-600">
-          +992 {o.client.phone}
+          {formatPhone(o.client.phone)}
         </div>
       )}
       <div className="mt-1 text-xs text-navy-600">
@@ -254,7 +255,7 @@ function BoardSkeleton() {
       aria-label="Загрузка"
     >
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex w-[85vw] shrink-0 flex-col sm:w-72">
+        <div key={i} className="flex w-[74vw] shrink-0 flex-col sm:w-72">
           <Skeleton className="mb-3 h-16 w-full rounded-xl" />
           <div className="space-y-2.5 p-1">
             {Array.from({ length: 3 }).map((_, j) => (
@@ -798,7 +799,7 @@ export function Funnel() {
               return (
               <div
                 key={col.stage}
-                className={`flex w-[85vw] shrink-0 snap-start flex-col sm:w-72 ${
+                className={`flex w-[74vw] shrink-0 snap-start flex-col sm:w-72 ${
                   isDue
                     ? /*
                        * Прилипает к левому краю: список должников виден, до

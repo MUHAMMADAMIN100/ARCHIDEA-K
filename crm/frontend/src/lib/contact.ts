@@ -1,3 +1,14 @@
+import {
+  COUNTRIES,
+  HOME_CODE,
+  HOME_DIGITS,
+  MAX_TOTAL_DIGITS,
+  MIN_TOTAL_DIGITS,
+  byCode,
+  countryOf,
+  groupNational,
+} from './countries';
+
 /**
  * Единые правила для контактных данных в интерфейсе.
  *
@@ -6,47 +17,98 @@
  * человек увидел ошибку сразу, а не после отправки формы.
  */
 
-export const PHONE_DIGITS = 9;
-const COUNTRY_CODE = '992';
+export const PHONE_DIGITS = HOME_DIGITS;
 
 /**
- * Любой ввод → девять цифр национального номера.
- * Возвращает null, если номер не таджикский или неполный.
+ * Телефон хранится и передаётся в одном виде: код страны и номер подряд,
+ * только цифры — «992900000001», «79161234567».
+ *
+ * Так же он лежит в базе: по номеру ловятся дубли клиентов и строится поиск.
+ * Местный номер из девяти цифр по-прежнему понимается как таджикский — так
+ * его набирают руками.
  */
 export function normalizePhone(input: string | null | undefined): string | null {
   if (!input) return null;
   let digits = String(input).replace(/\D/g, '');
+  if (!digits) return null;
 
-  if (digits.length > PHONE_DIGITS && digits.startsWith(COUNTRY_CODE)) {
-    digits = digits.slice(COUNTRY_CODE.length);
-  } else if (digits.length === PHONE_DIGITS + 1 && digits.startsWith('0')) {
+  if (digits.length === HOME_DIGITS) digits = HOME_CODE + digits;
+  else if (digits.length === HOME_DIGITS + 1 && digits.startsWith('0')) {
+    digits = HOME_CODE + digits.slice(1);
+  } else if (digits.length === HOME_DIGITS + 4 && digits.startsWith('8' + HOME_CODE)) {
     digits = digits.slice(1);
   }
-  return digits.length === PHONE_DIGITS ? digits : null;
+
+  if (digits.startsWith(HOME_CODE)) {
+    return digits.length === HOME_CODE.length + HOME_DIGITS ? digits : null;
+  }
+  if (digits.length < MIN_TOTAL_DIGITS || digits.length > MAX_TOTAL_DIGITS) {
+    return null;
+  }
+  return digits;
 }
 
-/** Цифры номера без кода страны — то, что человек набирает в поле */
+/** Только цифры введённого значения — без кода страны его не трактуем */
 export function phoneDigits(input: string | null | undefined): string {
   if (!input) return '';
-  let digits = String(input).replace(/\D/g, '');
-  if (digits.startsWith(COUNTRY_CODE) && digits.length > PHONE_DIGITS) {
-    digits = digits.slice(COUNTRY_CODE.length);
-  }
-  return digits.slice(0, PHONE_DIGITS);
+  return String(input).replace(/\D/g, '').slice(0, MAX_TOTAL_DIGITS);
 }
 
-/** «90 000 00 01» — как человек привык видеть номер */
+/** Национальная часть номера страны: «90 000 00 01» */
+export function formatNational(
+  national: string,
+  code: string = HOME_CODE,
+): string {
+  const country = byCode(code);
+  const groups = country?.groups ?? [3, 3, 3, 3];
+  return groupNational(national.replace(/\D/g, ''), groups);
+}
+
+/** Совместимость со старым именем: национальная часть таджикского номера */
 export function formatPhoneInput(input: string | null | undefined): string {
-  const d = phoneDigits(input);
-  const parts = [d.slice(0, 2), d.slice(2, 5), d.slice(5, 7), d.slice(7, 9)];
-  return parts.filter(Boolean).join(' ');
+  return formatNational(phoneDigits(input));
 }
 
-/** «+992 90 000 00 01» — для показа в карточках и списках */
+/** «+992 90 000 00 01» — для карточек и списков */
 export function formatPhone(input: string | null | undefined): string {
-  const d = phoneDigits(input);
-  if (!d) return '—';
-  return `+${COUNTRY_CODE} ${formatPhoneInput(d)}`;
+  const n = normalizePhone(input);
+  if (!n) {
+    const raw = phoneDigits(input);
+    return raw ? `+${raw}` : '—';
+  }
+  const country = countryOf(n);
+  if (!country) return `+${n}`;
+  return `+${country.code} ${groupNational(n.slice(country.code.length), country.groups)}`;
+}
+
+/**
+ * Разбирает номер на код страны и национальную часть.
+ *
+ * Нужен полю ввода: человек правит номер, а не строку целиком, и код страны
+ * у него отдельным списком. Незнакомый код остаётся кодом — просто вводится
+ * руками.
+ */
+export function splitPhone(input: string | null | undefined): {
+  code: string;
+  national: string;
+} {
+  const digits = phoneDigits(input);
+  if (!digits) return { code: HOME_CODE, national: '' };
+  const country = countryOf(digits);
+  if (country) {
+    return { code: country.code, national: digits.slice(country.code.length) };
+  }
+  /*
+   * Код неизвестен. Берём первые три цифры как код — большинство кодов вне
+   * списка трёхзначные, а человек всё равно поправит их руками.
+   */
+  return { code: digits.slice(0, 3), national: digits.slice(3) };
+}
+
+/** Ссылка для звонка и мессенджеров: только цифры с кодом страны */
+export function phoneHref(input: string | null | undefined): string {
+  const n = normalizePhone(input);
+  return n ? `+${n}` : `+${phoneDigits(input)}`;
 }
 
 export function isValidPhone(input: string | null | undefined): boolean {
@@ -78,12 +140,40 @@ export function sanitizePersonName(input: string): string {
 }
 
 /** Текст ошибки под полем — null, если всё в порядке */
-export function phoneError(input: string, required = true): string | null {
-  const d = phoneDigits(input);
+/**
+ * Текст ошибки под полем телефона.
+ *
+ * Считаем по выбранной стране: у Таджикистана длина известна точно, у чужой
+ * страны проверяем только, что номер похож на телефон. Отказать настоящему
+ * клиенту хуже, чем принять непривычный номер.
+ */
+export function phoneError(
+  national: string,
+  required = true,
+  code: string = HOME_CODE,
+): string | null {
+  const d = phoneDigits(national);
   if (!d) return required ? 'Укажите номер телефона' : null;
-  if (d.length < PHONE_DIGITS) return `Нужно ${PHONE_DIGITS} цифр, введено ${d.length}`;
+
+  const country = byCode(code);
+  if (country?.digits) {
+    if (d.length < country.digits) {
+      return `Нужно ${country.digits} цифр, введено ${d.length}`;
+    }
+    if (d.length > country.digits) {
+      return `Слишком длинный номер: ${d.length} цифр вместо ${country.digits}`;
+    }
+    return null;
+  }
+
+  const total = code.length + d.length;
+  if (total < MIN_TOTAL_DIGITS) return 'Слишком короткий номер';
+  if (total > MAX_TOTAL_DIGITS) return 'Слишком длинный номер';
   return null;
 }
+
+/** Список стран для выпадающего списка в поле телефона */
+export const PHONE_COUNTRIES = COUNTRIES;
 
 export function nameError(input: string, required = true): string | null {
   const v = input.trim();
