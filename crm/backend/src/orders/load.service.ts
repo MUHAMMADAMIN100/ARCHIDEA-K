@@ -27,8 +27,22 @@ export class LoadService {
   constructor(private prisma: PrismaService) {}
 
   async byDays(_user: AuthUser, from?: string, to?: string) {
-    const start = from ? dayUTC(from) : new Date();
-    const end = to ? dayUTC(to) : new Date(start.getTime() + 13 * 86400000);
+    /*
+     * Даты приходят из адресной строки. Мусор вместо даты давал Invalid Date,
+     * с ним падал запрос к базе, и календарь показывал ошибку вместо загрузки.
+     * Непонятную дату просто игнорируем — берём период по умолчанию.
+     */
+    const isDay = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const start = isDay(from) ? dayUTC(from as string) : new Date();
+    let end = isDay(to) ? dayUTC(to as string) : new Date(start.getTime() + 13 * 86400000);
+
+    // окно ограничено кварталом: календарь показывает месяц, а запрос на
+    // десять лет перебирал бы все выезды компании ради одной полосы загрузки
+    const MAX_DAYS = 92;
+    if (end.getTime() < start.getTime()) end = start;
+    if (end.getTime() - start.getTime() > MAX_DAYS * 86400000) {
+      end = new Date(start.getTime() + MAX_DAYS * 86400000);
+    }
 
     const groups = await this.prisma.shiftGroup.findMany({
       where: {
