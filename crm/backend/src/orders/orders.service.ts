@@ -267,11 +267,25 @@ export class OrdersService {
     return new Date(Date.now() - OrdersService.ARCHIVE_DAYS * 86_400_000);
   }
 
-  /** Условие «этот заказ уже в архиве» — закрыт и с тех пор прошло 45 дней */
+  /**
+   * Условие «этот заказ уже в архиве».
+   *
+   * Два срока сразу, и это принципиально:
+   *   • сделка закрыта больше 45 дней назад,
+   *   • И сама запись живёт в системе больше 45 дней.
+   *
+   * Раньше хватало первого условия — и заказ за прошедший месяц, внесённый
+   * сегодня, исчезал из воронки в ту же секунду: владелец вносил майские
+   * сделки и не находил их вовсе. Теперь у внесённой истории есть те же
+   * 45 дней на виду, что и у свежей сделки, а по-настоящему старые заказы
+   * уезжают в папку как раньше.
+   */
   private archivedWhere(): Prisma.OrderWhereInput {
+    const cutoff = this.archiveCutoff();
     return {
       stage: { in: [FunnelStage.PAID, FunnelStage.REJECTED] },
-      closedAt: { lt: this.archiveCutoff() },
+      closedAt: { lt: cutoff },
+      registeredAt: { lt: cutoff },
     };
   }
 

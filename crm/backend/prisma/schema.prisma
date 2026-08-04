@@ -559,6 +559,14 @@ model Order {
   updatedAt      DateTime        @updatedAt
   closedAt       DateTime?
 
+  /// Когда запись реально появилась в системе.
+  ///
+  /// Отличается от createdAt тем, что её НЕЛЬЗЯ поменять руками: createdAt —
+  /// это «дата оформления заявки», её менеджер правит, внося старые сделки.
+  /// От registeredAt считается переезд в архив, иначе заказ за май, внесённый
+  /// сегодня, исчезал бы из воронки в ту же секунду.
+  registeredAt DateTime @default(now())
+
   // ── Корзина (ТЗ 6) ──
   deletedAt    DateTime?
   deletedById  String?

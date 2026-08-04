@@ -44,6 +44,26 @@ function cardDate(iso: string): string {
   });
 }
 
+/**
+ * Сделка закрыта давно, а карточка всё ещё в воронке — значит её внесли
+ * задним числом.
+ *
+ * Такую видно сразу, иначе старый заказ среди свежих читается как сегодняшний.
+ * Порог тот же, что и у переезда в архив: 45 дней.
+ */
+const OLD_DEAL_DAYS = 45;
+
+function closedLongAgo(o: Order): string | null {
+  if (!o.closedAt) return null;
+  const days = (Date.now() - new Date(o.closedAt).getTime()) / 86_400_000;
+  if (days <= OLD_DEAL_DAYS) return null;
+  const when = new Date(o.closedAt).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+  });
+  return o.stage === 'REJECTED' ? `Отказ ${when}` : `Закрыт ${when}`;
+}
+
 const NO_MANAGER = '__none__';
 
 /**
@@ -131,6 +151,12 @@ function OrderCardBody({
           ))}
         </div>
       </div>
+      {/* внесённая история: сделка закрыта в прошлом месяце, а карточка свежая */}
+      {closedLongAgo(o) && (
+        <div className="mt-1 inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+          {closedLongAgo(o)}
+        </div>
+      )}
       {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
       {o.client?.phone && (
         <div className="mt-0.5 text-xs font-medium text-brand-600">

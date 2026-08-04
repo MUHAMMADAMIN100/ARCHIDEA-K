@@ -380,6 +380,8 @@ export interface Order {
   isLarge: boolean;
   createdAt: string;
   closedAt?: string | null;
+  /** Когда запись появилась в системе — от неё считается переезд в архив */
+  registeredAt?: string | null;
   deletedAt?: string | null;
   client?: {
     id: string;
