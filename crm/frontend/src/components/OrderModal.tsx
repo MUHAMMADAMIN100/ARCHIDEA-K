@@ -19,6 +19,7 @@ import { HistoryPanel } from './HistoryPanel';
 import { ReminderModal } from './ReminderModal';
 import { OrderPayments } from './OrderPayments';
 import { OrderSegments } from './OrderSegments';
+import { OrderPlan } from './OrderPlan';
 import {
   TAG_COLOR,
   TAG_LABEL,
@@ -143,6 +144,8 @@ export function OrderModal({
   const [showReminder, setShowReminder] = useState(false);
   // разбивка объекта на блоки, этажи и помещения (ТЗ: объём работ)
   const [showSegments, setShowSegments] = useState(false);
+  // план производства работ и срок (ТЗ: планирование)
+  const [showPlan, setShowPlan] = useState(false);
 
   const [stage, setStage] = useState<FunnelStage>('NEW');
   const [rejectionReason, setRejectionReason] = useState('');
@@ -1054,13 +1057,26 @@ export function OrderModal({
                       там разбивка просто не нужна.
                     */}
                     {order && (
-                      <button
-                        type="button"
-                        className="mt-1 text-xs font-medium text-brand-600 hover:underline"
-                        onClick={() => setShowSegments(true)}
-                      >
-                        Разбить объект по этажам и помещениям
-                      </button>
+                      <div className="mt-1 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-brand-600 hover:underline"
+                          onClick={() => setShowSegments(true)}
+                        >
+                          Разбить объект по этажам и помещениям
+                        </button>
+                        {/*
+                          Срок и план по дням считаются из объёма, выработки
+                          услуги и числа людей в бригаде (ТЗ: планирование).
+                        */}
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-brand-600 hover:underline"
+                          onClick={() => setShowPlan(true)}
+                        >
+                          План работ и срок
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1770,6 +1786,15 @@ export function OrderModal({
           clientName={order.client?.fullName}
           orderId={order.id}
           onClose={() => setShowReminder(false)}
+        />
+      )}
+
+      {showPlan && order && (
+        <OrderPlan
+          orderId={order.id}
+          clientName={order.client?.fullName}
+          address={order.address}
+          onClose={() => setShowPlan(false)}
         />
       )}
 

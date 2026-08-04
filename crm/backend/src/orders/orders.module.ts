@@ -5,6 +5,9 @@ import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 import { SegmentsService } from './segments.service';
 import { SegmentsController } from './segments.controller';
+import { PlanService } from './plan.service';
+import { LoadService } from './load.service';
+import { LoadController } from './load.controller';
 import { FinanceModule } from '../finance/finance.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { ReportsModule } from '../reports/reports.module';
@@ -18,8 +21,19 @@ import { PayrollModule } from '../payroll/payroll.module';
   // Отчёты — черновик платёжной ведомости по оплаченному заказу
   // Выезды — автоматический выезд бригады на этапе «Осмотр объекта»
   imports: [FinanceModule, TelegramModule, ReportsModule, PayrollModule],
-  providers: [OrdersService, PaymentsService, SegmentsService],
-  controllers: [OrdersController, PaymentsController, SegmentsController],
+  providers: [
+    OrdersService,
+    PaymentsService,
+    SegmentsService,
+    PlanService,
+    LoadService,
+  ],
+  controllers: [
+    OrdersController,
+    PaymentsController,
+    SegmentsController,
+    LoadController,
+  ],
   exports: [OrdersService],
 })
 export class OrdersModule {}

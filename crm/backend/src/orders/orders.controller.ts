@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { FunnelStage } from '@prisma/client';
 import { OrdersService } from './orders.service';
+import { PlanService } from './plan.service';
 import {
   AssignCleanersDto,
   ChangeStageDto,
@@ -26,7 +27,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
 export class OrdersController {
-  constructor(private service: OrdersService) {}
+  constructor(
+    private service: OrdersService,
+    private plan: PlanService,
+  ) {}
 
   @Get()
   list(
@@ -102,6 +106,17 @@ export class OrdersController {
     @Query('reason') reason?: string,
   ) {
     return this.service.remove(user, id, reason);
+  }
+
+  /**
+   * План производства работ и срок (ТЗ: планирование).
+   *
+   * Считается на лету из объёма, выработки услуги и числа людей — хранить
+   * его нельзя: поменяли бригаду, а в сохранённом плане прежние сроки.
+   */
+  @Get(':id/plan')
+  planOf(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.plan.forOrder(user, id);
   }
 
   /** История изменений заказа (ТЗ 2) */
