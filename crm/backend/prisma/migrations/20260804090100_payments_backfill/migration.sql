@@ -40,9 +40,14 @@ WHERE o."paidAmount" > 0
 -- выручка не удвоилась и не пропала, прежние автозаписи «order:<id>:income»
 -- переводим на перенесённый взнос: сумма и дата в отчётах остаются прежними,
 -- меняется только то, к чему запись привязана.
+--
+-- Записи, унесённые в корзину книги доходов, не трогаем: их убрал человек
+-- (например, вернул заказ из «Оплачено»), и перевешивать их на взнос значило
+-- бы решать за него.
 UPDATE "FinanceEntry" f
 SET "autoKey" = 'payment:legacy_' || f."orderId"
 WHERE f."autoKey" = 'order:' || f."orderId" || ':income'
+  AND f."deletedAt" IS NULL
   AND EXISTS (SELECT 1 FROM "OrderPayment" p WHERE p."id" = 'legacy_' || f."orderId")
   AND NOT EXISTS (
     SELECT 1 FROM "FinanceEntry" x WHERE x."autoKey" = 'payment:legacy_' || f."orderId"
@@ -76,10 +81,22 @@ FROM "OrderPayment" p
 JOIN "Order" o ON o."id" = p."orderId"
 WHERE p."id" = 'legacy_' || o."id"
   AND p."amount" > 0
+  -- Заказ в корзине дохода не приносит: его удалили, и заводить по нему
+  -- выручку задним числом нельзя. Взнос при этом создан выше — если заказ
+  -- восстановят, подтверждённая оплата останется при нём.
+  AND o."deletedAt" IS NULL
+  -- Ключ дохода уникален на всю книгу, и занятым он может оказаться даже
+  -- строкой из корзины. Без этой проверки перенос падал на уникальном
+  -- индексе — а упавшая миграция не даёт серверу подняться вообще.
+  AND NOT EXISTS (
+    SELECT 1 FROM "FinanceEntry" x WHERE x."autoKey" = 'payment:' || p."id"
+  )
+  -- Доход по заказу уже есть — второй строки быть не должно. Считаем и те
+  -- записи, что лежат в корзине: их убрал человек, и возвращать их деньги
+  -- в выручку за него мы не вправе.
   AND NOT EXISTS (
     SELECT 1
     FROM "FinanceEntry" x
     WHERE x."orderId" = o."id"
       AND x."kind" = 'INCOME'
-      AND x."deletedAt" IS NULL
   );
