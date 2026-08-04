@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { IsPersonName, IsTjPhone } from '../../common/validation/contact';
+import { MIN_TOTAL_DIGITS } from '../../common/validation/countries';
 
 /** Данные калькулятора (площадь, тип уборки, доп. услуги) */
 class CalculatorDto {
@@ -100,7 +101,9 @@ class ContactDto {
    */
   @IsOptional()
   @Transform(({ value }) =>
-    String(value ?? '').replace(/\D/g, '').length < 7 ? undefined : value,
+    String(value ?? '').replace(/\D/g, '').length < MIN_TOTAL_DIGITS
+      ? undefined
+      : value,
   )
   @IsString()
   @IsTjPhone()

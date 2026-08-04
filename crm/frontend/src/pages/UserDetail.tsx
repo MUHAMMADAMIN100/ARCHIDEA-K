@@ -36,6 +36,7 @@ import { monthRange } from '../lib/date';
 import { Period, PeriodFilter, StatCard } from '../components/common';
 import { DetailModal, DetailTable } from '../components/Drilldown';
 import type { Role } from '../types';
+import { formatPhone } from '../lib/contact';
 
 interface UserDetailData {
   id: string;
@@ -241,7 +242,7 @@ export function UserDetail() {
             <dt className="text-navy-600">Телефон</dt>
             <dd className="flex items-center gap-1.5 font-medium text-navy-800">
               <Phone className="h-4 w-4 text-navy-600" />
-              {data.phone || '—'}
+              {data.phone ? formatPhone(data.phone) : '—'}
             </dd>
           </div>
           <div className="flex items-center justify-between">
@@ -727,7 +728,7 @@ function PeriodAnalytics({
                           {o.client?.fullName ?? '—'}
                         </div>
                         <div className="text-xs text-navy-600">
-                          {o.client?.phone ?? ''}
+                          {o.client?.phone ? formatPhone(o.client.phone) : ''}
                         </div>
                       </div>
                     ),

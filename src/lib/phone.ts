@@ -72,8 +72,12 @@ export function fullPhone(code: string, national: string): string {
  */
 export function phoneComplete(code: string, national: string): boolean {
   const d = national.replace(/\D/g, '');
+  const c = code.replace(/\D/g, '');
+  // без кода страны непонятно, куда звонить, — и сервер такой номер принял бы
+  // за местный: девять цифр у соседних стран тоже встречаются
+  if (!c) return false;
   const country = byCode(code);
   if (country?.digits) return d.length === country.digits;
-  const total = code.replace(/\D/g, '').length + d.length;
+  const total = c.length + d.length;
   return total >= MIN_TOTAL_DIGITS && total <= MAX_TOTAL_DIGITS;
 }

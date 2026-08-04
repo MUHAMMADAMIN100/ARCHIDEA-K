@@ -43,6 +43,7 @@ import {
 } from '../lib/labels';
 import { nowISO, tempId, withRetry } from '../lib/util';
 import { userSeesFinance } from '../types';
+import { formatPhone } from '../lib/contact';
 import type {
   Bonus,
   Cleaner,
@@ -1140,7 +1141,7 @@ function OrderPicker({
               >
                 <div className="font-medium text-navy-900">{o.client?.fullName ?? '—'}</div>
                 <div className="text-xs text-navy-600">
-                  {o.client?.phone ?? ''}
+                  {o.client?.phone ? formatPhone(o.client.phone) : ''}
                   {o.address ? ` · ${o.address}` : ''}
                 </div>
               </button>

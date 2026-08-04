@@ -39,21 +39,42 @@ export const COUNTRY_CODE = HOME_CODE;
 /**
  * Любой ввод → канонический вид (цифры с кодом страны) либо null.
  *
- * Девять цифр без кода по-прежнему считаются таджикским номером: так их
- * набирают руками, и так они лежат в базе со времён, когда других стран не
- * было. Ведущая «8» перед местным номером тоже отбрасывается.
+ * Девять цифр БЕЗ плюса считаются местным номером: так их набирают руками и
+ * так они лежат в базе со времён, когда других стран не было. Ведущая «8»
+ * перед местным номером тоже отбрасывается.
+ *
+ * А вот плюс в начале — это заявление «код страны я уже указал», и тогда
+ * догадка про местный номер выключается. Без этого различия иностранный
+ * номер ровно из девяти цифр (у соседей такие есть) молча превращался бы в
+ * таджикский: настоящий номер терялся, а в худшем случае новый клиент
+ * «сливался» в карточку постороннего человека с таким же номером.
  */
 export function normalizePhone(input: string | null | undefined): string | null {
   if (!input) return null;
-  let digits = String(input).replace(/\D/g, '');
+  const raw = String(input).trim();
+  const codeGiven = raw.startsWith('+');
+  let digits = raw.replace(/\D/g, '');
   if (!digits) return null;
 
-  // местный номер без кода страны — дописываем свой код
-  if (digits.length === HOME_DIGITS) digits = HOME_CODE + digits;
-  else if (digits.length === HOME_DIGITS + 1 && digits.startsWith('0')) {
-    digits = HOME_CODE + digits.slice(1);
-  } else if (digits.length === HOME_DIGITS + 4 && digits.startsWith('8' + HOME_CODE)) {
-    digits = digits.slice(1);
+  if (!codeGiven) {
+    // местный номер без кода страны — дописываем свой код
+    if (digits.length === HOME_DIGITS) digits = HOME_CODE + digits;
+    else if (digits.length === HOME_DIGITS + 1 && digits.startsWith('0')) {
+      digits = HOME_CODE + digits.slice(1);
+    } else if (
+      digits.length === HOME_DIGITS + 4 &&
+      digits.startsWith('8' + HOME_CODE)
+    ) {
+      digits = digits.slice(1);
+    } else if (digits.length < HOME_DIGITS) {
+      /*
+       * Без плюса и короче местного номера — это недобранный местный номер,
+       * а не чужая страна: код страны занял бы ещё несколько цифр сверху.
+       * Раньше такой огрызок проходил как «иностранный» и оседал в базе
+       * мусорной карточкой.
+       */
+      return null;
+    }
   }
 
   if (digits.startsWith(HOME_CODE)) {

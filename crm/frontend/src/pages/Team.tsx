@@ -15,7 +15,7 @@ import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { PhoneInput } from '../components/ContactFields';
-import { sanitizePersonName } from '../lib/contact';
+import { formatPhone, sanitizePersonName } from '../lib/contact';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
@@ -327,7 +327,7 @@ export function Team() {
                             )}
                           </div>
                           <div className="truncate text-xs text-navy-600">
-                            {c.phone || 'телефон не указан'}
+                            {c.phone ? formatPhone(c.phone) : 'телефон не указан'}
                           </div>
                           {showRates && (
                             <span className="mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-navy-50 px-2 py-1 text-xs font-semibold text-navy-700">
@@ -395,7 +395,7 @@ export function Team() {
                     {c.fullName}
                   </div>
                   <div className="text-xs text-navy-600">
-                    {c.phone || 'телефон не указан'}
+                    {c.phone ? formatPhone(c.phone) : 'телефон не указан'}
                   </div>
                 </div>
                 {showRates && (
@@ -553,7 +553,7 @@ function BrigadeCostModal({
               <div>
                 <div className="font-medium text-navy-900">{c.fullName}</div>
                 <div className="text-xs text-navy-600">
-                  {c.phone || 'телефон не указан'}
+                  {c.phone ? formatPhone(c.phone) : 'телефон не указан'}
                 </div>
               </div>
             ),

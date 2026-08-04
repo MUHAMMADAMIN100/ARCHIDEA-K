@@ -73,9 +73,14 @@ export function PhoneInput({
   const error = touched ? phoneError(national, required, code) : null;
   const country = byCode(code);
 
+  /*
+   * Наружу номер уходит С ПЛЮСОМ. Плюс здесь не украшение: он говорит
+   * серверу «код страны выбран человеком, догадываться не надо». Без него
+   * иностранный номер ровно из девяти цифр молча стал бы таджикским.
+   */
   const push = (nextCode: string, nextNational: string) => {
     const digits = `${nextCode}${nextNational}`.replace(/\D/g, '');
-    onChange(digits.slice(0, MAX_TOTAL_DIGITS));
+    onChange(digits ? `+${digits.slice(0, MAX_TOTAL_DIGITS)}` : '');
   };
 
   return (
@@ -93,7 +98,11 @@ export function PhoneInput({
           aria-label="Страна номера"
           onChange={(e) => {
             if (e.target.value === 'other') {
+              // код очищаем: пока его не вписали, номер сохранить нельзя —
+              // иначе он ушёл бы с прежней страной
               setCustom(true);
+              setCode('');
+              push('', national);
               return;
             }
             setCustom(false);

@@ -287,7 +287,7 @@ export class LeadsService {
     const lines = [
       '<b>Новая заявка с сайта</b>',
       `Клиент: ${escapeHtml(client.fullName)}`,
-      `Телефон: ${escapeHtml(client.phone)}`,
+      `Телефон: ${escapeHtml(formatPhone(client.phone))}`,
       // запасной номер нужен прямо в уведомлении: по нему звонят вторым
       `Запасной: ${escapeHtml(formatPhone(contact.phone2))}`,
       `Адрес: ${escapeHtml(contact.address)}`,

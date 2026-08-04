@@ -29,14 +29,27 @@ export const PHONE_DIGITS = HOME_DIGITS;
  */
 export function normalizePhone(input: string | null | undefined): string | null {
   if (!input) return null;
-  let digits = String(input).replace(/\D/g, '');
+  const raw = String(input).trim();
+  // плюс в начале значит «код страны уже указан» — догадку про местный номер
+  // выключаем, иначе иностранный номер из девяти цифр стал бы таджикским
+  const codeGiven = raw.startsWith('+');
+  let digits = raw.replace(/\D/g, '');
   if (!digits) return null;
 
-  if (digits.length === HOME_DIGITS) digits = HOME_CODE + digits;
-  else if (digits.length === HOME_DIGITS + 1 && digits.startsWith('0')) {
-    digits = HOME_CODE + digits.slice(1);
-  } else if (digits.length === HOME_DIGITS + 4 && digits.startsWith('8' + HOME_CODE)) {
-    digits = digits.slice(1);
+  if (!codeGiven) {
+    if (digits.length === HOME_DIGITS) digits = HOME_CODE + digits;
+    else if (digits.length === HOME_DIGITS + 1 && digits.startsWith('0')) {
+      digits = HOME_CODE + digits.slice(1);
+    } else if (
+      digits.length === HOME_DIGITS + 4 &&
+      digits.startsWith('8' + HOME_CODE)
+    ) {
+      digits = digits.slice(1);
+    } else if (digits.length < HOME_DIGITS) {
+      // без плюса и короче местного номера — недобранный местный, а не чужая
+      // страна: код страны занял бы ещё несколько цифр сверху
+      return null;
+    }
   }
 
   if (digits.startsWith(HOME_CODE)) {
@@ -154,6 +167,8 @@ export function phoneError(
 ): string | null {
   const d = phoneDigits(national);
   if (!d) return required ? 'Укажите номер телефона' : null;
+  // без кода страны номер не сохранить: неизвестно, куда звонить
+  if (!code.replace(/\D/g, '')) return 'Укажите код страны';
 
   const country = byCode(code);
   if (country?.digits) {
