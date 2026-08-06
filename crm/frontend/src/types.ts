@@ -407,7 +407,7 @@ export interface Order {
 export interface BoardColumn {
   stage: FunnelStage;
   label: string;
-  /** Сколько закрытых заказов этапа уехало в архив (45 дней после закрытия) */
+  /** Сколько закрытых заказов этапа лежит в папке «Архив» (в колонке — не больше 20) */
   archived?: number;
   /** Полная стоимость заказов этапа — сколько на нём заработано */
   amount?: number;

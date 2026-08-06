@@ -255,39 +255,32 @@ export class OrdersService {
   }
 
   /**
-   * Через сколько дней после оплаты или отказа заказ уходит из воронки в
-   * архив (решение владельца). Доска показывает работу, а не историю: без
-   * этого «Оплачено» разрасталось до сотен карточек, и найти среди них
-   * свежую было нельзя.
+   * Сколько закрытых карточек держит колонка (решение владельца).
+   *
+   * Доска показывает работу, а не историю: без предела «Оплачено»
+   * разрасталось до десятков карточек, и найти среди них свежую было нельзя.
+   * В колонке остаются 20 самых свежих по дате закрытия, остальные уезжают
+   * в папку «Архив» на колонке. Прежнее правило «45 дней после закрытия»
+   * убрано по просьбе владельца: количество — единственный критерий.
    */
-  private static readonly ARCHIVE_DAYS = 45;
+  private static readonly KEEP_CLOSED_ON_BOARD = 20;
 
-  /** Заказы, закрытые раньше этой даты, показываются только в архиве */
-  private archiveCutoff(): Date {
-    return new Date(Date.now() - OrdersService.ARCHIVE_DAYS * 86_400_000);
-  }
+  /** Этапы, у которых есть папка «Архив» */
+  private static readonly CLOSED_STAGES: FunnelStage[] = [
+    FunnelStage.PAID,
+    FunnelStage.REJECTED,
+  ];
 
   /**
-   * Условие «этот заказ уже в архиве».
+   * Порядок «свежие сверху» для закрытых этапов.
    *
-   * Два срока сразу, и это принципиально:
-   *   • сделка закрыта больше 45 дней назад,
-   *   • И сама запись живёт в системе больше 45 дней.
-   *
-   * Раньше хватало первого условия — и заказ за прошедший месяц, внесённый
-   * сегодня, исчезал из воронки в ту же секунду: владелец вносил майские
-   * сделки и не находил их вовсе. Теперь у внесённой истории есть те же
-   * 45 дней на виду, что и у свежей сделки, а по-настоящему старые заказы
-   * уезжают в папку как раньше.
+   * Тот же порядок обязан использоваться и доской, и архивом: граница
+   * «первые 20» должна проходить по одному и тому же месту, иначе заказ
+   * мог бы показаться в обоих списках или пропасть из обоих. Второй ключ —
+   * идентификатор — разводит заказы, закрытые в одну секунду.
    */
-  private archivedWhere(): Prisma.OrderWhereInput {
-    const cutoff = this.archiveCutoff();
-    return {
-      stage: { in: [FunnelStage.PAID, FunnelStage.REJECTED] },
-      closedAt: { lt: cutoff },
-      registeredAt: { lt: cutoff },
-    };
-  }
+  private static readonly CLOSED_ORDER: Prisma.OrderOrderByWithRelationInput[] =
+    [{ closedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }];
 
   list(
     user: AuthUser,
@@ -295,13 +288,10 @@ export class OrdersService {
       stage?: FunnelStage;
       managerId?: string;
       search?: string;
-      /** доска: закрытое больше 45 дней назад лежит в архиве, а не в колонке */
-      liveOnly?: boolean;
     },
   ) {
     const where: Prisma.OrderWhereInput = this.scopeWhere(user);
     if (q.stage) where.stage = q.stage;
-    if (q.liveOnly) where.NOT = this.archivedWhere();
     if (seesAll(user) && q.managerId) where.managerId = q.managerId;
     if (q.search) {
       const term = q.search.trim();
@@ -324,25 +314,7 @@ export class OrdersService {
 
   /** Доска воронки: заказы, сгруппированные по этапам */
   async board(user: AuthUser) {
-    const orders = await this.list(user, { liveOnly: true });
-
-    /*
-     * Сколько закрытого лежит в архиве — по этапам. Показываем числом на
-     * значке папки: видно, что история никуда не делась, и одним нажатием
-     * она открывается.
-     */
-    const archivedGroups = await this.prisma.order.groupBy({
-      by: ['stage'],
-      where: {
-        ...this.scopeWhere(user),
-        ...this.archivedWhere(),
-      },
-      _count: { _all: true },
-      _sum: { finalPrice: true, estimatedPrice: true },
-    });
-    const archivedBy = new Map(
-      archivedGroups.map((g) => [g.stage, g._count._all]),
-    );
+    const orders = await this.list(user, {});
 
     /*
      * Сколько всего раз клиент к нам обращался — считаем по всем его
@@ -377,15 +349,32 @@ export class OrdersService {
     );
     return stages.map((stage) => {
       const inStage = orders.filter((o) => o.stage === stage);
+
+      /*
+       * Закрытая колонка держит только свежую двадцатку — по дате закрытия.
+       * Остальное числится в папке «Архив»: на доске от него только счётчик,
+       * содержимое подтягивается отдельным запросом, когда папку открыли.
+       */
+      const closed = OrdersService.CLOSED_STAGES.includes(stage);
+      const shown = closed
+        ? [...inStage]
+            .sort(
+              (a, b) =>
+                (b.closedAt?.getTime() ?? 0) - (a.closedAt?.getTime() ?? 0) ||
+                (b.id > a.id ? 1 : -1),
+            )
+            .slice(0, OrdersService.KEEP_CLOSED_ON_BOARD)
+        : inStage;
+
       return {
         stage,
         label: STAGE_LABEL[stage],
         /*
          * Сумма денег на этапе — ПОЛНАЯ стоимость заказов, то есть сколько
-         * компания на этом шаге заработала. Раньше здесь был остаток к
-         * получению, и после частичной оплаты этап «худел», а полностью
-         * оплаченный заказ показывал ноль — заработанные деньги пропадали
-         * с доски. Недоплату показываем отдельной строкой «Из них долг».
+         * компания на этом шаге заработала, ВКЛЮЧАЯ уехавшее в папку:
+         * переезд карточки в архив не должен «худить» этап — деньги-то
+         * получены. Раньше здесь был остаток к получению, и после частичной
+         * оплаты этап «худел». Недоплата — отдельной строкой «Из них долг».
          */
         amount: inStage.reduce(
           (sum, o) => sum + (o.finalPrice ?? o.estimatedPrice ?? 0),
@@ -403,30 +392,31 @@ export class OrdersService {
               : 0),
           0,
         ),
-        orders: inStage,
-        /** сколько закрытых заказов этого этапа уехало в архив */
-        archived: archivedBy.get(stage) ?? 0,
+        orders: shown,
+        /** сколько закрытых заказов этапа лежит в папке «Архив» */
+        archived: inStage.length - shown.length,
       };
     });
   }
 
   /**
-   * Архив этапа: закрытые заказы старше 45 дней.
+   * Папка «Архив» этапа: всё, что не поместилось в двадцатку колонки.
    *
    * Отдельным запросом, а не вместе с доской: архив открывают редко, и
-   * тянуть его на каждое обновление воронки незачем. Вернуть заказ в работу
-   * можно как обычно — сменить этап в карточке, и он снова окажется в
-   * колонке (дата закрытия при этом сбрасывается).
+   * тянуть его на каждое обновление воронки незачем. Порядок сортировки
+   * ОБЯЗАН совпадать с доской — граница «первые 20» проходит по одному и
+   * тому же месту. Вернуть заказ в работу можно как обычно — сменить этап
+   * в карточке, и он снова окажется в колонке.
    */
   archive(user: AuthUser, stage: FunnelStage, take = 200) {
     return this.prisma.order.findMany({
       where: {
         ...this.scopeWhere(user),
-        ...this.archivedWhere(),
         stage,
       },
       include: orderInclude,
-      orderBy: { closedAt: 'desc' },
+      orderBy: OrdersService.CLOSED_ORDER,
+      skip: OrdersService.KEEP_CLOSED_ON_BOARD,
       take: Math.min(Math.max(1, take), 500),
     });
   }
