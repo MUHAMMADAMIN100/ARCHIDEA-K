@@ -292,10 +292,11 @@ export class OrdersService {
    * Делит закрытые заказы этапа на «в колонке» и «в папке».
    *
    * Правило владельца, двумя ситами подряд:
-   *   1. В колонке живут только сделки ТЕКУЩЕГО календарного месяца
-   *      (по Душанбе). Забытая майская сделка, внесённая в августе, — это
-   *      старая история: как только она доходит до «Оплачено», ей место в
-   *      папке, а не среди рабочих карточек.
+   *   1. В колонке живут только сделки, ЗАКРЫТЫЕ в текущем календарном
+   *      месяце (по Душанбе): «закрыт 04 авг» — августовская, август ещё
+   *      идёт. Всё, что закрыто в прошлых месяцах, — в папке. У внесённой
+   *      задним числом сделки датой закрытия становится её старая дата
+   *      (см. backfilledClosedAt), поэтому она попадает в папку сразу.
    *   2. Из оставшихся в колонке — не больше 20 самых свежих по дате
    *      оформления.
    *
@@ -303,9 +304,9 @@ export class OrdersService {
    * поэтому граница у них общая — заказ не может ни показаться в обоих
    * списках, ни пропасть из обоих.
    */
-  private splitClosed<T extends { createdAt: Date; id: string }>(
-    inStage: T[],
-  ): { shown: T[]; archived: T[] } {
+  private splitClosed<
+    T extends { createdAt: Date; closedAt?: Date | null; id: string },
+  >(inStage: T[]): { shown: T[]; archived: T[] } {
     const currentMonth = dayKey(new Date()).slice(0, 7);
     const sorted = [...inStage].sort(
       (a, b) =>
@@ -315,14 +316,43 @@ export class OrdersService {
     const shown: T[] = [];
     const archived: T[] = [];
     for (const order of sorted) {
-      const fresh = dayKey(order.createdAt).slice(0, 7) === currentMonth;
-      if (fresh && shown.length < OrdersService.KEEP_CLOSED_ON_BOARD) {
+      // у старых записей даты закрытия может не быть — тогда судим по оформлению
+      const monthOf = dayKey(order.closedAt ?? order.createdAt).slice(0, 7);
+      if (
+        monthOf === currentMonth &&
+        shown.length < OrdersService.KEEP_CLOSED_ON_BOARD
+      ) {
         shown.push(order);
       } else {
         archived.push(order);
       }
     }
     return { shown, archived };
+  }
+
+  /**
+   * Дата закрытия для сделки, внесённой задним числом, — её СТАРАЯ дата.
+   *
+   * Владелец вносит забытую майскую сделку в августе: дата оформления — май,
+   * а запись появилась только что. Закрой мы её сегодняшним числом, в папке
+   * стояло бы враньё «закрыт 6 авг», а сама карточка повисла бы в колонке
+   * среди августовской работы. Поэтому такой сделке дата закрытия ставится
+   * по дате оформления.
+   *
+   * Обычная долгая сделка (заявка пришла в июне, запись завели тогда же,
+   * закрыли в августе) сюда не попадает: у неё месяц оформления совпадает с
+   * месяцем появления записи, и закрывается она сегодняшним числом.
+   *
+   * Возвращает старую дату закрытия либо null — «закрывай сегодняшним».
+   */
+  private backfilledClosedAt(order: {
+    createdAt: Date;
+    registeredAt: Date;
+  }): Date | null {
+    const created = dayKey(order.createdAt).slice(0, 7);
+    const registered = dayKey(order.registeredAt).slice(0, 7);
+    const current = dayKey(new Date()).slice(0, 7);
+    return created < registered && created < current ? order.createdAt : null;
   }
 
   list(
@@ -663,7 +693,22 @@ export class OrdersService {
      */
     if (dto.createdAt) {
       const created = parseDate(dto.createdAt);
-      if (created) data.createdAt = created;
+      if (created) {
+        data.createdAt = created;
+        /*
+         * Сделка уже закрыта, а дату оформления увели в прошлый месяц —
+         * значит её вносили задним числом и закрыли не тем днём. Переносим
+         * и дату закрытия, иначе карточка останется в колонке текущего
+         * месяца с подписью «закрыт сегодня» на майской сделке.
+         */
+        if (OrdersService.CLOSED_STAGES.includes(before.stage)) {
+          const backdated = this.backfilledClosedAt({
+            createdAt: created,
+            registeredAt: before.registeredAt,
+          });
+          if (backdated) data.closedAt = backdated;
+        }
+      }
     }
     if (dto.managerId && seesAll(user)) data.managerId = dto.managerId;
 
@@ -1017,13 +1062,15 @@ export class OrdersService {
     const data: Prisma.OrderUncheckedUpdateInput = { stage: dto.stage };
     if (dto.stage === FunnelStage.REJECTED) {
       data.rejectionReason = dto.rejectionReason;
-      data.closedAt = new Date();
+      data.closedAt = this.backfilledClosedAt(order) ?? new Date();
     } else if (order.stage === FunnelStage.REJECTED) {
       // возврат из «Отказа» на активный этап — чистим причину и дату закрытия
       data.rejectionReason = null;
       data.closedAt = null;
     }
-    if (dto.stage === FunnelStage.PAID) data.closedAt = new Date();
+    if (dto.stage === FunnelStage.PAID) {
+      data.closedAt = this.backfilledClosedAt(order) ?? new Date();
+    }
     // ушли из «Оплачено» — дата закрытия больше не действительна,
     // иначе заказ продолжит числиться в выручке периода
     if (order.stage === FunnelStage.PAID && dto.stage !== FunnelStage.PAID) {

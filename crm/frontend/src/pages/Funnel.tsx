@@ -1177,7 +1177,7 @@ function ArchiveModal({
   return (
     <DetailModal
       title={`Архив — ${STAGE_LABEL[stage]}`}
-      subtitle="Закрыто больше 45 дней назад. Чтобы вернуть заказ в работу, откройте его и смените этап"
+      subtitle="Сделки прошлых месяцев и всё сверх 20 карточек колонки. Чтобы вернуть заказ в работу, откройте его и смените этап"
       onClose={onClose}
     >
       <DetailStats
