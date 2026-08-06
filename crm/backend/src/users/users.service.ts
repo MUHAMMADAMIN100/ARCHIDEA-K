@@ -145,6 +145,7 @@ export class UsersService {
         role: dto.role ?? Role.MANAGER,
         phone: dto.phone,
         canManageOps: dto.canManageOps ?? false,
+        noFinance: dto.noFinance ?? false,
       },
       select: SAFE_SELECT,
     });

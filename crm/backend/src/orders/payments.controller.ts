@@ -11,7 +11,6 @@ import {
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, UpdatePaymentDto } from './dto/payment.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { FinanceBanGuard } from '../common/guards/finance-ban.guard';
 import {
   AuthUser,
   CurrentUser,
@@ -23,12 +22,14 @@ import {
  * Отдельный контроллер, а не пара методов в orders: у платежей своя история,
  * своя правка и своё удаление — в карточке заказа они живут списком.
  *
- * FinanceBanGuard здесь обязателен: взнос пишет строку в книгу доходов, а
- * персональный запрет на деньги сильнее роли. Без него сотрудник, которому
- * владелец закрыл финансы, правил бы выручку компании через карточку заказа —
- * то есть ровно то, что ему запрещено, только с другой стороны.
+ * FinanceBanGuard здесь НАМЕРЕННО нет (решение владельца): принять оплату и
+ * записать её в карточку заказа — работа того, кто ведёт клиента, а не
+ * бухгалтерия. Ибодат с запретом «без доступа к финансам» вносит оплату,
+ * строка в книге доходов создаётся сама — но саму книгу (раздел «Финансы»,
+ * зарплаты, ведомости) запрет закрывает как и прежде: там стоят свои замки.
+ * Доступ к заказу проверяет сервис — менеджер работает только со своими.
  */
-@UseGuards(JwtAuthGuard, FinanceBanGuard)
+@UseGuards(JwtAuthGuard)
 @Controller('orders/:orderId/payments')
 export class PaymentsController {
   constructor(private service: PaymentsService) {}
