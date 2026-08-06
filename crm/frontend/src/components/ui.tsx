@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, X } from 'lucide-react';
@@ -220,6 +220,38 @@ export function ErrorState({
 /** Сколько модалок сейчас открыто — прокрутку страницы отпускаем на последней */
 let lockCount = 0;
 
+/*
+ * «Назад» закрывает окно, а не уводит со страницы.
+ *
+ * Окно живёт ПОВЕРХ страницы, и раньше кнопка «назад» о нём не знала: человек
+ * открывал карточку заказа из воронки, жал «назад» — и вылетал со всей
+ * воронки, теряя и карточку, и колонку, до которой долистал.
+ *
+ * Как устроено: каждое открытое окно кладёт в историю браузера свою запись
+ * (адрес не меняется — только метка). «Назад» снимает эту запись, мы это
+ * слышим и закрываем верхнее окно. Если окно закрыли крестиком или после
+ * сохранения — сами снимаем свою запись, чтобы она не осталась лишним шагом.
+ * Вложенные окна закрываются по одному: запись у каждого своя.
+ */
+const modalStack: { id: number; close: () => void }[] = [];
+let modalSeq = 0;
+/** Сколько ближайших событий «назад» — наши собственные, а не человека */
+let ignorePops = 0;
+
+function topModalId(): number | null {
+  const state = window.history.state as { __modal?: number } | null;
+  return typeof state?.__modal === 'number' ? state.__modal : null;
+}
+
+window.addEventListener('popstate', () => {
+  if (ignorePops > 0) {
+    ignorePops -= 1;
+    return;
+  }
+  const top = modalStack[modalStack.length - 1];
+  if (top) top.close();
+});
+
 export function Modal({
   open,
   onClose,
@@ -236,6 +268,13 @@ export function Modal({
   /** Кнопка слева от крестика — например, карандаш «править» */
   headerAction?: ReactNode;
 }) {
+  /*
+   * Закрытие по «назад» зовёт актуальный onClose через ref: иначе пришлось бы
+   * пересоздавать запись в истории при каждом ререндере родителя.
+   */
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     /*
@@ -245,9 +284,37 @@ export function Modal({
      */
     lockCount += 1;
     document.body.style.overflow = 'hidden';
+
+    const id = ++modalSeq;
+    const entry = { id, close: () => onCloseRef.current() };
+    modalStack.push(entry);
+    /*
+     * Свои поля истории роутера сохраняем: в них живёт счётчик переходов,
+     * по которому кнопка «Назад» на страницах решает, есть ли куда возвращаться.
+     */
+    window.history.pushState(
+      { ...(window.history.state as object | null), __modal: id },
+      '',
+    );
+
     return () => {
       lockCount -= 1;
       if (lockCount === 0) document.body.style.overflow = '';
+
+      const at = modalStack.indexOf(entry);
+      if (at >= 0) modalStack.splice(at, 1);
+      /*
+       * Окно закрыли не кнопкой «назад» (крестик, клик мимо, после
+       * сохранения) — запись в истории ещё висит. Снимаем её сами, пометив,
+       * что это НАШ шаг назад: иначе он закрыл бы следующее окно.
+       *
+       * Если же запись уже не сверху (человек ушёл по ссылке из окна или
+       * закрыл его кнопкой «назад») — историю не трогаем.
+       */
+      if (topModalId() === id) {
+        ignorePops += 1;
+        window.history.back();
+      }
     };
   }, [open]);
 
