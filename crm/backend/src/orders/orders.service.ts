@@ -27,7 +27,7 @@ import {
 import { seesFinance } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { resolveManager } from '../common/resolve-manager';
-import { formatDate, parseDate } from '../common/time/dushanbe';
+import { dayKey, formatDate, parseDate } from '../common/time/dushanbe';
 import {
   calculatePrice,
   PricingExtra,
@@ -288,6 +288,43 @@ export class OrdersService {
   private static readonly CLOSED_ORDER: Prisma.OrderOrderByWithRelationInput[] =
     [{ createdAt: 'desc' }, { id: 'desc' }];
 
+  /**
+   * Делит закрытые заказы этапа на «в колонке» и «в папке».
+   *
+   * Правило владельца, двумя ситами подряд:
+   *   1. В колонке живут только сделки ТЕКУЩЕГО календарного месяца
+   *      (по Душанбе). Забытая майская сделка, внесённая в августе, — это
+   *      старая история: как только она доходит до «Оплачено», ей место в
+   *      папке, а не среди рабочих карточек.
+   *   2. Из оставшихся в колонке — не больше 20 самых свежих по дате
+   *      оформления.
+   *
+   * Единственное место с этим правилом: и доска, и папка «Архив» зовут его,
+   * поэтому граница у них общая — заказ не может ни показаться в обоих
+   * списках, ни пропасть из обоих.
+   */
+  private splitClosed<T extends { createdAt: Date; id: string }>(
+    inStage: T[],
+  ): { shown: T[]; archived: T[] } {
+    const currentMonth = dayKey(new Date()).slice(0, 7);
+    const sorted = [...inStage].sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime() ||
+        (b.id > a.id ? 1 : -1),
+    );
+    const shown: T[] = [];
+    const archived: T[] = [];
+    for (const order of sorted) {
+      const fresh = dayKey(order.createdAt).slice(0, 7) === currentMonth;
+      if (fresh && shown.length < OrdersService.KEEP_CLOSED_ON_BOARD) {
+        shown.push(order);
+      } else {
+        archived.push(order);
+      }
+    }
+    return { shown, archived };
+  }
+
   list(
     user: AuthUser,
     q: {
@@ -357,21 +394,13 @@ export class OrdersService {
       const inStage = orders.filter((o) => o.stage === stage);
 
       /*
-       * Закрытая колонка держит только свежую двадцатку — по дате оформления
-       * (см. CLOSED_ORDER: почему не по дате закрытия). Остальное числится в
+       * Закрытая колонка держит только сделки текущего месяца, и не больше
+       * двадцати (правило целиком — в splitClosed). Остальное числится в
        * папке «Архив»: на доске от него только счётчик, содержимое
        * подтягивается отдельным запросом, когда папку открыли.
        */
       const closed = OrdersService.CLOSED_STAGES.includes(stage);
-      const shown = closed
-        ? [...inStage]
-            .sort(
-              (a, b) =>
-                b.createdAt.getTime() - a.createdAt.getTime() ||
-                (b.id > a.id ? 1 : -1),
-            )
-            .slice(0, OrdersService.KEEP_CLOSED_ON_BOARD)
-        : inStage;
+      const shown = closed ? this.splitClosed(inStage).shown : inStage;
 
       return {
         stage,
@@ -407,25 +436,27 @@ export class OrdersService {
   }
 
   /**
-   * Папка «Архив» этапа: всё, что не поместилось в двадцатку колонки.
+   * Папка «Архив» этапа: всё, что не показывается в колонке.
    *
    * Отдельным запросом, а не вместе с доской: архив открывают редко, и
-   * тянуть его на каждое обновление воронки незачем. Порядок сортировки
-   * ОБЯЗАН совпадать с доской — граница «первые 20» проходит по одному и
-   * тому же месту. Вернуть заказ в работу можно как обычно — сменить этап
-   * в карточке, и он снова окажется в колонке.
+   * тянуть его на каждое обновление воронки незачем. Правило деления —
+   * общее с доской (splitClosed), поэтому заказ не может ни показаться в
+   * обоих списках, ни пропасть из обоих. Вернуть заказ в работу можно как
+   * обычно — сменить этап в карточке, и он снова окажется в колонке.
    */
-  archive(user: AuthUser, stage: FunnelStage, take = 200) {
-    return this.prisma.order.findMany({
+  async archive(user: AuthUser, stage: FunnelStage, take = 200) {
+    const inStage = await this.prisma.order.findMany({
       where: {
         ...this.scopeWhere(user),
         stage,
       },
       include: orderInclude,
       orderBy: OrdersService.CLOSED_ORDER,
-      skip: OrdersService.KEEP_CLOSED_ON_BOARD,
-      take: Math.min(Math.max(1, take), 500),
     });
+    return this.splitClosed(inStage).archived.slice(
+      0,
+      Math.min(Math.max(1, take), 500),
+    );
   }
 
   async getOne(user: AuthUser, id: string) {
