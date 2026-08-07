@@ -60,6 +60,21 @@ export class OrderGuestDto {
   rate: number;
 }
 
+/**
+ * Своя доп. услуга заказа: название, цена и отметка «включить в счёт».
+ *
+ * Заводится прямо в карточке заказа: справочник для этого не нужен, а
+ * «вынос мусора — 150» вписывать было некуда.
+ */
+export class CustomExtraDto {
+  @IsString() @MaxLength(120) title: string;
+
+  @IsInt() @Min(0) @Max(MAX_INT) price: number;
+
+  /** Не отмечена — остаётся в карточке заметкой, в сумму не идёт */
+  @IsOptional() @IsBoolean() checked?: boolean;
+}
+
 export class CreateOrderDto {
   @IsString() clientId: string;
   @IsOptional() @IsEnum(CleaningType) cleaningType?: CleaningType;
@@ -74,10 +89,18 @@ export class CreateOrderDto {
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) pricePerSqm?: number;
   /** Итог, если менеджер задал его вручную (ТЗ 5) */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) finalPrice?: number;
-  /** Выбранные доп. услуги: ключ услуги → количество */
+  /** Выбранные доп. услуги с сайта: ключ услуги → количество */
   @IsOptional()
   @IsObject()
   extras?: Record<string, number>;
+
+  /** Свои доп. услуги строками — в сумму идут только отмеченные */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CustomExtraDto)
+  customExtras?: CustomExtraDto[];
 
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   @IsOptional()
@@ -153,6 +176,13 @@ export class UpdateOrderDto {
   @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
   /** Выбранные доп. услуги: ключ услуги → количество */
   @IsOptional() @IsObject() extras?: Record<string, number>;
+  /** Свои доп. услуги строками — в сумму идут только отмеченные */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CustomExtraDto)
+  customExtras?: CustomExtraDto[];
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) discount?: number;
   /** Разовые сотрудники под этот заказ */

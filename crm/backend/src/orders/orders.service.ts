@@ -30,6 +30,8 @@ import { resolveManager } from '../common/resolve-manager';
 import { dayKey, formatDate, parseDate } from '../common/time/dushanbe';
 import {
   calculatePrice,
+  CustomExtra,
+  LARGE_ORDER_THRESHOLD,
   PricingExtra,
   PricingTariff,
   unitPrice,
@@ -40,9 +42,6 @@ import {
   CreateOrderDto,
   UpdateOrderDto,
 } from './dto/order.dto';
-
-/** Порог «крупного заказа» (сомони) — для уведомления руководителю */
-const LARGE_ORDER_THRESHOLD = 2000;
 
 const STAGE_LABEL: Record<FunnelStage, string> = {
   NEW: 'Новая заявка',
@@ -138,6 +137,37 @@ export class OrdersService {
     private reports: ReportsService,
     private shiftGroups: ShiftGroupsService,
   ) {}
+
+  /**
+   * Доп. услуги с сайта → строки заказа.
+   *
+   * Заявка с сайта приходит списком ключей справочника. В карточке заказа
+   * менеджер работает строками, поэтому переводим сразу при оформлении: иначе
+   * человек видел бы сумму, но не понимал, из чего она сложилась. Услуги
+   * с сайта клиент выбрал сам — значит отмечены.
+   */
+  private async siteExtrasToRows(
+    extras: Record<string, number> | null | undefined,
+  ): Promise<CustomExtra[]> {
+    if (!extras || !Object.keys(extras).length) return [];
+    const catalogue = await this.prisma.extraService.findMany({
+      where: { key: { in: Object.keys(extras) } },
+      select: { key: true, title: true, price: true, hasQty: true },
+    });
+    const rows: CustomExtra[] = [];
+    for (const [key, rawQty] of Object.entries(extras)) {
+      const item = catalogue.find((e) => e.key === key);
+      if (!item) continue;
+      const qty = Math.max(0, Math.round(Number(rawQty) || 0));
+      if (qty === 0) continue;
+      rows.push({
+        title: item.hasQty && qty > 1 ? `${item.title} × ${qty}` : item.title,
+        price: item.hasQty ? item.price * qty : item.price,
+        checked: true,
+      });
+    }
+    return rows;
+  }
 
   private scopeWhere(user: AuthUser): Prisma.OrderWhereInput {
     return seesAll(user) ? { ...NOT_DELETED } : { ...NOT_DELETED, managerId: user.id };
@@ -548,6 +578,18 @@ export class OrdersService {
       (sum, r) => sum + r.total,
       0,
     );
+    /*
+     * Доп. услуги заказа — всегда строки. Пришли с сайта ключами — переводим
+     * в строки здесь же, чтобы в карточке было видно, из чего сложилась цена.
+     */
+    const customExtras = dto.customExtras?.length
+      ? dto.customExtras.map((r) => ({
+          title: r.title.trim(),
+          price: Math.max(0, Math.round(Number(r.price) || 0)),
+          checked: r.checked !== false,
+        }))
+      : await this.siteExtrasToRows(dto.extras);
+
     const priced = calculatePrice(
       {
         serviceKey,
@@ -555,7 +597,7 @@ export class OrdersService {
         seats: dto.seats,
         dirtLevel,
         pricePerSqm: dto.pricePerSqm,
-        extras: dto.extras,
+        customExtras,
         discount,
         additionalWork,
       },
@@ -597,8 +639,11 @@ export class OrdersService {
            * при первой же правке заказа пересчёт брал пустой список, и сумма
            * падала ровно на стоимость доп. услуг.
            */
-          ...(dto.extras && Object.keys(dto.extras).length
-            ? { extras: dto.extras as unknown as Prisma.InputJsonValue }
+          ...(customExtras.length
+            ? {
+                customExtras:
+                  customExtras as unknown as Prisma.InputJsonValue,
+              }
             : {}),
           ...(dto.guestCleaners
             ? {
@@ -718,10 +763,15 @@ export class OrdersService {
       this.tariffFor(serviceKey),
       this.extrasCatalogue(),
     ]);
-    const nextExtras =
-      dto.extras !== undefined
-        ? dto.extras
-        : ((before.extras as Record<string, number> | null) ?? undefined);
+    const nextCustomExtras: CustomExtra[] | undefined =
+      dto.customExtras !== undefined
+        ? dto.customExtras.map((r) => ({
+            title: r.title.trim(),
+            price: Math.max(0, Math.round(Number(r.price) || 0)),
+            checked: r.checked !== false,
+          }))
+        : ((before.customExtras as unknown as CustomExtra[] | null) ??
+          undefined);
     const nextDiscount = dto.discount !== undefined ? dto.discount : before.discount;
     /*
      * Дополнительные услуги: новые строки обогащаем заново (цены могли
@@ -779,14 +829,26 @@ export class OrdersService {
         seats: (data.seats as number) ?? before.seats,
         dirtLevel: nextDirt,
         pricePerSqm: unitOverride,
-        extras: nextExtras,
+        customExtras: nextCustomExtras,
+        /*
+         * Заказ, заведённый до перехода на строки (или пришедший с сайта),
+         * хранит доп. услуги прежним списком ключей. Без этого запасного
+         * пути правка одного лишь адреса обнуляла бы их и удешевляла заказ.
+         * Когда строки есть, список игнорируется — двойного счёта нет.
+         */
+        extras: nextCustomExtras
+          ? undefined
+          : ((before.extras as Record<string, number> | null) ?? undefined),
         discount: nextDiscount,
         additionalWork,
       },
       tariff,
       extrasList,
     );
-    if (dto.extras !== undefined) data.extras = dto.extras;
+    if (dto.customExtras !== undefined) {
+      data.customExtras = (nextCustomExtras ??
+        []) as unknown as Prisma.InputJsonValue;
+    }
     if (dto.discount !== undefined) data.discount = dto.discount;
     /*
      * Сумма оплаты сюда больше не приходит: с появлением взносов (ТЗ 3.1)

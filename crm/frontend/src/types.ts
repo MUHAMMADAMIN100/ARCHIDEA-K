@@ -371,6 +371,8 @@ export interface Order {
   isManualPrice?: boolean;
   /** Выбранные доп. услуги: ключ услуги → количество */
   extras?: Record<string, number> | null;
+  /** Свои доп. услуги строками: в сумму идут только отмеченные */
+  customExtras?: { title: string; price: number; checked: boolean }[] | null;
   /** Скидка по заказу в сомони */
   discount?: number;
   /** Сколько клиент уже заплатил, сомони. Считается из взносов, вручную не задаётся */

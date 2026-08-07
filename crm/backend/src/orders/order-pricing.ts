@@ -31,12 +31,49 @@ export interface PricingInput {
   dirtLevel?: DirtLevel | null;
   /** Цена за единицу, если менеджер задал её вручную */
   pricePerSqm?: number | null;
-  /** Выбранные доп. услуги: ключ → количество */
+  /** Выбранные доп. услуги с сайта: ключ → количество */
   extras?: Record<string, number> | null;
+  /** Свои доп. услуги строками — в сумму идут только отмеченные */
+  customExtras?: CustomExtra[] | null;
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   discount?: number | null;
   /** Сумма дополнительных ОСНОВНЫХ услуг (мульти-выбор) — уже посчитана */
   additionalWork?: number | null;
+}
+
+/**
+ * Порог «крупного заказа» в сомони (решение владельца).
+ *
+ * Живёт здесь, а не в сервисе заказов: тем же порогом метит заявки с сайта
+ * модуль обращений, и разъехавшись, эти две цифры давали бы разные метки
+ * на одинаковых по сумме заказах.
+ */
+export const LARGE_ORDER_THRESHOLD = 5000;
+
+/**
+ * Своя доп. услуга заказа: название, цена и отметка «включить в счёт».
+ *
+ * Неотмеченная строка остаётся в карточке как заметка («обсуждали вынос
+ * мусора»), но денег не добавляет: иначе достаточно было бы удалить строку,
+ * и договорённость терялась бы.
+ */
+export interface CustomExtra {
+  title: string;
+  price: number;
+  checked: boolean;
+}
+
+/** Сумма отмеченных своих доп. услуг */
+export function customExtrasTotal(
+  rows: CustomExtra[] | null | undefined,
+): number {
+  if (!rows?.length) return 0;
+  const sum = rows.reduce(
+    (acc, r) =>
+      acc + (r?.checked ? Math.max(0, Math.round(Number(r.price) || 0)) : 0),
+    0,
+  );
+  return Math.min(sum, 2_000_000_000);
 }
 
 /** Доп. услуга из справочника — для расчёта её вклада в сумму */
@@ -139,7 +176,15 @@ export function calculatePrice(
   const mainWork = Math.min(units * pricePerUnit, 2_000_000_000);
   const addWork = Math.max(0, Math.round(Number(input.additionalWork) || 0));
   const workTotal = Math.min(mainWork + addWork, 2_000_000_000);
-  const extras = extrasTotal(input.extras, extrasCatalogue);
+  /*
+   * Доп. услуги считаются из СТРОК заказа. Справочник остаётся входным
+   * каналом: заявка с сайта приходит списком ключей, и он превращается в
+   * такие же строки при оформлении заказа (см. orders.service). Складывать
+   * оба источника нельзя — одна и та же услуга посчиталась бы дважды.
+   */
+  const extras = input.customExtras
+    ? customExtrasTotal(input.customExtras)
+    : extrasTotal(input.extras, extrasCatalogue);
   const subtotal = Math.min(workTotal + extras, 2_000_000_000);
 
   /*

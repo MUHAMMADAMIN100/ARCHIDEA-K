@@ -12,6 +12,7 @@ import {
   Role,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { LARGE_ORDER_THRESHOLD } from '../orders/order-pricing';
 import { ClientsService } from '../clients/clients.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TelegramService } from '../telegram/telegram.service';
@@ -254,7 +255,8 @@ export class LeadsService {
               : null,
         comment: dto.quiz?.comment,
         extras: perSeat ? undefined : (dto.calculator?.extras ?? undefined),
-        isLarge: (dto.total ?? 0) >= 2000,
+        // порог крупного заказа — общий для всей системы (решение владельца)
+        isLarge: (dto.total ?? 0) >= LARGE_ORDER_THRESHOLD,
       },
     });
 

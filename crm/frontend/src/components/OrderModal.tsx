@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Bell, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
@@ -173,7 +173,14 @@ export function OrderModal({
   const [isManualPrice, setIsManualPrice] = useState(false);
   const [preferences, setPreferences] = useState('');
   // доп. услуги: ключ → количество; скидка в сомони
-  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
+  /*
+   * Доп. услуги заказа — свои строки: название, цена, отметка «в счёт».
+   * Готовый список из справочника убран (решение владельца): вписать
+   * «вынос мусора — 150» было некуда, а половина списка не нужна вовсе.
+   */
+  const [extraRows, setExtraRows] = useState<
+    { key: string; title: string; price: string; checked: boolean }[]
+  >([]);
   const [discount, setDiscount] = useState('');
   // скидка подставлена из карточки клиента, а не задана у самого заказа
   const [discountFromClient, setDiscountFromClient] = useState(false);
@@ -248,14 +255,12 @@ export function OrderModal({
    * доп. услуги − скидка. Считаем и здесь, чтобы менеджер видел итог сразу,
    * не дожидаясь ответа сервера; авторитетным остаётся сервер.
    */
-  const extrasCatalogue = tariffsQuery.data?.extras ?? [];
-  const extrasSum = Object.entries(selectedExtras).reduce((sum, [key, qty]) => {
-    const item = extrasCatalogue.find((e) => e.key === key);
-    if (!item) return sum;
-    const n = Math.max(0, Math.round(Number(qty) || 0));
-    if (n === 0) return sum;
-    return sum + (item.hasQty ? item.price * n : item.price);
-  }, 0);
+  // в сумму идут только отмеченные строки: неотмеченная остаётся заметкой
+  const extrasSum = extraRows.reduce(
+    (sum, r) =>
+      sum + (r.checked ? Math.max(0, Math.round(Number(r.price) || 0)) : 0),
+    0,
+  );
 
   const unitLabel = selectedTariff?.unit ?? (isSeatsUnit ? 'место' : 'м²');
   const unitsNow = Number((isSeatsUnit ? editSeats : editArea) || 0);
@@ -357,7 +362,16 @@ export function OrderModal({
       setIsManualPrice(!!o.isManualPrice);
     }
     if (!skip('preferences')) setPreferences(o.preferences ?? '');
-    if (!skip('extras')) setSelectedExtras(o.extras ?? {});
+    if (!skip('extras')) {
+      setExtraRows(
+        (o.customExtras ?? []).map((r, i) => ({
+          key: `e${i}_${Math.random().toString(36).slice(2, 7)}`,
+          title: r.title,
+          price: String(r.price ?? 0),
+          checked: r.checked !== false,
+        })),
+      );
+    }
     /*
      * Скидка: своя у заказа, а если её нет — постоянная скидка клиента.
      *
@@ -628,7 +642,13 @@ export function OrderModal({
           : {}),
         isManualPrice,
         preferences: trimmedPrefs,
-        extras: selectedExtras,
+        customExtras: extraRows
+          .filter((r) => r.title.trim())
+          .map((r) => ({
+            title: r.title.trim(),
+            price: Math.max(0, Math.round(Number(r.price) || 0)),
+            checked: r.checked,
+          })),
         discount: discountSum,
         // данные заявки — правятся прямо в карточке
         source: editSource,
@@ -1409,72 +1429,111 @@ export function OrderModal({
               <div className="space-y-3 rounded-xl border border-navy-100 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-navy-800">
-                    Дополнительные услуги
+                    Доп. услуги
                   </span>
-                  <span className="text-xs text-navy-600">
-                    {extrasSum > 0 ? formatPrice(extrasSum) : 'не выбраны'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-navy-600">
+                      {extrasSum > 0 ? formatPrice(extrasSum) : 'не добавлены'}
+                    </span>
+                    <button
+                      type="button"
+                      className="press flex h-7 w-7 items-center justify-center rounded-lg border border-navy-200 bg-white text-navy-600 hover:bg-navy-50"
+                      aria-label="Добавить доп. услугу"
+                      title="Добавить доп. услугу"
+                      onClick={() => {
+                        markTouched('extras');
+                        setExtraRows((prev) => [
+                          ...prev,
+                          {
+                            key: `e${Date.now()}_${prev.length}`,
+                            title: '',
+                            price: '',
+                            checked: true,
+                          },
+                        ]);
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
-                {extrasCatalogue.length === 0 ? (
+                {extraRows.length === 0 && (
                   <p className="text-xs text-navy-600">
-                    Справочник доп. услуг пуст — заведите их в разделе «Услуги и цены».
+                    Пока не добавлены. Нажмите «плюс», чтобы вписать свою
+                    услугу и её цену.
                   </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {extrasCatalogue.map((e) => {
-                      const qty = selectedExtras[e.key] ?? 0;
-                      const on = qty > 0;
-                      return (
-                        <div
-                          key={e.key}
-                          className={`flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-2 ${
-                            on ? 'border-brand-400 bg-brand-50/60' : 'border-navy-100'
-                          }`}
-                        >
-                          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={on}
-                              onChange={(ev) => {
-                                markTouched('extras');
-                                setSelectedExtras((prev) => {
-                                  const next = { ...prev };
-                                  if (ev.target.checked) next[e.key] = 1;
-                                  else delete next[e.key];
-                                  return next;
-                                });
-                              }}
-                              className="h-4 w-4 shrink-0 accent-navy-500"
-                            />
-                            <span className="min-w-0 truncate text-sm text-navy-800">
-                              {e.title}
-                            </span>
-                          </label>
-                          <span className="shrink-0 text-xs text-navy-600">
-                            {formatPrice(e.price)}
-                            {e.hasQty ? ' / шт' : ''}
-                          </span>
-                          {/* количество — только там, где цена умножается */}
-                          {on && e.hasQty && (
-                            <input
-                              type="number"
-                              min={1}
-                              className="input input-sm w-20 shrink-0"
-                              value={qty}
-                              onChange={(ev) => {
-                                markTouched('extras');
-                                const n = Math.max(1, Math.round(Number(ev.target.value) || 1));
-                                setSelectedExtras((prev) => ({ ...prev, [e.key]: n }));
-                              }}
-                              aria-label={`Количество: ${e.title}`}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
                 )}
+
+                <div className="space-y-1.5">
+                  {extraRows.map((r, i) => (
+                    <div
+                      key={r.key}
+                      className={`flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-2 ${
+                        r.checked ? 'border-brand-400 bg-brand-50/60' : 'border-navy-100'
+                      }`}
+                    >
+                      <input
+                        className="input input-sm min-w-0 flex-1"
+                        value={r.title}
+                        placeholder="Название услуги"
+                        maxLength={120}
+                        onChange={(ev) => {
+                          markTouched('extras');
+                          setExtraRows((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, title: ev.target.value } : x,
+                            ),
+                          );
+                        }}
+                        aria-label="Название доп. услуги"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        className="input input-sm w-24 shrink-0"
+                        value={r.price}
+                        placeholder="Цена"
+                        onChange={(ev) => {
+                          markTouched('extras');
+                          setExtraRows((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, price: ev.target.value } : x,
+                            ),
+                          );
+                        }}
+                        aria-label="Цена доп. услуги"
+                      />
+                      {/* галочка: включить строку в сумму заказа */}
+                      <input
+                        type="checkbox"
+                        checked={r.checked}
+                        onChange={(ev) => {
+                          markTouched('extras');
+                          setExtraRows((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, checked: ev.target.checked } : x,
+                            ),
+                          );
+                        }}
+                        className="h-4 w-4 shrink-0 accent-brand-600"
+                        aria-label="Включить в сумму заказа"
+                        title="Включить в сумму заказа"
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-lg p-1 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Удалить услугу"
+                        onClick={() => {
+                          markTouched('extras');
+                          setExtraRows((prev) => prev.filter((_, j) => j !== i));
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
