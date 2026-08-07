@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { userFinanceBanned, userSeesFinance, userSeesTrash } from './types';
+import { userSeesReports, userSeesFinance, userSeesTrash } from './types';
 import type { Role } from './types';
 
 // Разделы грузятся по требованию (code-splitting) — тяжёлые библиотеки
@@ -59,15 +59,16 @@ function FinanceOnly({ children }: { children: JSX.Element }) {
 }
 
 /**
- * Разделы с деньгами, которые нужны менеджеру по работе (платёжные ведомости).
+ * Платёжные ведомости.
  *
  * Закрыты не по роли, а по личной галочке «без доступа к финансам»: менеджер
- * ведомости составляет — это его работа, а сотруднику, которому владелец
- * закрыл деньги, они не положены. Ту же проверку делает сервер.
+ * ведомости составляет — это его работа. Но запрет перебивается второй
+ * галочкой «но ведомости — открыть»: ведомость это рабочий документ, а не
+ * книга доходов компании. Ту же проверку делает сервер.
  */
 function MoneyBanned({ children }: { children: JSX.Element }) {
   const { user } = useAuth();
-  if (user && userFinanceBanned(user)) return <Navigate to="/" replace />;
+  if (user && !userSeesReports(user)) return <Navigate to="/" replace />;
   return children;
 }
 

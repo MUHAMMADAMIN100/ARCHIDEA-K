@@ -39,6 +39,9 @@ export class CreateUserDto {
    * пока владелец не откроет карточку и не поставит галочку второй раз.
    */
   @IsOptional() @IsBoolean() noFinance?: boolean;
+
+  /** Персональный доступ к ведомостям — работает поверх запрета на финансы */
+  @IsOptional() @IsBoolean() canSeeReports?: boolean;
 }
 
 /**
@@ -68,6 +71,8 @@ export class UpdateUserDto {
    * интерфейс её показывал, а до сервера она не доходила вовсе.
    */
   @IsOptional() @IsBoolean() noFinance?: boolean;
+  /** Персональный доступ к ведомостям — работает поверх запрета на финансы */
+  @IsOptional() @IsBoolean() canSeeReports?: boolean;
   @IsOptional() @IsBoolean() acceptsLeads?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
 

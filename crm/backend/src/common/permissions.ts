@@ -149,6 +149,19 @@ export function financeBanned(user: AuthUser | null | undefined): boolean {
   return user?.noFinance === true;
 }
 
+/**
+ * Доступ к платёжным ведомостям.
+ *
+ * Ведомость — рабочий документ: в ней состав бригады, объект и выплаты за
+ * смену. Это не книга доходов компании, поэтому запрет «без доступа к
+ * финансам» здесь перебивается персональной галочкой: владелец открывает
+ * ведомости конкретному человеку, не открывая ему прибыль и расходы.
+ */
+export function seesReports(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  return !financeBanned(user) || user.canSeeReports === true;
+}
+
 /** Управление командой, бригадами, выездами и учётом смен (ТЗ 2, 4) */
 export function managesOps(user: AuthUser | null | undefined): boolean {
   return can(user, 'ops:manage');

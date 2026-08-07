@@ -60,6 +60,8 @@ export interface AuthUser {
   canSeeTrash?: boolean;
   /** персональный запрет на финансы — сильнее роли */
   noFinance?: boolean;
+  /** Персональный доступ к ведомостям — сильнее запрета на финансы */
+  canSeeReports?: boolean;
   /** владелец компании: единственный, кто может удалять сотрудников */
   isOwner?: boolean;
 }
@@ -112,6 +114,19 @@ export function userManagesTasks(u?: AuthUser | null): boolean {
  */
 export function userFinanceBanned(u?: AuthUser | null): boolean {
   return u?.noFinance === true;
+}
+
+/**
+ * Видит ли сотрудник платёжные ведомости.
+ *
+ * Ведомость — рабочий документ (бригада, объект, выплаты за смену), а не
+ * книга доходов компании. Поэтому запрет «без доступа к финансам» здесь
+ * перебивается персональной галочкой: владелец открывает ведомости
+ * конкретному человеку, не открывая ему прибыль и расходы.
+ */
+export function userSeesReports(u?: AuthUser | null): boolean {
+  if (!u) return false;
+  return !u.noFinance || u.canSeeReports === true;
 }
 
 export function userSeesFinance(u?: AuthUser | null): boolean {

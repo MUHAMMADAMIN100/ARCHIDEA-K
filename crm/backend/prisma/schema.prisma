@@ -239,6 +239,10 @@ model User {
   /// открывает не каждому: этот сотрудник сохраняет управление людьми и
   /// операциями, но не видит доходов, расходов, выплат, премий и выручки.
   noFinance      Boolean  @default(false)
+  /// Персональный доступ к платёжным ведомостям — СИЛЬНЕЕ запрета на финансы.
+  /// Ведомости ведут и сводят те, кому доверено, даже если книга доходов и
+  /// расходов компании им закрыта: это разные вещи.
+  canSeeReports  Boolean  @default(false)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

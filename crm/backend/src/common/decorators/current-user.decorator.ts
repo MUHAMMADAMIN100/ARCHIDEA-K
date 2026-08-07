@@ -13,6 +13,8 @@ export interface AuthUser {
   canSeeTrash: boolean;
   /** персональный запрет на финансы — сильнее роли (см. permissions.ts) */
   noFinance: boolean;
+  /** Персональный доступ к платёжным ведомостям — сильнее запрета на финансы */
+  canSeeReports?: boolean;
   /** Владелец компании: единственный, кто удаляет сотрудников */
   isOwner: boolean;
 }

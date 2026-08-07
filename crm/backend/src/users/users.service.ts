@@ -45,6 +45,7 @@ const SAFE_SELECT = {
   canManageTasks: true,
   canSeeTrash: true,
   noFinance: true,
+  canSeeReports: true,
   /** ТЗ 10 — личные уведомления в Telegram */
   telegramChatId: true,
   telegramEnabled: true,
@@ -146,6 +147,7 @@ export class UsersService {
         phone: dto.phone,
         canManageOps: dto.canManageOps ?? false,
         noFinance: dto.noFinance ?? false,
+        canSeeReports: dto.canSeeReports ?? false,
       },
       select: SAFE_SELECT,
     });
@@ -358,6 +360,7 @@ export class UsersService {
       canManageTasks?: boolean;
       canSeeTrash?: boolean;
       noFinance?: boolean;
+      canSeeReports?: boolean;
       acceptsLeads?: boolean;
       isActive?: boolean;
       password?: string;
@@ -386,6 +389,12 @@ export class UsersService {
      * сотрудник с открытой вкладкой продолжал бы видеть деньги до
      * следующего входа, а флаг ставят именно чтобы закрыть доступ СЕЙЧАС.
      */
+    if (
+      dto.canSeeReports !== undefined &&
+      dto.canSeeReports !== exists.canSeeReports
+    ) {
+      data.canSeeReports = dto.canSeeReports;
+    }
     if (dto.noFinance !== undefined && dto.noFinance !== exists.noFinance) {
       data.noFinance = dto.noFinance;
       data.sessionEpoch = { increment: 1 };
@@ -444,6 +453,7 @@ export class UsersService {
         'canManageTasks',
         'canSeeTrash',
         'noFinance',
+        'canSeeReports',
         'acceptsLeads',
         'isActive',
         'passwordHash',

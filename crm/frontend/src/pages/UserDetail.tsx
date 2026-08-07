@@ -51,6 +51,7 @@ interface UserDetailData {
   canManageTasks?: boolean;
   canSeeTrash?: boolean;
   noFinance?: boolean;
+  canSeeReports?: boolean;
   isActive: boolean;
   createdAt: string;
   stats: {
@@ -91,6 +92,7 @@ export function UserDetail() {
     canManageTasks: boolean;
     canSeeTrash: boolean;
     noFinance: boolean;
+    canSeeReports: boolean;
     isActive: boolean;
     password?: string;
   }) => {
@@ -110,6 +112,7 @@ export function UserDetail() {
             canManageTasks: payload.canManageTasks,
             canSeeTrash: payload.canSeeTrash,
             noFinance: payload.noFinance,
+            canSeeReports: payload.canSeeReports,
             isActive: payload.isActive,
           }
         : d,
@@ -389,6 +392,7 @@ function EditUserModal({
     canManageTasks: boolean;
     canSeeTrash: boolean;
     noFinance: boolean;
+    canSeeReports: boolean;
     isActive: boolean;
     password?: string;
   }) => void;
@@ -406,6 +410,7 @@ function EditUserModal({
   const [canManageTasks, setCanManageTasks] = useState(!!user.canManageTasks);
   const [canSeeTrash, setCanSeeTrash] = useState(!!user.canSeeTrash);
   const [noFinance, setNoFinance] = useState(!!user.noFinance);
+  const [canSeeReports, setCanSeeReports] = useState(!!user.canSeeReports);
   const [isActive, setIsActive] = useState(user.isActive);
   const [password, setPassword] = useState('');
 
@@ -425,6 +430,8 @@ function EditUserModal({
       // запрет на финансы имеет смысл только у руководителя: у менеджера
       // денег и так нет, и хранить у него взведённый флаг незачем
       noFinance: role === 'DIRECTOR' ? noFinance : false,
+      // галочка имеет смысл только при запрете: без него ведомости и так открыты
+      canSeeReports: role === 'DIRECTOR' && noFinance ? canSeeReports : false,
       isActive,
       ...(password ? { password } : {}),
     });
@@ -571,6 +578,31 @@ function EditUserModal({
                 Сохраняет управление людьми, услугами и операциями, но не видит
                 доходов и расходов, выплат, премий и выручки — ни в меню, ни по
                 прямой ссылке. Активные сессии сотрудника при этом сбрасываются.
+              </span>
+            </span>
+          </label>
+        )}
+
+        {/*
+          Ведомости — исключение из запрета на финансы: это рабочий документ
+          (бригада, объект, выплаты за смену), а не книга доходов компании.
+          Галочку показываем только когда запрет стоит: без него ведомости
+          и так открыты, и лишний переключатель только сбивал бы с толку.
+        */}
+        {role === 'DIRECTOR' && noFinance && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={canSeeReports}
+              onChange={(e) => setCanSeeReports(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-emerald-600"
+            />
+            <span className="text-sm text-navy-800">
+              <span className="font-medium">Но ведомости — открыть</span>
+              <span className="mt-0.5 block text-xs text-navy-600">
+                Раздел «Ведомости» будет доступен: сотрудник составляет их и
+                правит. Доходы, расходы и прибыль компании при этом
+                по-прежнему закрыты.
               </span>
             </span>
           </label>

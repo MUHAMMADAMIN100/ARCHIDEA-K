@@ -32,7 +32,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
 import { StuckSentinel, useStuck } from './ScrollArea';
-import { userFinanceBanned, userSeesFinance, userSeesTrash } from '../types';
+import { userSeesReports, userFinanceBanned, userSeesFinance, userSeesTrash } from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -224,7 +224,8 @@ export function Layout() {
     // персональный запрет на финансы сильнее роли: галочка в карточке
     // сотрудника убирает денежные разделы даже у руководителя
     if (i.finance && !userSeesFinance(user)) return false;
-    if (i.moneyBan && userFinanceBanned(user)) return false;
+    // ведомости открываются персональной галочкой поверх запрета на финансы
+    if (i.moneyBan && !userSeesReports(user)) return false;
     return true;
   };
   const groups = NAV_GROUPS.map((g) => ({
