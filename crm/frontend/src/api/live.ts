@@ -99,7 +99,18 @@ export function useLiveUpdates(enabled: boolean, userId?: string): void {
     const openStream = (): void => {
       if (stopped || es || typeof EventSource === 'undefined') return;
       streamSeen = Date.now();
-      es = new EventSource('/api/events');
+      /*
+       * Адрес потока строится от того же корня, что и обычные запросы.
+       *
+       * Раньше здесь стоял буквальный «/api/events»: на проде он совпадает с
+       * корнем запросов, а на локальной разработке — нет (запросы идут на
+       * сервер приложения напрямую). Поток стучался в сервер разработки,
+       * получал 404 — и живых обновлений на стенде не было вовсе, что и
+       * скрывало неполадки канала от проверок.
+       */
+      es = new EventSource(`${api.defaults.baseURL}/events`, {
+        withCredentials: true,
+      });
       es.onmessage = (e) => {
         try {
           apply(JSON.parse(e.data) as Incoming, true);
