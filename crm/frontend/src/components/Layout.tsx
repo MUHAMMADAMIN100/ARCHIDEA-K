@@ -68,8 +68,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Работа',
     items: [
-      { to: '/', label: 'Дашборд', icon: LayoutDashboard },
-      { to: '/funnel', label: 'Воронка', icon: Filter },
+      // воронка стоит первой и живёт на корне: это стартовый экран CRM
+      { to: '/', label: 'Воронка', icon: Filter },
+      { to: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
       { to: '/clients', label: 'Клиенты', icon: Users },
       { to: '/tasks', label: 'Задачи', icon: CheckSquare },
       { to: '/calendar', label: 'Календарь', icon: CalendarRange },
@@ -119,10 +120,11 @@ const NAV_GROUPS: NavGroup[] = [
  * У менеджеров навигация прежняя — их работа устроена иначе.
  */
 const DIRECTOR_NAV: NavItem[] = [
-  { to: '/', label: 'Дашборд', icon: LayoutDashboard },
+  // воронка первой и на корне — с неё открывается CRM у всех ролей
+  { to: '/', label: 'Воронка', icon: Filter },
+  { to: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
   { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
-  { to: '/funnel', label: 'Воронка', icon: Filter },
   { to: '/clients', label: 'Клиенты', icon: Users },
   // календарь поднят из «Ещё»: по нему планируют день, а не заглядывают раз в неделю
   { to: '/calendar', label: 'Календарь', icon: CalendarRange },
