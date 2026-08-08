@@ -360,28 +360,23 @@ export class OrdersService {
   }
 
   /**
-   * Дата закрытия для сделки, внесённой задним числом, — её СТАРАЯ дата.
+   * Дата закрытия сделки — это её дата оформления. Всегда.
    *
-   * Владелец вносит забытую майскую сделку в августе: дата оформления — май,
-   * а запись появилась только что. Закрой мы её сегодняшним числом, в папке
-   * стояло бы враньё «закрыт 6 авг», а сама карточка повисла бы в колонке
-   * среди августовской работы. Поэтому такой сделке дата закрытия ставится
-   * по дате оформления.
+   * Решение владельца: заказ считается тем месяцем, которым он ОФОРМЛЕН, а не
+   * тем, когда до него дошли руки. Иначе отчёт за месяц врёт — а по этим
+   * цифрам считают выручку.
    *
-   * Обычная долгая сделка (заявка пришла в июне, запись завели тогда же,
-   * закрыли в августе) сюда не попадает: у неё месяц оформления совпадает с
-   * месяцем появления записи, и закрывается она сегодняшним числом.
+   * Раньше дата подтягивалась только у сделок, ВНЕСЁННЫХ задним числом: когда
+   * запись появилась в системе позже месяца оформления. Обычная долгая сделка
+   * (заявка в мае, деньги в августе) под правило не попадала и закрывалась
+   * сегодняшним днём — так заказ «Банофи» от 28 мая получил «закрыт 4 авг», а
+   * его 1610 сомони уехали из майской выручки в августовскую.
    *
-   * Возвращает старую дату закрытия либо null — «закрывай сегодняшним».
+   * Следствие владельцем принято: закрытие старой сделки меняет цифры уже
+   * прошедшего месяца.
    */
-  private backfilledClosedAt(order: {
-    createdAt: Date;
-    registeredAt: Date;
-  }): Date | null {
-    const created = dayKey(order.createdAt).slice(0, 7);
-    const registered = dayKey(order.registeredAt).slice(0, 7);
-    const current = dayKey(new Date()).slice(0, 7);
-    return created < registered && created < current ? order.createdAt : null;
+  private closingDateOf(order: { createdAt: Date }): Date {
+    return order.createdAt;
   }
 
   list(
@@ -740,17 +735,13 @@ export class OrdersService {
       if (created) {
         data.createdAt = created;
         /*
-         * Сделка уже закрыта, а дату оформления увели в прошлый месяц —
-         * значит её вносили задним числом и закрыли не тем днём. Переносим
-         * и дату закрытия, иначе карточка останется в колонке текущего
-         * месяца с подписью «закрыт сегодня» на майской сделке.
+         * Дата закрытия ходит за датой оформления: у закрытой сделки они
+         * равны по определению (см. closingDateOf). Поправили дату
+         * оформления — переносится и закрытие, иначе заказ остался бы в
+         * выручке того месяца, к которому больше не относится.
          */
         if (OrdersService.CLOSED_STAGES.includes(before.stage)) {
-          const backdated = this.backfilledClosedAt({
-            createdAt: created,
-            registeredAt: before.registeredAt,
-          });
-          if (backdated) data.closedAt = backdated;
+          data.closedAt = this.closingDateOf({ createdAt: created });
         }
       }
     }
@@ -1123,14 +1114,14 @@ export class OrdersService {
     const data: Prisma.OrderUncheckedUpdateInput = { stage: dto.stage };
     if (dto.stage === FunnelStage.REJECTED) {
       data.rejectionReason = dto.rejectionReason;
-      data.closedAt = this.backfilledClosedAt(order) ?? new Date();
+      data.closedAt = this.closingDateOf(order);
     } else if (order.stage === FunnelStage.REJECTED) {
       // возврат из «Отказа» на активный этап — чистим причину и дату закрытия
       data.rejectionReason = null;
       data.closedAt = null;
     }
     if (dto.stage === FunnelStage.PAID) {
-      data.closedAt = this.backfilledClosedAt(order) ?? new Date();
+      data.closedAt = this.closingDateOf(order);
     }
     // ушли из «Оплачено» — дата закрытия больше не действительна,
     // иначе заказ продолжит числиться в выручке периода

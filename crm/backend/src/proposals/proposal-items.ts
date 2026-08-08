@@ -41,6 +41,42 @@ interface TariffSource {
   priceMedium: number;
   priceHeavy: number;
   pricePerSqm: number;
+  /** Что входит в услугу — построчно, для состава позиции в КП */
+  includedWorks?: string[];
+  /** Выработка одного человека за смену — из неё считается срок работ */
+  outputPerDay?: number | null;
+}
+
+/**
+ * Планируемый срок работ по позиции.
+ *
+ * Считается из выработки: сколько единиц успевает один человек за смену.
+ * Объём 596 м² при выработке 60 м² — это 10 человеко-дней; уложить их в срок
+ * можно разным числом людей, поэтому берём горизонт не больше пяти дней (так
+ * составлено типовое КП компании) и добираем бригадой.
+ *
+ * Нет выработки в справочнике — строки не будет вовсе. Пустое «Планируемая
+ * сдача работы ___ дней» в предложении клиенту хуже, чем её отсутствие.
+ */
+const MAX_PLAN_DAYS = 5;
+
+export function planNote(
+  volume: number,
+  outputPerDay: number | null | undefined,
+): string | null {
+  const output = Number(outputPerDay ?? 0);
+  if (!(output > 0) || !(volume > 0)) return null;
+
+  const personDays = Math.ceil(volume / output);
+  const days = Math.min(personDays, MAX_PLAN_DAYS);
+  const people = Math.ceil(personDays / days);
+
+  const dayWord = days === 1 ? 'день' : days < 5 ? 'дня' : 'дней';
+  const peopleWord = people === 1 ? 'человек' : people < 5 ? 'человека' : 'человек';
+  return (
+    `Планируемая сдача работы ${days} ${dayWord}. ` +
+    `На объекте будут работать ${people} ${peopleWord} в день.`
+  );
 }
 
 interface ExtraSource {
@@ -89,6 +125,8 @@ export function itemsFromOrder(
       volume,
       unitPrice: perUnit,
       amount: volume * perUnit,
+      includes: tariff?.includedWorks ?? null,
+      note: planNote(volume, tariff?.outputPerDay),
     });
   }
 
@@ -108,6 +146,8 @@ export function itemsFromOrder(
       volume: qty,
       unitPrice: price,
       amount: qty * price,
+      includes: catalog?.includedWorks ?? null,
+      note: planNote(qty, catalog?.outputPerDay),
     });
   }
 

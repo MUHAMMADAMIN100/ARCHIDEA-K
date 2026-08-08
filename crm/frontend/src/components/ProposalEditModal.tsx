@@ -24,6 +24,15 @@ interface Draft {
   unit: string;
   volume: string;
   unitPrice: string;
+  /*
+   * Состав услуги и срок работ здесь НЕ правятся — они приходят из справочника
+   * услуг. Но провезти их через форму обязательно: сохранение отправляет
+   * позиции целиком и затирает всё, чего в запросе нет. Без этих двух полей
+   * первая же правка цены вычищала из готового КП весь состав работ и строку
+   * сдачи — то есть половину документа, который видит клиент.
+   */
+  includes?: string[] | null;
+  note?: string | null;
 }
 
 /** Разделы, которые предлагаются в подсказке — свой можно вписать любой */
@@ -37,6 +46,8 @@ function toDraft(item: ProposalItem, i: number): Draft {
     unit: item.unit ?? '',
     volume: item.volume != null ? String(item.volume) : '',
     unitPrice: item.unitPrice != null ? String(item.unitPrice) : '',
+    includes: item.includes ?? null,
+    note: item.note ?? null,
   };
 }
 
@@ -91,6 +102,9 @@ export function ProposalEditModal({
         volume: d.volume ? Number(d.volume) : undefined,
         unitPrice: d.unitPrice ? Math.round(Number(d.unitPrice)) : undefined,
         amount: amountOf(d) || undefined,
+        // состав и срок не редактируются, но должны пережить сохранение
+        ...(d.includes?.length ? { includes: d.includes } : {}),
+        ...(d.note ? { note: d.note } : {}),
       }));
 
     setSaving(true);

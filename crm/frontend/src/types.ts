@@ -841,6 +841,10 @@ export interface ProposalItem {
   section?: string | null;
   /** Единица объёма: м², место, шт */
   unit?: string | null;
+  /** Что входит в услугу — построчно, из справочника услуг */
+  includes?: string[] | null;
+  /** Срок работ и число людей: «Планируемая сдача работы 5 дней…» */
+  note?: string | null;
 }
 
 export interface Proposal {

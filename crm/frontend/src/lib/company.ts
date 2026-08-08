@@ -14,6 +14,9 @@ export const COMPANY = {
   instagram: '@archidea.cleaning',
   telegram: '@archideacleaning',
   workingHours: 'ежедневно с 8:00 до 22:00',
+  /** Кем подписано коммерческое предложение — как в бумажном бланке компании */
+  director: 'Аниса Мукими',
+  directorTitle: 'Руководитель компании',
 };
 
 /** Строка реквизитов одной строкой — для подвала печатной формы */

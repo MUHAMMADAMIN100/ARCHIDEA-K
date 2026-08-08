@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CHECKLISTS } from './checklist-seed';
 import {
   DEFAULT_PROPOSAL_TEMPLATE,
+  COMPLEX_PROPOSAL_TEMPLATE,
   PREVIOUS_PROPOSAL_BODIES,
 } from './proposal-seed';
 
@@ -360,6 +361,28 @@ export class SetupService implements OnApplicationBootstrap {
       }
     } catch (e) {
       this.logger.warn('Не удалось создать базовый шаблон КП');
+    }
+
+    /*
+     * Шаблон по бумажному бланку компании — заводится отдельно и только один
+     * раз, по имени. Проверка «шаблонов вообще нет» здесь не годится: она
+     * сработала бы лишь на пустой базе, а бланк нужен и там, где стандартный
+     * шаблон давно создан. Удалил руководитель этот шаблон — значит он ему не
+     * нужен, и возвращать его при каждом рестарте нельзя.
+     */
+    try {
+      const exists = await this.prisma.proposalTemplate.findFirst({
+        where: { name: COMPLEX_PROPOSAL_TEMPLATE.name },
+        select: { id: true },
+      });
+      if (!exists) {
+        await this.prisma.proposalTemplate.create({
+          data: { ...COMPLEX_PROPOSAL_TEMPLATE, isDefault: false, isActive: true },
+        });
+        this.logger.log('Создан шаблон КП «Комплексный клининг»');
+      }
+    } catch {
+      this.logger.warn('Не удалось создать шаблон КП «Комплексный клининг»');
     }
   }
 

@@ -30,6 +30,7 @@ import {
   STAGE_LABEL,
   STAGE_ORDER,
   formatPrice,
+  formatVolume,
   orderDue,
   orderTotal,
 } from '../lib/labels';
@@ -83,8 +84,26 @@ const STAGE_DOT: Record<FunnelStage, string> = {
  * Иначе заявки со свежего лендинга не попадали бы в календарь вообще,
  * хотя дату клиент уже назвал.
  */
+/**
+ * День, в котором заказ стоит в календаре.
+ *
+ * Сначала дата уборки — календарь прежде всего план работ. Не назначена —
+ * заказ встаёт в день ОФОРМЛЕНИЯ, а не проваливается в «Без даты»: месяц
+ * выглядел пустым, хотя заказы за него были, и по календарю нельзя было
+ * понять, сколько работы приняли.
+ */
 function orderDate(o: Order): string | null {
-  return o.scheduledDate ?? o.preferredDate ?? null;
+  return o.scheduledDate ?? o.preferredDate ?? o.createdAt ?? null;
+}
+
+/**
+ * Заказ стоит в клетке по дате оформления, а не уборки.
+ *
+ * Разница существенная: «убираем 14-го» и «оформили 14-го» — разные вещи,
+ * и без пометки первый же взгляд на календарь вводит в заблуждение.
+ */
+function placedByCreation(o: Order): boolean {
+  return !o.scheduledDate && !o.preferredDate;
 }
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -170,10 +189,18 @@ function TaskCard({ task, compact }: { task: Task; compact: boolean }) {
   );
 }
 
-/** Карточка заказа в клетке календаря — цвет по этапу воронки */
+/**
+ * Карточка заказа в клетке календаря — цвет по этапу воронки.
+ *
+ * Объект (адрес и объём) показывается и в месячной сетке: календарь открывают,
+ * чтобы понять, КУДА ехать, а одно имя клиента на это не отвечает. Строка
+ * обрезается по ширине клетки, полный текст — в подсказке при наведении.
+ */
 function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
+  const object = [order.address, formatVolume(order)].filter(Boolean).join(' · ');
   return (
     <div
+      title={`${order.client?.fullName ?? 'Клиент'} — ${object}`}
       className={`rounded-lg border px-2 py-1.5 text-left shadow-card transition-[box-shadow,transform] duration-120 ease-out hover:-translate-y-px hover:shadow-lift ${
         STAGE_COLOR[order.stage]
       } ${STAGE_BORDER[order.stage]}`}
@@ -197,9 +224,10 @@ function OrderCard({ order, compact }: { order: Order; compact: boolean }) {
           </span>
         )}
       </div>
-      {!compact && order.address && (
+      {object && (
         <div className="truncate pl-3 text-[10px] opacity-80">
-          {order.address}
+          {/* в месяце клетка узкая — там только адрес, объём уводим в подсказку */}
+          {compact ? order.address || formatVolume(order) : object}
         </div>
       )}
     </div>
@@ -232,9 +260,18 @@ function DayOrderRow({
         <span className="block truncate text-sm font-semibold text-navy-900">
           {order.client?.fullName ?? 'Клиент'}
         </span>
+        {/*
+          Объект — то, ради чего календарь и открывают: куда ехать и какой
+          там объём. Адрес и метраж идут раньше этапа, а у заказа без даты
+          уборки первым словом стоит «оформлен» — иначе строка читается как
+          «в этот день убираем», хотя выезд ещё не назначен.
+        */}
         <span className="mt-0.5 block truncate text-xs text-navy-600">
-          {STAGE_LABEL[order.stage]}
-          {order.address ? ` · ${order.address}` : ''}
+          {placedByCreation(order) && (
+            <span className="font-semibold text-navy-500">оформлен · </span>
+          )}
+          {order.address ? `${order.address} · ` : ''}
+          {formatVolume(order)} · {STAGE_LABEL[order.stage]}
         </span>
       </span>
       <span className="shrink-0 text-right">
@@ -467,7 +504,7 @@ export function Calendar() {
     return map;
   }, [remindersQuery.data]);
 
-  // заказы по дням уборки (с учётом фильтра этапа)
+  // заказы по дням: уборка, а без неё — оформление (с учётом фильтра этапа)
   const { ordersByDay, ordersUndated } = useMemo(() => {
     const map = new Map<string, Order[]>();
     const none: Order[] = [];

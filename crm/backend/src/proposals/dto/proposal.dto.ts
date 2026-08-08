@@ -55,6 +55,22 @@ export class ProposalItemDto {
   @IsOptional() @IsString() @MaxLength(80) section?: string;
   /** Единица объёма: м², место, шт */
   @IsOptional() @IsString() @MaxLength(20) unit?: string;
+  /**
+   * Что входит в услугу — построчно.
+   *
+   * Поле обязано быть объявлено здесь: ValidationPipe работает с
+   * `whitelist: true` и молча выбрасывает всё, чего нет в DTO. Однажды мы уже
+   * потеряли так целое поле — оно сохранялось в интерфейсе и не доезжало до
+   * сервера.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  includes?: string[];
+  /** Срок работ и число людей по позиции */
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
 
 /** Ручные корректировки поверх данных заказа/клиента при создании КП */

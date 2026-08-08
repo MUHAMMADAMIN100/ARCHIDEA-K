@@ -13,8 +13,8 @@ import {
 import { api } from '../api/client';
 import { useFetch, invalidate } from '../api/hooks';
 import { Spinner, Badge, ErrorState } from '../components/ui';
-import { ScrollArea } from '../components/ScrollArea';
 import { PrintSheet } from '../components/common';
+import { COMPANY } from '../lib/company';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import {
@@ -259,96 +259,145 @@ export function OfferView() {
           </div>
         )}
 
-        {/* Позиции сметы */}
+        {/*
+          Список услуг — по бумажному бланку компании: номер, развёрнутое
+          описание услуги и стоимость. Раньше здесь была плоская таблица из
+          пяти колонок (объём, цена за ед., сумма), и состав работ в неё не
+          помещался вовсе — из-за этого предложения собирали руками в
+          текстовом редакторе, а CRM оставалась в стороне.
+
+          Средняя колонка несёт всё, что клиент читает глазами: объём, цену за
+          единицу, что входит в услугу и срок сдачи. Ширина не задаётся жёстко
+          — на телефоне текст переносится, горизонтальной прокрутки нет.
+        */}
         {items.length > 0 && (
           <div className="mt-6">
-            <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-navy-700">
-              Позиции
-            </h3>
-            {/*
-              Растворяющийся край — сигнал «таблица шире экрана» для телефона.
-              В PDF его гасим: на листе таблица помещается целиком, а признак
-              прокрутки снимается с экранной раскладки и лёг бы белым пятном
-              поверх колонки «Сумма».
-            */}
-            <ScrollArea
-              axis="x"
-              className="print:[&::before]:hidden print:[&::after]:hidden"
-              label="Позиции сметы"
-            >
-              <table className="w-full min-w-[520px] border-collapse text-sm">
-                <thead>
-                  <tr className="bg-navy-500 text-left text-xs text-white print:bg-white print:text-navy-900">
-                    <th className="border border-navy-300 px-2 py-1.5 font-semibold">№</th>
-                    <th className="border border-navy-300 px-2 py-1.5 font-semibold">
-                      Наименование
-                    </th>
-                    <th className="border border-navy-300 px-2 py-1.5 text-right font-semibold">
-                      Объём
-                    </th>
-                    <th className="border border-navy-300 px-2 py-1.5 text-right font-semibold">
-                      Цена за ед.
-                    </th>
-                    <th className="border border-navy-300 px-2 py-1.5 text-right font-semibold">
-                      Сумма
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, i) => (
-                    <Fragment key={i}>
-                      {/*
-                        Заголовок раздела печатается один раз перед его первой
-                        позицией: клиент читает смету блоками — работы отдельно,
-                        доп. услуги отдельно, — а не сплошным списком.
-                      */}
-                      {it.section && it.section !== items[i - 1]?.section && (
-                        <tr className="bg-navy-100/70 print:bg-navy-50">
-                          <td
-                            className="border border-navy-200 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-navy-700"
-                            colSpan={5}
-                          >
-                            {it.section}
-                          </td>
-                        </tr>
-                      )}
-                    <tr>
-                      <td className="border border-navy-200 px-2 py-1.5 text-navy-600">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-navy-500 text-left text-xs text-white print:bg-white print:text-navy-900">
+                  <th className="w-8 border border-navy-300 px-2 py-1.5 font-semibold">
+                    №
+                  </th>
+                  <th className="border border-navy-300 px-2 py-1.5 font-semibold">
+                    Список предоставляемых услуг
+                  </th>
+                  <th className="w-24 border border-navy-300 px-2 py-1.5 text-right font-semibold sm:w-28">
+                    Стоимость
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <Fragment key={i}>
+                    {/*
+                      Заголовок раздела печатается один раз перед его первой
+                      позицией: клиент читает смету блоками — работы отдельно,
+                      доп. услуги отдельно, — а не сплошным списком.
+                    */}
+                    {it.section && it.section !== items[i - 1]?.section && (
+                      <tr className="bg-navy-100/70 print:bg-navy-50">
+                        <td
+                          className="border border-navy-200 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-navy-700"
+                          colSpan={3}
+                        >
+                          {it.section}
+                        </td>
+                      </tr>
+                    )}
+                    <tr className="align-top">
+                      <td className="border border-navy-200 px-2 py-2 text-navy-600">
                         {i + 1}
                       </td>
-                      <td className="border border-navy-200 px-2 py-1.5 font-medium text-navy-900">
-                        {it.title}
+                      <td className="border border-navy-200 px-2 py-2 text-navy-900">
+                        <div className="font-semibold">{it.title}</div>
+                        <ul className="mt-1 space-y-0.5 text-xs text-navy-700">
+                          {it.volume != null && (
+                            <li>
+                              • Объём: {it.volume}
+                              {it.unit ? ` ${it.unit}` : ''}
+                            </li>
+                          )}
+                          {it.unitPrice != null && (
+                            <li>
+                              • Стоимость услуги — {formatPrice(it.unitPrice)}
+                              {it.unit ? `/${it.unit}` : ''}
+                            </li>
+                          )}
+                        </ul>
+                        {it.includes && it.includes.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs font-semibold text-navy-800">
+                              В состав услуги входит:
+                            </div>
+                            <ul className="mt-0.5 space-y-0.5 text-xs text-navy-700">
+                              {it.includes.map((w, k) => (
+                                <li key={k}>• {w}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {it.note && (
+                          <div className="mt-2 text-xs text-navy-600">{it.note}</div>
+                        )}
                       </td>
-                      <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-700">
-                        {it.volume != null
-                          ? `${it.volume}${it.unit ? ` ${it.unit}` : ''}`
-                          : '—'}
-                      </td>
-                      <td className="border border-navy-200 px-2 py-1.5 text-right text-navy-700">
-                        {it.unitPrice != null ? formatPrice(it.unitPrice) : '—'}
-                      </td>
-                      <td className="border border-navy-200 px-2 py-1.5 text-right font-bold text-navy-900">
-                        {it.amount != null ? formatPrice(it.amount) : '—'}
+                      <td className="border border-navy-200 px-2 py-2 text-right font-bold text-navy-900">
+                        {it.amount != null ? (
+                          <>
+                            <span className="block whitespace-nowrap tabular-nums">
+                              {it.amount.toLocaleString('ru-RU')}
+                            </span>
+                            <span className="block text-xs font-normal text-navy-600">
+                              сомони
+                            </span>
+                          </>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </tr>
-                    </Fragment>
-                  ))}
-                  <tr className="bg-navy-50 font-bold text-navy-900">
-                    <td className="border border-navy-200 px-2 py-1.5" colSpan={4}>
-                      Итого
+                  </Fragment>
+                ))}
+                {/*
+                  Скидка отдельной строкой: в позиции она не входит, иначе
+                  вычлась бы дважды. Клиент должен видеть, из чего сложился
+                  итог, а не гадать, почему сумма меньше слагаемых.
+                */}
+                {p.discount > 0 && (
+                  <tr className="text-navy-800">
+                    <td className="border border-navy-200 px-2 py-1.5" colSpan={2}>
+                      Скидка
                     </td>
-                    <td className="border border-navy-200 px-2 py-1.5 text-right">
-                      {formatPrice(p.total)}
+                    <td className="whitespace-nowrap border border-navy-200 px-2 py-1.5 text-right font-semibold tabular-nums">
+                      −{p.discount.toLocaleString('ru-RU')}
                     </td>
                   </tr>
-                </tbody>
-              </table>
-            </ScrollArea>
+                )}
+                <tr className="bg-navy-50 font-bold text-navy-900">
+                  <td className="border border-navy-200 px-2 py-2" colSpan={2}>
+                    Стоимость комплексного клининга помещения
+                  </td>
+                  <td className="whitespace-nowrap border border-navy-200 px-2 py-2 text-right tabular-nums">
+                    {p.total.toLocaleString('ru-RU')}
+                    <span className="block text-xs font-normal text-navy-600">
+                      сомони
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
 
-        {/* Подпись — только для печати */}
-        <div className="mt-8 hidden justify-between gap-8 text-sm print:flex">
+        {/*
+          Подпись бланка. На экране она тоже видна — менеджер должен понимать,
+          что уйдёт клиенту, не открывая предпросмотр печати.
+        */}
+        <div className="mt-8 text-sm text-navy-800">
+          <div>С уважением и надеждой на долгосрочное сотрудничество</div>
+          <div className="mt-3 font-medium">{COMPANY.directorTitle}</div>
+          <div className="font-semibold">{COMPANY.director}</div>
+        </div>
+        <div className="mt-6 hidden justify-between gap-8 text-xs text-navy-600 print:flex">
           <div>Подготовил: {p.createdByName}</div>
           <div>Подпись ____________________ дата ____________</div>
         </div>

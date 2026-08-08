@@ -69,9 +69,10 @@ export function Dashboard() {
           <Skeleton className="h-8 w-64 max-w-full rounded-md" />
           <Skeleton className="mt-1 h-5 w-44 max-w-full rounded-md" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* заглушка повторяет сетку плиток один в один — экран не прыгнет */}
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-md" />
+            <Skeleton key={i} className="h-[104px] rounded-md sm:h-40" />
           ))}
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -135,25 +136,39 @@ export function Dashboard() {
         subtitle="Сводка по работе на сегодня"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/*
+        На телефоне плитки идут по две в ряд и компактнее: по одной в ряд
+        сводка занимала четыре экрана, и «Клиентов в базе» нельзя было увидеть
+        не пролистав. От sm и шире всё остаётся ровно как было — правка
+        касается только мобильной вёрстки.
+      */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         {cards.map((c) => {
           const body = (
             <>
               <div className="flex items-center justify-between">
                 <span
-                  className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.color}`}
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${c.color}`}
                 >
-                  <c.icon className="h-5 w-5" />
+                  <c.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                 </span>
-                <ArrowRight className="h-4 w-4 text-navy-600" />
+                <ArrowRight className="h-3.5 w-3.5 text-navy-600 sm:h-4 sm:w-4" />
               </div>
-              <div className="mt-4 text-3xl font-extrabold text-navy-900">{c.value}</div>
-              <div className="text-sm text-navy-600">{c.label}</div>
+              <div className="mt-2.5 text-2xl font-extrabold leading-none text-navy-900 sm:mt-4 sm:text-3xl">
+                {c.value}
+              </div>
+              <div className="mt-1 text-xs leading-tight text-navy-600 sm:mt-0 sm:text-sm">
+                {c.label}
+              </div>
             </>
           );
 
           return c.to ? (
-            <Link key={c.label} to={c.to} className="card-interactive press p-5">
+            <Link
+              key={c.label}
+              to={c.to}
+              className="card-interactive press p-3.5 sm:p-5"
+            >
               {body}
             </Link>
           ) : (
@@ -162,7 +177,7 @@ export function Dashboard() {
               type="button"
               onClick={() => setDrill(c.drill!)}
               title="Показать эти заказы"
-              className="card-interactive press p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300"
+              className="card-interactive press p-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300 sm:p-5"
             >
               {body}
             </button>
