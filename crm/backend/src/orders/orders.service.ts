@@ -150,6 +150,9 @@ export class OrdersService {
     extras: Record<string, number> | null | undefined,
   ): Promise<CustomExtra[]> {
     if (!extras || !Object.keys(extras).length) return [];
+    // корзину здесь намеренно не отсекаем: калькулятор на сайте по-прежнему
+    // предлагает клиенту опции, убранные из справочника CRM (решение
+    // владельца — сайт не трогать), и заявка по ним должна считаться
     const catalogue = await this.prisma.extraService.findMany({
       where: { key: { in: Object.keys(extras) } },
       select: { key: true, title: true, price: true, hasQty: true },
@@ -204,12 +207,21 @@ export class OrdersService {
   }
 
   /**
-   * Справочник доп. услуг для расчёта. Берём активные и не удалённые:
-   * цена доп. услуги — тоже цена компании, из браузера её не принимаем.
+   * Справочник доп. услуг ДЛЯ РАСЧЁТА — по нему считается цена, а не
+   * составляется список выбора.
+   *
+   * Поэтому здесь берутся все услуги, включая скрытые и убранные в корзину.
+   * Смысл справочника в другом: цена доп. услуги — это цена компании, и мы
+   * не принимаем её из браузера, а находим по ключу у себя.
+   *
+   * Убранную услугу отфильтровать нельзя: в старых заказах она записана
+   * ключом, и при первой же правке адреса заказ пересчитался бы без неё —
+   * сумма молча уменьшилась бы. Выбрать убранную услугу в форме заказа всё
+   * равно нельзя: список выбора собирается отдельно (tariffs.service), и
+   * там корзина и скрытые отсекаются.
    */
   private extrasCatalogue(): Promise<PricingExtra[]> {
     return this.prisma.extraService.findMany({
-      where: { ...NOT_DELETED, isActive: true },
       select: { key: true, price: true, hasQty: true },
     });
   }
