@@ -1,4 +1,11 @@
-export type Role = 'DIRECTOR' | 'MANAGER';
+export type Role = 'DIRECTOR' | 'SUPERVISOR' | 'MANAGER';
+
+/** Как роль называется по-русски — одинаково во всех разделах */
+export const ROLE_TITLE: Record<Role, string> = {
+  DIRECTOR: 'Руководитель',
+  SUPERVISOR: 'Управляющий',
+  MANAGER: 'Менеджер',
+};
 export type LeadSource =
   | 'SITE'
   | 'INSTAGRAM'
@@ -74,7 +81,10 @@ export interface AuthUser {
  * это userManagesOps / userManagesCatalogs ниже (на бэкенде — permissions.ts).
  */
 export function userSeesAll(u?: AuthUser | null): boolean {
-  return !!u && (u.role === 'DIRECTOR' || u.canManageOps === true);
+  return (
+    !!u &&
+    (u.role === 'DIRECTOR' || u.role === 'SUPERVISOR' || u.canManageOps === true)
+  );
 }
 
 /**
@@ -126,6 +136,9 @@ export function userFinanceBanned(u?: AuthUser | null): boolean {
  */
 export function userSeesReports(u?: AuthUser | null): boolean {
   if (!u) return false;
+  // у управляющего ведомости — часть работы: он ведёт выезды и выплаты
+  // бригадам и отправляет отчёты руководству
+  if (u.role === 'SUPERVISOR') return true;
   return !u.noFinance || u.canSeeReports === true;
 }
 

@@ -52,6 +52,7 @@ import {
   DIRT_LABEL,
   DIRT_ORDER,
   formatPrice,
+  isLargeOrder,
   orderDue,
   orderTotal,
   formatDate,
@@ -253,7 +254,10 @@ export function ClientCard() {
       seats: payload.seats ?? null,
       estimatedPrice: payload.estimatedPrice,
       finalPrice: null,
-      isLarge: payload.estimatedPrice >= 2000,
+      isLarge: isLargeOrder({
+        finalPrice: null,
+        estimatedPrice: payload.estimatedPrice,
+      }),
       createdAt: nowISO(),
       cleaners: assignedCleaners,
     };

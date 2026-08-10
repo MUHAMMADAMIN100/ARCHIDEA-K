@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from 'react';
-import { reloadForFreshChunks, clearChunkReloadGuard } from '../lib/chunkReload';
+import { reloadForFreshChunks, reloadNow } from '../lib/chunkReload';
 
 interface Props {
   children: ReactNode;
@@ -45,10 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
               : 'Попробуйте обновить страницу. Если не помогло — сообщите нам.'}
           </div>
           <button
-            onClick={() => {
-              clearChunkReloadGuard();
-              window.location.reload();
-            }}
+            onClick={reloadNow}
             className="btn-primary"
           >
             Обновить

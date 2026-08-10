@@ -32,7 +32,13 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { NotificationsBell } from './NotificationsBell';
 import { StuckSentinel, useStuck } from './ScrollArea';
-import { userSeesReports, userFinanceBanned, userSeesFinance, userSeesTrash } from '../types';
+import {
+  ROLE_TITLE,
+  userSeesReports,
+  userFinanceBanned,
+  userSeesFinance,
+  userSeesTrash,
+} from '../types';
 import type { Role } from '../types';
 
 interface NavItem {
@@ -238,7 +244,13 @@ export function Layout() {
    * раскрывается прямо в сайдбаре — это привычнее выпадающей панели и
    * одинаково работает на телефоне.
    */
-  const isDirector = user?.role === 'DIRECTOR';
+  /*
+   * Кабинет руководителя показывается и управляющему: у него та же работа
+   * компании целиком, просто без денежных разделов и без раздачи доступов —
+   * их отсекает visible() выше, поэтому отдельного меню не требуется.
+   */
+  const isDirector =
+    user?.role === 'DIRECTOR' || user?.role === 'SUPERVISOR';
   const topNav = DIRECTOR_NAV.filter(visible);
   const moreGroups = MORE_GROUPS.map((g) => ({
     ...g,
@@ -454,7 +466,11 @@ export function Layout() {
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <div className="hidden text-sm text-navy-600 sm:block">
-            {user?.role === 'DIRECTOR' ? 'Кабинет руководителя' : 'Кабинет менеджера'}
+            {user?.role === 'DIRECTOR'
+              ? 'Кабинет руководителя'
+              : user?.role === 'SUPERVISOR'
+                ? 'Кабинет управляющего'
+                : 'Кабинет менеджера'}
           </div>
           <div className="ml-auto flex items-center gap-3">
             <NotificationsBell />
@@ -468,7 +484,7 @@ export function Layout() {
                     {user?.fullName}
                   </div>
                   <div className="text-xs text-navy-600">
-                    {user?.role === 'DIRECTOR' ? 'Руководитель' : 'Менеджер'}
+                    {user ? ROLE_TITLE[user.role] : ''}
                   </div>
                 </div>
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-500 text-sm font-bold text-white">

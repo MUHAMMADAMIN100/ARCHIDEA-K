@@ -1,5 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import { reloadForFreshChunks } from './chunkReload';
+import { ChunkFallback } from '../components/ChunkFallback';
 
 /**
  * lazy() с устойчивой загрузкой чанка на мобильном/флаки-сети:
@@ -20,11 +21,13 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       try {
         await new Promise((r) => setTimeout(r, 600));
         return await factory();
-      } catch (err) {
+      } catch {
         reloadForFreshChunks();
-        // если reload не сработал (сработал guard) — прокидываем ошибку
-        // в ErrorBoundary; иначе рендерим пустышку, пока идёт перезагрузка
-        return { default: (() => null) as unknown as T };
+        // Если перезагрузка не сработала (сработала защита от зацикливания),
+        // показываем понятный экран с кнопкой «Обновить». Пустоту не рисуем
+        // никогда: белый экран рядом с работающим меню человек читает как
+        // «система сломалась», и починить его сам он не может.
+        return { default: ChunkFallback as unknown as T };
       }
     }
   });

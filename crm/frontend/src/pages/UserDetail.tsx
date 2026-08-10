@@ -480,6 +480,7 @@ function EditUserModal({
             <label className="label">Роль</label>
             <select className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
               <option value="MANAGER">Менеджер</option>
+              <option value="SUPERVISOR">Управляющий</option>
               <option value="DIRECTOR">Руководитель</option>
             </select>
           </div>
@@ -495,6 +496,21 @@ function EditUserModal({
             </select>
           </div>
         </div>
+
+        {/* У управляющего галочек нет: роль сама открывает всё, кроме денег
+            и доступов. Поясняем прямо в карточке, чтобы не гадать, чего не
+            хватает и почему переключатели пропали. */}
+        {role === 'SUPERVISOR' && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 text-sm text-navy-800">
+            <span className="font-medium">Что открыто управляющему</span>
+            <span className="mt-0.5 block text-xs text-navy-600">
+              Воронка и клиенты всей компании, задачи, команда, смены и выезды,
+              услуги и цены, чек-листы, КП, аналитика и платёжные ведомости.
+              Закрыты доходы и расходы, премии, сотрудники и корзина —
+              отдельных галочек для этого не нужно.
+            </span>
+          </div>
+        )}
 
         {/* Общая база — только для менеджеров (руководитель и так видит всё).
             Разделы менеджеру открыты и без этого флага; он расширяет именно

@@ -649,7 +649,8 @@ export class OrdersService {
           ...(additional !== null
             ? { additionalServices: additional as unknown as Prisma.InputJsonValue }
             : {}),
-          isLarge: (finalPrice || estimatedPrice) >= LARGE_ORDER_THRESHOLD,
+          // правило одно на весь проект: итоговая цена, а пока её нет — расчётная
+          isLarge: (finalPrice ?? estimatedPrice ?? 0) >= LARGE_ORDER_THRESHOLD,
           // ТЗ 3.1 — команда назначается сразу при оформлении
           ...(cleanerIds.length
             ? { cleaners: { connect: cleanerIds.map((id) => ({ id })) } }

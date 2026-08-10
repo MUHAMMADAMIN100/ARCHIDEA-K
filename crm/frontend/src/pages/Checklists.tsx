@@ -184,14 +184,21 @@ export function Checklists() {
             render: (t: ChecklistTemplate) => (
               <div className="flex justify-end gap-1">
                 <button
-                  onClick={() => setModalTemplate(t)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setModalTemplate(t);
+                  }}
                   className="press rounded-lg p-1.5 text-navy-600 hover:bg-navy-50 hover:text-navy-700"
                   title="Редактировать"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => removeTemplate(t)}
+                  /* удаление не должно попутно открывать шаблон на правку */
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeTemplate(t);
+                  }}
                   className="press rounded-lg p-1.5 text-navy-600 hover:bg-red-50 hover:text-red-600"
                   title="Удалить"
                 >
@@ -222,6 +229,12 @@ export function Checklists() {
         columns={columns}
         rows={data}
         rowKey={(t) => t.id}
+        /*
+          Нажатие в любое место строки открывает шаблон: попасть в карандаш
+          размером 16 px, особенно с телефона, неудобно. Карандаш оставлен —
+          по нему видно, что строка редактируется.
+        */
+        onRowClick={canManage ? (t) => setModalTemplate(t) : undefined}
         loading={loading}
         error={error}
         onRetry={reload}

@@ -256,6 +256,20 @@ export function orderTotal(
 }
 
 /**
+ * С какой суммы заказ считается крупным. Должно совпадать с порогом на
+ * сервере (backend/src/orders/order-pricing.ts) — иначе метка «КРУПНЫЙ»
+ * мигает: сначала одна, после ответа сервера другая.
+ */
+export const LARGE_ORDER_THRESHOLD = 5000;
+
+/** Крупный ли заказ по его сумме */
+export function isLargeOrder(
+  o: Pick<Order, 'finalPrice' | 'estimatedPrice'>,
+): boolean {
+  return orderTotal(o) >= LARGE_ORDER_THRESHOLD;
+}
+
+/**
  * Сколько по заказу ещё предстоит получить: полная стоимость минус то,
  * что клиент уже заплатил.
  *

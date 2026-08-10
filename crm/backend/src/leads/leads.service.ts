@@ -361,7 +361,9 @@ export class LeadsService {
       this.prisma.user.findMany({
         where: {
           ...NOT_DELETED,
-          role: Role.MANAGER,
+          // кто принимает заявки, решает галочка acceptsLeads, а не роль:
+          // управляющий раньше был менеджером и не должен выпасть из очереди
+          role: { in: [Role.MANAGER, Role.SUPERVISOR] },
           isActive: true,
           acceptsLeads: true,
         },

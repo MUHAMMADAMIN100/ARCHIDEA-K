@@ -14,6 +14,7 @@ import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
 import { tempId, withRetry } from '../lib/util';
+import { ROLE_TITLE } from '../types';
 import type { Manager, Role } from '../types';
 
 export function UsersPage() {
@@ -108,13 +109,15 @@ export function UsersPage() {
                   className={`flex h-11 w-11 items-center justify-center rounded-xl ${
                     u.role === 'DIRECTOR'
                       ? 'bg-brand-500 text-white'
-                      : 'bg-navy-100 text-navy-700'
+                      : u.role === 'SUPERVISOR'
+                        ? 'bg-indigo-500 text-white'
+                        : 'bg-navy-100 text-navy-700'
                   }`}
                 >
-                  {u.role === 'DIRECTOR' ? (
-                    <ShieldCheck className="h-5 w-5" />
-                  ) : (
+                  {u.role === 'MANAGER' ? (
                     <UserRound className="h-5 w-5" />
+                  ) : (
+                    <ShieldCheck className="h-5 w-5" />
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -127,10 +130,12 @@ export function UsersPage() {
                   className={
                     u.role === 'DIRECTOR'
                       ? 'bg-navy-100 text-navy-700'
-                      : 'bg-blue-100 text-blue-700'
+                      : u.role === 'SUPERVISOR'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-blue-100 text-blue-700'
                   }
                 >
-                  {u.role === 'DIRECTOR' ? 'Руководитель' : 'Менеджер'}
+                  {ROLE_TITLE[u.role]}
                 </Badge>
                 <div className="flex items-center gap-1">
                   <button
@@ -220,6 +225,7 @@ function AddUserModal({
           <label className="label">Роль</label>
           <select className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
             <option value="MANAGER">Менеджер</option>
+            <option value="SUPERVISOR">Управляющий</option>
             <option value="DIRECTOR">Руководитель</option>
           </select>
         </div>

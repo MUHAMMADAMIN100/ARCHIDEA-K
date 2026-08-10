@@ -19,6 +19,13 @@ import { AuthUser } from './decorators/current-user.decorator';
  * Раньше и то и другое решалось одним `seesAll`, из-за чего менеджер, которому
  * нужен раздел «Смены и выезды», автоматически получал бы и чужих клиентов.
  */
+/** Как роль называется по-русски — для писем, журналов и корзины */
+export const ROLE_TITLE: Record<Role, string> = {
+  [Role.DIRECTOR]: 'Руководитель',
+  [Role.SUPERVISOR]: 'Управляющий',
+  [Role.MANAGER]: 'Менеджер',
+};
+
 export type Permission =
   // Задачи
   | 'tasks:all' // видеть и вести ВСЕ задачи компании (ТЗ 1.2)
@@ -77,12 +84,36 @@ const MANAGER: Permission[] = [
   'proposals:templates',
 ];
 
+/**
+ * Управляющий — вся работа компании, кроме денег и доступов.
+ *
+ * Это руководитель по работе: воронка и клиенты всей компании, задачи,
+ * команда, выезды, услуги, чек-листы, КП, аналитика и платёжные ведомости.
+ * Отличие от директора ровно в двух местах, и оба намеренные:
+ *  - `finance:*` — доходы, расходы и премии компании остаются у владельца;
+ *  - `users:manage` и корзина — раздав доступы, управляющий мог бы поднять
+ *    себе роль до руководителя, и запрет на деньги перестал бы что-то значить.
+ */
+const SUPERVISOR: Permission[] = [
+  'tasks:all',
+  'ops:manage',
+  'services:manage',
+  'audit:view',
+  'checklists:manage',
+  'proposals:templates',
+];
+
+/** Права роли без учёта персональных флагов */
+function roleBase(role: Role): Permission[] {
+  if (role === Role.DIRECTOR) return DIRECTOR;
+  if (role === Role.SUPERVISOR) return SUPERVISOR;
+  return MANAGER;
+}
+
 export function permissionsOf(user: AuthUser | null | undefined): Permission[] {
   if (!user) return [];
 
-  const list = new Set<Permission>(
-    user.role === Role.DIRECTOR ? DIRECTOR : MANAGER,
-  );
+  const list = new Set<Permission>(roleBase(user.role));
 
   /*
    * Расширенный доступ (canManageOps) теперь означает только одно — область
@@ -159,6 +190,9 @@ export function financeBanned(user: AuthUser | null | undefined): boolean {
  */
 export function seesReports(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
+  // Ведомости — часть работы управляющего: он отвечает за выезды и выплаты
+  // бригадам, и отправляет отчёты руководству. Роль даёт их сама.
+  if (user.role === Role.SUPERVISOR) return true;
   return !financeBanned(user) || user.canSeeReports === true;
 }
 

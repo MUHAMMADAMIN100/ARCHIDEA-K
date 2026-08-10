@@ -19,9 +19,13 @@ export interface AuthUser {
   isOwner: boolean;
 }
 
-/** Видит ли пользователь данные всей компании (директор или ops-менеджер) */
+/** Видит ли пользователь данные всей компании (руководитель, управляющий или ops-менеджер) */
 export function seesAll(user: AuthUser): boolean {
-  return user.role === Role.DIRECTOR || user.canManageOps === true;
+  return (
+    user.role === Role.DIRECTOR ||
+    user.role === Role.SUPERVISOR ||
+    user.canManageOps === true
+  );
 }
 
 /** Достаёт текущего пользователя (из JWT) в параметр метода */

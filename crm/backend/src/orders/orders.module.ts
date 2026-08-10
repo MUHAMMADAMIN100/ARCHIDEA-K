@@ -6,8 +6,6 @@ import { PaymentsController } from './payments.controller';
 import { SegmentsService } from './segments.service';
 import { SegmentsController } from './segments.controller';
 import { PlanService } from './plan.service';
-import { LoadService } from './load.service';
-import { LoadController } from './load.controller';
 import { FinanceModule } from '../finance/finance.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { ReportsModule } from '../reports/reports.module';
@@ -26,13 +24,11 @@ import { PayrollModule } from '../payroll/payroll.module';
     PaymentsService,
     SegmentsService,
     PlanService,
-    LoadService,
   ],
   controllers: [
     OrdersController,
     PaymentsController,
     SegmentsController,
-    LoadController,
   ],
   exports: [OrdersService],
 })

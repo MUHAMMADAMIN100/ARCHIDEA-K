@@ -73,7 +73,9 @@ export class UsersService {
 
   findManagers() {
     return this.prisma.user.findMany({
-      where: { ...NOT_DELETED, role: Role.MANAGER },
+      // управляющий ведёт заказы наравне с менеджерами и должен оставаться
+      // в списке ответственных — иначе его заказы теряют владельца в формах
+      where: { ...NOT_DELETED, role: { in: [Role.MANAGER, Role.SUPERVISOR] } },
       select: SAFE_SELECT,
       orderBy: { fullName: 'asc' },
     });

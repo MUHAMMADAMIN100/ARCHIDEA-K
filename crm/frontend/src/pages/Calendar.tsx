@@ -19,7 +19,6 @@ import { api } from '../api/client';
 import { useFetch } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { Skeleton, PageHeader, ErrorState, Modal } from '../components/ui';
-import { BrigadeLoad } from '../components/BrigadeLoad';
 import { TaskModal } from '../components/TaskModal';
 import { OrderModal } from '../components/OrderModal';
 import {
@@ -1407,18 +1406,6 @@ export function Calendar() {
             ? 'Нажмите на заказ или задачу, чтобы открыть карточку'
             : 'Нажмите на заказ, чтобы открыть его; задачи перетаскиваются'}
         </span>
-      </div>
-
-      {/*
-        Загрузка бригад за тот же период, что показан в календаре (ТЗ:
-        планирование): сколько людей уже занято в каждый день и куда они едут.
-        Так видно, на какой день можно ставить новый объект.
-      */}
-      <div className="mt-4">
-        <BrigadeLoad
-          from={dayKey(days[0])}
-          to={dayKey(days[days.length - 1])}
-        />
       </div>
 
       <OrderModal

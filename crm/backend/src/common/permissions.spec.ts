@@ -8,7 +8,9 @@ import {
   permissionsOf,
   seesAllTasks,
   seesFinance,
+  seesReports,
 } from './permissions';
+import { seesAll } from './decorators/current-user.decorator';
 
 /**
  * Права доступа — то место, где ошибка стоит дороже всего: либо сотрудник
@@ -38,6 +40,68 @@ const director = (o: Partial<AuthUser> = {}) =>
   user({ role: Role.DIRECTOR, ...o });
 const manager = (o: Partial<AuthUser> = {}) =>
   user({ role: Role.MANAGER, ...o });
+const supervisor = (o: Partial<AuthUser> = {}) =>
+  user({ role: Role.SUPERVISOR, ...o });
+
+/**
+ * Роль «Управляющий» — решение владельца: вся работа компании, кроме денег
+ * и раздачи доступов. Границу проверяем с обеих сторон: и что открыто, и что
+ * закрыто. Если кто-то добавит управляющему финансы или управление
+ * сотрудниками, эти тесты обязаны упасть.
+ */
+describe('Права: роль «Управляющий»', () => {
+  const OPEN: Permission[] = [
+    'tasks:all',
+    'ops:manage',
+    'services:manage',
+    'audit:view',
+    'checklists:manage',
+    'proposals:templates',
+  ];
+  const CLOSED: Permission[] = [
+    'finance:view',
+    'finance:manage',
+    'users:manage',
+    'trash:view',
+    'trash:purge',
+  ];
+
+  it.each(OPEN)('открыто: %s', (p) => {
+    expect(can(supervisor(), p)).toBe(true);
+  });
+
+  it.each(CLOSED)('закрыто: %s', (p) => {
+    expect(can(supervisor(), p)).toBe(false);
+  });
+
+  it('видит данные всей компании, а не только свои', () => {
+    expect(seesAll(supervisor())).toBe(true);
+  });
+
+  it('ведёт задачи всей компании', () => {
+    expect(seesAllTasks(supervisor())).toBe(true);
+  });
+
+  it('деньги компании закрыты', () => {
+    expect(seesFinance(supervisor())).toBe(false);
+  });
+
+  it('платёжные ведомости открыты — это его работа', () => {
+    expect(seesReports(supervisor())).toBe(true);
+  });
+
+  it('ведомости остаются даже с галочкой «без доступа к финансам»', () => {
+    expect(seesReports(supervisor({ noFinance: true }))).toBe(true);
+  });
+
+  it('корзина закрыта даже с личным флагом — он только для руководителя', () => {
+    expect(can(supervisor({ canSeeTrash: true }), 'trash:view')).toBe(false);
+  });
+
+  it('управление сотрудниками закрыто наглухо: иначе роль поднимут себе сами', () => {
+    expect(can(supervisor({ canManageOps: true }), 'users:manage')).toBe(false);
+  });
+});
 
 describe('Права: роль «Менеджер»', () => {
   const OPEN: Permission[] = [

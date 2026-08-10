@@ -1,8 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
-import { FunnelStage, Prisma } from '@prisma/client';
+import { FunnelStage, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatDate, formatDateTime } from '../common/time/dushanbe';
 import { AuditEntity } from '../audit/audit.types';
+import { ROLE_TITLE } from '../common/permissions';
 
 /**
  * Клиент Prisma или транзакция. purgeGuard вызывается и как самостоятельная
@@ -224,7 +225,7 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
     financial: false,
     title: (row) => row.fullName,
     subtitle: (row) =>
-      `${row.login} · ${row.role === 'DIRECTOR' ? 'Директор' : 'Менеджер'}`,
+      `${row.login} · ${ROLE_TITLE[row.role as Role] ?? 'Менеджер'}`,
     search: (term) => ({
       OR: [
         { fullName: containsInsensitive(term) },
