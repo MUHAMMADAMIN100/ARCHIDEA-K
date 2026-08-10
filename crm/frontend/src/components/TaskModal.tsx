@@ -9,6 +9,7 @@ import { Modal } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { DatePicker } from './DatePicker';
+import { formatDateTimeTz } from '../lib/date';
 import {
   PRIORITY_LABEL,
   PRIORITY_ORDER,
@@ -263,6 +264,18 @@ export function TaskModal({
       title={mode === 'create' ? 'Новая задача' : 'Задача'}
     >
       <div className="space-y-3">
+        {/*
+          Когда задачу поставили и кто. Стоит первой строкой и только у уже
+          существующей задачи: у новой создавать ещё нечего. Подпись «Создана»
+          не даёт спутать эту дату с полем «Дата» ниже — там срок выполнения.
+        */}
+        {mode === 'edit' && task && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-navy-50 px-3 py-2 text-xs text-navy-600">
+            <span>Создана {formatDateTimeTz(task.createdAt)}</span>
+            <span>Поставил: {task.creator.fullName}</span>
+          </div>
+        )}
+
         <div>
           <label className="label">Название *</label>
           <input

@@ -15,6 +15,7 @@ import {
   TASK_TYPE_LABEL,
   formatDate,
 } from '../lib/labels';
+import { formatDateTimeTz } from '../lib/date';
 import { formatPhone, phoneHref } from '../lib/contact';
 import { tempId, nowISO, withRetry } from '../lib/util';
 import { userManagesTasks } from '../types';
@@ -254,6 +255,14 @@ export function Tasks() {
                           {formatDate(t.deadline)}
                         </span>
                       )}
+                      {/*
+                        Когда задачу поставили. Слово «Создана» здесь
+                        обязательно: рядом стоит срок выполнения, и две голые
+                        даты в одной строке читались бы как одно и то же.
+                        Видно всем, кто видит задачу, — исполнителю знать,
+                        когда ему поручили, не менее важно, чем руководителю.
+                      */}
+                      <span>Создана {formatDateTimeTz(t.createdAt)}</span>
                       {canAssign && <span>Поставил: {t.creator.fullName}</span>}
                     </div>
                   </div>
