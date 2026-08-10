@@ -219,6 +219,21 @@ function EntriesTab() {
     { deps: [period.from, period.to] },
   );
 
+  /*
+   * За какой период посчитаны цифры сверху. Раньше в карточках стояло только
+   * «за период», а какой именно — приходилось искать глазами в фильтрах ниже.
+   * Период бывает любой (неделя, квартал, свои даты), поэтому пишем датами,
+   * а не названием месяца.
+   */
+  const periodLabel =
+    period.from && period.to
+      ? `${formatDateTz(period.from)} — ${formatDateTz(period.to)}`
+      : period.from
+        ? `с ${formatDateTz(period.from)}`
+        : period.to
+          ? `по ${formatDateTz(period.to)}`
+          : 'за всё время';
+
   const rows = data?.rows ?? [];
 
   const refreshAfterMutation = () => {
@@ -466,6 +481,7 @@ function EntriesTab() {
         <StatCard
           label="Доход за период"
           value={summary ? formatPrice(summary.income) : '—'}
+          hint={periodLabel}
           tone="positive"
           title="Из каких операций сложился доход"
           onClick={() =>
@@ -475,6 +491,7 @@ function EntriesTab() {
         <StatCard
           label="Расход за период"
           value={summary ? formatPrice(summary.expense) : '—'}
+          hint={periodLabel}
           tone="negative"
           title="Из каких операций сложился расход"
           onClick={() =>
@@ -484,6 +501,7 @@ function EntriesTab() {
         <StatCard
           label="Прибыль"
           value={summary ? formatPrice(summary.profit) : '—'}
+          hint={periodLabel}
           tone={summary && summary.profit < 0 ? 'negative' : 'positive'}
           title="Все операции периода: доход минус расход"
           onClick={() =>

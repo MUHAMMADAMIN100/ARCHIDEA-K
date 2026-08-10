@@ -400,61 +400,95 @@ export function Clients() {
   );
 }
 
+/** Что человек заполнил в форме нового клиента */
+export interface ClientDraftPayload {
+  fullName: string;
+  phone: string;
+  source: LeadSource;
+  managerId?: string;
+  /** постоянная скидка клиента в сомони */
+  discount?: number;
+  extraPhones?: string[];
+  sourceDetail?: string;
+  address?: string;
+  tags?: ClientTag[];
+}
+
 export function AddClientModal({
   onClose,
   onCreate,
   isDirector,
+  initial,
 }: {
   /** уже использованные теги — для подсказки при вводе */
   onClose: () => void;
   onCreate: (
-    payload: {
-      fullName: string;
-      phone: string;
-      source: LeadSource;
-      managerId?: string;
-      /** постоянная скидка клиента в сомони */
-      discount?: number;
-      extraPhones?: string[];
-      sourceDetail?: string;
-      address?: string;
-      tags?: ClientTag[];
-    },
+    payload: ClientDraftPayload,
     managerName: string | null,
     order: NewOrderInput | null,
   ) => void;
   isDirector: boolean;
+  /**
+   * Что было введено в прошлый раз.
+   *
+   * Нужно, когда сервер отказал: карточка уже исчезла с экрана, и форма
+   * открывается заново — заставлять человека набирать имя, телефон, адрес и
+   * метраж по второму разу нельзя.
+   */
+  initial?: {
+    payload: ClientDraftPayload;
+    managerName: string | null;
+    order: NewOrderInput | null;
+  };
 }) {
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [fullName, setFullName] = useState(initial?.payload.fullName ?? '');
+  const [phone, setPhone] = useState(initial?.payload.phone ?? '');
   // запасные номера «на всякий случай» (ТЗ 1.1)
   /*
     Два номера сразу: второй показывается пустым и обязателен к заполнению —
     так просил заказчик, чтобы база не оставалась с одним контактом.
   */
-  const [extraPhones, setExtraPhones] = useState<string[]>(['']);
+  const [extraPhones, setExtraPhones] = useState<string[]>(
+    initial?.payload.extraPhones?.length ? initial.payload.extraPhones : [''],
+  );
   // адрес объекта: спрашиваем один раз здесь, дальше он подставляется в заказы
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState(initial?.payload.address ?? '');
   // статусы клиента — те же, что в карточке; можно отметить несколько
-  const [tags, setTags] = useState<ClientTag[]>([]);
+  const [tags, setTags] = useState<ClientTag[]>(initial?.payload.tags ?? []);
   // свободные теги (ТЗ 1.2) — в дополнение к единственному статусу
   const [labelInput, setLabelInput] = useState('');
-  const [source, setSource] = useState<LeadSource>('CALL');
+  const [source, setSource] = useState<LeadSource>(
+    initial?.payload.source ?? 'CALL',
+  );
   // «От кого» — рекомендатель или партнёр (ТЗ 1.4)
-  const [sourceDetail, setSourceDetail] = useState('');
+  const [sourceDetail, setSourceDetail] = useState(
+    initial?.payload.sourceDetail ?? '',
+  );
   // постоянная скидка: подставляется в новые заказы клиента
-  const [discount, setDiscount] = useState('');
-  const [managerId, setManagerId] = useState('');
+  const [discount, setDiscount] = useState(
+    initial?.payload.discount ? String(initial.payload.discount) : '',
+  );
+  const [managerId, setManagerId] = useState(initial?.payload.managerId ?? '');
   // заявка в воронке
-  const [makeOrder, setMakeOrder] = useState(true);
+  const [makeOrder, setMakeOrder] = useState(
+    initial ? initial.order !== null : true,
+  );
   // ещё услуги в заявке (ТЗ 1.3): ключ + объём, цена подставится из справочника
   const [moreServices, setMoreServices] = useState<
     { key: string; qty: string }[]
   >([]);
-  const [serviceKey, setServiceKey] = useState('GENERAL');
-  const [dirtLevel, setDirtLevel] = useState<DirtLevel>('LIGHT');
-  const [area, setArea] = useState('');
-  const [seats, setSeats] = useState('');
+  const [serviceKey, setServiceKey] = useState(
+    initial?.order?.serviceKey ?? 'GENERAL',
+  );
+  const [dirtLevel, setDirtLevel] = useState<DirtLevel>(
+    initial?.order?.dirtLevel ?? 'LIGHT',
+  );
+  const [area, setArea] = useState(
+    initial?.order?.area ? String(initial.order.area) : '',
+  );
+  const [seats, setSeats] = useState(
+    initial?.order?.seats ? String(initial.order.seats) : '',
+  );
   const [price, setPrice] = useState('');
   // ТЗ 5: цена за единицу и автоматический расчёт суммы
   const [pricePerUnit, setPricePerUnit] = useState('');

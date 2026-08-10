@@ -15,7 +15,11 @@ import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { OrderModal } from '../components/OrderModal';
 import { formatPhone } from '../lib/contact';
-import { AddClientModal, type NewOrderInput } from './Clients';
+import {
+  AddClientModal,
+  type ClientDraftPayload,
+  type NewOrderInput,
+} from './Clients';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -27,9 +31,11 @@ import {
   TYPE_LABEL,
   formatPrice,
   formatVolume,
+  isLargeOrder,
   orderDue,
   orderTotal,
 } from '../lib/labels';
+import { nowISO, tempId } from '../lib/util';
 import { userSeesAll } from '../types';
 import type { BoardColumn, ClientTag, FunnelStage, Order } from '../types';
 
@@ -488,6 +494,15 @@ export function Funnel() {
   }, [data]);
   // «Добавить клиента» прямо из воронки — та же форма, что в «Клиентах»
   const [showAddClient, setShowAddClient] = useState(false);
+  /*
+   * Черновик формы нового клиента: держим его на случай отказа сервера,
+   * чтобы вернуть человеку всё введённое, а не пустые поля.
+   */
+  const [draft, setDraft] = useState<{
+    payload: ClientDraftPayload;
+    managerName: string | null;
+    order: NewOrderInput | null;
+  } | null>(null);
   // какой этап открыт в архиве (папка у заголовка колонки)
   const [archiveOf, setArchiveOf] = useState<FunnelStage | null>(null);
   // счётчик над колонкой — не просто число: по клику показываем сам список
@@ -1101,27 +1116,115 @@ export function Funnel() {
       {showAddClient && (
         <AddClientModal
           isDirector={canFilter}
-          onClose={() => setShowAddClient(false)}
-          onCreate={async (payload, _managerName, order: NewOrderInput | null) => {
-            try {
-              const client = (await api.post('/clients', payload)).data as {
-                id: string;
+          /* при отказе сервера возвращаем форму со всем, что было введено */
+          initial={draft ?? undefined}
+          onClose={() => {
+            setShowAddClient(false);
+            setDraft(null);
+          }}
+          onCreate={(payload, managerName, order: NewOrderInput | null) => {
+            /*
+             * Карточка встаёт в воронку СРАЗУ, до ответа сервера.
+             *
+             * Раньше форма закрывалась, а заявка появлялась только после
+             * полного перезапроса доски — секунды три на глаз. Человек в это
+             * время не понимал, сохранилось у него что-нибудь или нет.
+             */
+            setShowAddClient(false);
+            setDraft(null);
+
+            const tempOrderId = tempId();
+            const price = order
+              ? (order.finalPrice ?? order.estimatedPrice ?? 0)
+              : 0;
+            if (order) {
+              const card: Order = {
+                id: tempOrderId,
+                clientId: tempId(),
+                managerId: payload.managerId,
+                stage: 'NEW',
+                source: payload.source,
+                cleaningType: order.cleaningType,
+                serviceKey: order.serviceKey ?? null,
+                dirtLevel: order.dirtLevel ?? null,
+                area: order.area,
+                seats: order.seats ?? null,
+                address: order.address ?? payload.address,
+                estimatedPrice: order.estimatedPrice,
+                finalPrice: order.finalPrice ?? null,
+                isLarge: isLargeOrder({
+                  finalPrice: order.finalPrice ?? null,
+                  estimatedPrice: order.estimatedPrice,
+                }),
+                createdAt: nowISO(),
+                client: {
+                  id: '',
+                  fullName: payload.fullName,
+                  phone: payload.phone,
+                  tags: payload.tags ?? [],
+                },
+                manager: managerName
+                  ? { id: payload.managerId ?? '', fullName: managerName }
+                  : undefined,
+                cleaners: [],
               };
-              if (order) {
-                await api.post('/orders', {
-                  clientId: client.id,
-                  source: payload.source,
-                  managerId: payload.managerId,
-                  ...order,
-                });
-              }
-              reload();
-              toast.success(order ? 'Клиент и заявка созданы' : 'Клиент создан');
-            } catch (e: any) {
-              toast.error(
-                e?.response?.data?.message || 'Не удалось создать клиента',
+              setData((cols) =>
+                cols
+                  ? cols.map((c) =>
+                      c.stage === 'NEW'
+                        ? {
+                            ...c,
+                            orders: [card, ...c.orders],
+                            amount: (c.amount ?? 0) + price,
+                          }
+                        : c,
+                    )
+                  : cols,
               );
             }
+
+            void (async () => {
+              try {
+                const client = (await api.post('/clients', payload)).data as {
+                  id: string;
+                };
+                if (order) {
+                  await api.post('/orders', {
+                    clientId: client.id,
+                    source: payload.source,
+                    managerId: payload.managerId,
+                    ...order,
+                  });
+                }
+                toast.success(
+                  order ? 'Клиент и заявка созданы' : 'Клиент создан',
+                );
+                // тихая сверка: подменяем временную карточку настоящей
+                reload();
+              } catch (e: any) {
+                // карточку убираем и открываем форму заново — набранное цело
+                setData((cols) =>
+                  cols
+                    ? cols.map((c) =>
+                        c.stage === 'NEW'
+                          ? {
+                              ...c,
+                              orders: c.orders.filter(
+                                (o) => o.id !== tempOrderId,
+                              ),
+                              amount: Math.max(0, (c.amount ?? 0) - price),
+                            }
+                          : c,
+                      )
+                    : cols,
+                );
+                setDraft({ payload, managerName, order });
+                setShowAddClient(true);
+                toast.error(
+                  e?.response?.data?.message || 'Не удалось создать клиента',
+                );
+              }
+            })();
           }}
         />
       )}
