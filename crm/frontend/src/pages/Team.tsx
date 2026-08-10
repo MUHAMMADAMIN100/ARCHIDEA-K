@@ -12,7 +12,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { PhoneInput } from '../components/ContactFields';
 import { formatPhone, sanitizePersonName } from '../lib/contact';
@@ -97,10 +97,13 @@ export function Team() {
           }))
         : bs,
     );
-    toast.success('Клинер удалён');
-    api.delete(`/cleaners/${c.id}`).catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить клинера');
-      reloadAll(); // вернуть серверное состояние
+    await deleteRecord({
+      // список уже поправлен выше — возвращаем серверное состояние
+      remove: () => () => reloadAll(),
+      request: () => api.delete(`/cleaners/${c.id}`),
+      onDone: () => toast.success('Клинер удалён'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/cleaners', '/brigades'],
     });
   };
 

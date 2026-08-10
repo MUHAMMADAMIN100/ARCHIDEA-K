@@ -1,7 +1,7 @@
 import { useEffect, useState, type MutableRefObject } from 'react';
 import { Check, Trash2, Users } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord } from '../api/hooks';
 import { ClientPicker } from './ClientPicker';
 import { useAuth } from '../auth/AuthContext';
 import { userManagesTasks } from '../types';
@@ -238,11 +238,20 @@ export function TaskModal({
       danger: true,
     });
     if (!ok) return;
+    // окно закрываем сразу, задачу убираем из календаря сразу — а «удалена»
+    // говорим только после ответа сервера. Не ответил успехом — задача
+    // возвращается на место (onReload) и видно причину отказа.
     onDeleted(task.id);
     onClose();
-    // через background(): на время запроса поллинг на паузе, иначе фоновое
-    // обновление успело бы вернуть уже удалённую задачу обратно в календарь
-    background(api.delete(`/tasks/${task.id}`), 'Не удалось удалить задачу');
+    inFlightRef.current += 1;
+    await deleteRecord({
+      remove: () => () => onReload(),
+      request: () => api.delete(`/tasks/${task.id}`),
+      onDone: () => toast.success('Задача удалена'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/tasks'],
+    });
+    inFlightRef.current -= 1;
   };
 
   const canSubmit = title.trim().length > 0 && assigneeIds.length > 0;

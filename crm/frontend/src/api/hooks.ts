@@ -91,6 +91,118 @@ export function mutateCache<T>(url: string, updater: (prev: T) => T) {
   cache.set(url, updater(cache.get(url) as T));
 }
 
+/*
+ * ─────────── Защита от «удалённая запись вернулась» ───────────
+ *
+ * Экраны обновляются сами: по таймеру, при возврате на вкладку, по событию
+ * с сервера и просто при заходе в раздел. Такой запрос легко обгоняет ещё
+ * не дошедшее до сервера удаление — сервер честно отдаёт запись, которая на
+ * экране уже убрана, и она возвращается. Именно поэтому удалённая ведомость
+ * появлялась снова и исчезала только после обновления страницы.
+ *
+ * Поэтому пока идёт изменение данных, ответы на ЧТЕНИЕ не принимаются: они
+ * заведомо описывают состояние «до». Показанное на экране при этом не
+ * страдает — оно берётся из кэша, а свежее подтянется сразу после того, как
+ * сервер подтвердит изменение.
+ *
+ * Счётчик общий на всё приложение, потому что гонка бывает и между разными
+ * экранами: удаляют в карточке, а возвращает запись список, который в этот
+ * момент открывается.
+ */
+let mutationsInFlight = 0;
+let mutationGeneration = 0;
+
+/** Началось изменение данных */
+function beginMutation(): void {
+  mutationsInFlight += 1;
+  mutationGeneration += 1;
+}
+
+/** Изменение закончилось — успехом или отказом, неважно */
+function endMutation(): void {
+  mutationsInFlight = Math.max(0, mutationsInFlight - 1);
+  mutationGeneration += 1;
+}
+
+/**
+ * Устарел ли ответ на чтение, начатый при поколении `startedAt`.
+ *
+ * Устарел, если за время запроса что-то меняли или меняют прямо сейчас.
+ */
+function readIsStale(startedAt: number): boolean {
+  return mutationsInFlight > 0 || mutationGeneration !== startedAt;
+}
+
+/**
+ * Убрать запись из списка на экране. Возвращает функцию возврата на место —
+ * ею пользуется `deleteRecord`, если сервер удалять отказался.
+ */
+export function removeFrom<T>(
+  setData: (updater: Updater<T>) => void,
+  apply: (prev: T | null) => T | null,
+): () => void {
+  let previous: T | null = null;
+  setData((prev) => {
+    previous = prev;
+    return apply(prev);
+  });
+  return () => setData(previous);
+}
+
+/**
+ * То же для списка, который сейчас не на экране, но лежит в кэше: удаляем
+ * ведомость в её карточке — строка должна исчезнуть и в списке ведомостей.
+ */
+export function removeFromCache<T>(
+  url: string,
+  apply: (prev: T) => T,
+): () => void {
+  if (!cache.has(url)) return () => {};
+  const previous = cache.get(url) as T;
+  cache.set(url, apply(previous));
+  return () => cache.set(url, previous);
+}
+
+/**
+ * Удаление записи — единое правило на весь проект.
+ *
+ * С экрана запись убирается сразу: ждать сеть, чтобы увидеть результат
+ * своего нажатия, человек не должен. А вот НАДПИСЬ «удалено» появляется
+ * только после ответа сервера — раньше она показывалась сразу и врала:
+ * сервер мог отказать (ведомость уже отправлена, у клиента есть заказы), а
+ * человек уже прочитал «удалено» и уходил. Если сервер отказал, запись
+ * встаёт на место и видно причину.
+ */
+export async function deleteRecord(opts: {
+  /** убрать запись с экрана; вернуть функцию возврата на случай отказа */
+  remove: () => (() => void) | void;
+  /** сам запрос удаления */
+  request: () => Promise<unknown>;
+  /** сообщить об успехе — после подтверждения сервера */
+  onDone?: () => void;
+  /** сообщить об отказе с причиной от сервера */
+  onFail: (message: string) => void;
+  /** разделы, которые после удаления надо перечитать */
+  refresh?: string[];
+}): Promise<boolean> {
+  beginMutation();
+  const undo = opts.remove();
+  try {
+    await opts.request();
+    endMutation();
+    if (opts.refresh?.length) refreshResources(opts.refresh);
+    opts.onDone?.();
+    return true;
+  } catch (e: any) {
+    undo?.();
+    endMutation();
+    opts.onFail(
+      e?.response?.data?.message || 'Не удалось удалить. Попробуйте ещё раз',
+    );
+    return false;
+  }
+}
+
 /**
  * Сбросить кэш по префиксу адреса — данные подтянутся заново при следующем заходе.
  *
@@ -179,6 +291,24 @@ export function applyLiveChange(resource: string): void {
   }
 }
 
+/**
+ * Забыть кэш указанных разделов и попросить открытые экраны перечитать их.
+ *
+ * Нужно сразу после изменения данных: пока оно шло, ответы на чтение не
+ * принимались (см. readIsStale), поэтому кто-то мог остаться со старым
+ * списком. Здесь мы честно догоняем состояние сервера.
+ */
+export function refreshResources(prefixes: string[]): void {
+  for (const prefix of prefixes) {
+    invalidate(prefix);
+    for (const [key, set] of liveListeners) {
+      if (key.startsWith(prefix) || prefix.startsWith(key)) {
+        for (const fn of set) fn();
+      }
+    }
+  }
+}
+
 export function invalidate(prefix: string) {
   for (const key of [...cache.keys()]) {
     if (key.startsWith(prefix)) cache.delete(key);
@@ -242,6 +372,7 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
         setLoading(true);
       }
       const gen = dataGenRef.current;
+      const globalGen = mutationGeneration;
       try {
         const res = await api.get<T>(url);
         // отставший ответ: между стартом запроса и его завершением произошла
@@ -249,6 +380,13 @@ export function useFetch<T>(url: string | null, opts: Options = {}) {
         // Проверяем для ЛЮБОЙ загрузки (не только фоновой): первичная
         // тоже может завершиться уже после действия пользователя.
         if (dataGenRef.current !== gen) return;
+        /*
+         * То же, но про изменения на ДРУГИХ экранах: пока шло удаление,
+         * сервер ещё отдавал удаляемую запись. Принять такой ответ значит
+         * вернуть её на экран. Отказываемся от него, только если человеку
+         * есть что показать из кэша — пустой экран так не оставим.
+         */
+        if (readIsStale(globalGen) && cache.has(url)) return;
         /*
          * Пустое тело ответа приводим к null.
          *

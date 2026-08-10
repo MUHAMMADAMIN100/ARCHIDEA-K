@@ -11,7 +11,12 @@ import {
   Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { invalidateOrderRelated, useFetch } from '../api/hooks';
+import {
+  deleteRecord,
+  invalidateOrderRelated,
+  removeFromCache,
+  useFetch,
+} from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesAll } from '../types';
 import {
@@ -348,12 +353,19 @@ export function ClientCard() {
       danger: true,
     });
     if (!ok) return;
-    // оптимистично: сразу уходим к списку, удаление — в фоне
-    // (список сам подтянет актуальные данные тихим рефетчем)
-    toast.success('Клиент перемещён в корзину');
+    // к списку уходим сразу, а «перемещён в корзину» скажем только после
+    // подтверждения сервера: у клиента могут быть незакрытые заказы, и тогда
+    // он останется на месте — врать об удалении в такой момент нельзя
     navigate('/clients');
-    withRetry(() => api.delete(`/clients/${data.id}`)).catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить клиента');
+    await deleteRecord({
+      remove: () =>
+        removeFromCache<Client[]>('/clients', (prev) =>
+          prev.filter((x) => x.id !== data.id),
+        ),
+      request: () => withRetry(() => api.delete(`/clients/${data.id}`)),
+      onDone: () => toast.success('Клиент перемещён в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/clients', '/orders'],
     });
   };
 

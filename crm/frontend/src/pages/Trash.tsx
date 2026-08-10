@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
-import { invalidate, useFetch } from '../api/hooks';
+import { deleteRecord, invalidate, removeFrom, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
@@ -189,26 +189,31 @@ export function Trash() {
     if (!ok) return;
 
     setBusy(key, true);
-    list.setData((prev) =>
-      prev
-        ? { rows: prev.rows.filter((r) => rowKey(r) !== key), total: Math.max(0, prev.total - 1) }
-        : prev,
-    );
-    bumpCount(item.type, -1);
-    try {
-      await api.delete(`/trash/${item.type}/${item.id}`);
-      toast.success(`«${item.title}» удалено безвозвратно`);
-      invalidate('/trash');
-      AFFECTED_PREFIXES[item.type].forEach(invalidate);
-    } catch (e: any) {
-      list.setData((prev) =>
-        prev ? { rows: [item, ...prev.rows], total: prev.total + 1 } : prev,
-      );
-      bumpCount(item.type, 1);
-      toast.error(e?.response?.data?.message || 'Не удалось удалить запись');
-    } finally {
-      setBusy(key, false);
-    }
+    await deleteRecord({
+      remove: () => {
+        const back = removeFrom(list.setData, (prev) =>
+          prev
+            ? {
+                rows: prev.rows.filter((r) => rowKey(r) !== key),
+                total: Math.max(0, prev.total - 1),
+              }
+            : prev,
+        );
+        bumpCount(item.type, -1);
+        return () => {
+          back();
+          bumpCount(item.type, 1);
+        };
+      },
+      request: () => api.delete(`/trash/${item.type}/${item.id}`),
+      onDone: () => {
+        toast.success(`«${item.title}» удалено безвозвратно`);
+        invalidate('/trash');
+        AFFECTED_PREFIXES[item.type].forEach(invalidate);
+      },
+      onFail: (m) => toast.error(m),
+    });
+    setBusy(key, false);
   };
 
   /** Массовая очистка текущей вкладки (или всей корзины на вкладке «Все») */
@@ -225,22 +230,31 @@ export function Trash() {
     const params = new URLSearchParams({ confirm: 'true' });
     if (activeTab !== 'all') params.set('type', activeTab);
 
-    try {
-      const res = await api.delete<{ deleted: Record<TrashType, number>; total: number }>(
-        `/trash?${params.toString()}`,
-      );
-      toast.success(
-        res.data.total > 0
-          ? `Безвозвратно удалено записей: ${res.data.total}`
-          : 'Очищать было нечего — корзина уже пуста',
-      );
-      invalidate('/trash');
-      const types = activeTab === 'all' ? ALL_TRASH_TYPES : [activeTab];
-      types.forEach((t) => AFFECTED_PREFIXES[t].forEach(invalidate));
-      reloadAll();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось очистить корзину');
-    }
+    let purged = 0;
+    await deleteRecord({
+      // список чистим не заранее: очистка идёт пачкой, и сколько записей
+      // сервер действительно снёс, известно только из его ответа
+      remove: () => undefined,
+      request: async () => {
+        const res = await api.delete<{
+          deleted: Record<TrashType, number>;
+          total: number;
+        }>(`/trash?${params.toString()}`);
+        purged = res.data.total;
+      },
+      onDone: () => {
+        toast.success(
+          purged > 0
+            ? `Безвозвратно удалено записей: ${purged}`
+            : 'Очищать было нечего — корзина уже пуста',
+        );
+        invalidate('/trash');
+        const types = activeTab === 'all' ? ALL_TRASH_TYPES : [activeTab];
+        types.forEach((t) => AFFECTED_PREFIXES[t].forEach(invalidate));
+        reloadAll();
+      },
+      onFail: (m) => toast.error(m),
+    });
   };
 
   const tabItems = [

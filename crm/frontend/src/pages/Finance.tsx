@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { Gift, Link2, Pencil, Plus, Search, Trash2, Wallet, X } from 'lucide-react';
 import { api } from '../api/client';
-import { invalidate, useFetch } from '../api/hooks';
+import { deleteRecord, invalidate, removeFrom, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
@@ -325,18 +325,22 @@ function EntriesTab() {
     });
     if (!ok) return;
 
-    setData((prev) =>
-      prev ? { ...prev, rows: prev.rows.filter((r) => r.id !== entry.id), total: prev.total - 1 } : prev,
-    );
-    toast.success('Операция перенесена в корзину');
-    try {
-      await withRetry(() => api.delete(`/finance/${entry.id}`));
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить операцию');
-      reload(); // вернуть серверное состояние
-    } finally {
-      refreshAfterMutation();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (prev) =>
+          prev
+            ? {
+                ...prev,
+                rows: prev.rows.filter((r) => r.id !== entry.id),
+                total: prev.total - 1,
+              }
+            : prev,
+        ),
+      request: () => withRetry(() => api.delete(`/finance/${entry.id}`)),
+      onDone: () => toast.success('Операция перенесена в корзину'),
+      onFail: (m) => toast.error(m),
+    });
+    refreshAfterMutation();
   };
 
   const footIncome = rows.filter((r) => r.kind === 'INCOME').reduce((s, r) => s + r.amount, 0);
@@ -1246,16 +1250,16 @@ function BonusesTab() {
     });
     if (!ok) return;
 
-    setData((list) => (list ? list.filter((b) => b.id !== bonus.id) : list));
-    toast.success('Премия перенесена в корзину');
-    try {
-      await withRetry(() => api.delete(`/bonuses/${bonus.id}`));
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить премию');
-      reload();
-    } finally {
-      refreshAfterMutation();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) =>
+          list ? list.filter((b) => b.id !== bonus.id) : list,
+        ),
+      request: () => withRetry(() => api.delete(`/bonuses/${bonus.id}`)),
+      onDone: () => toast.success('Премия перенесена в корзину'),
+      onFail: (m) => toast.error(m),
+    });
+    refreshAfterMutation();
   };
 
   const columns: Column<Bonus>[] = [

@@ -3,7 +3,7 @@ import { Bell, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
-import { invalidateOrderRelated, useFetch } from '../api/hooks';
+import { deleteRecord, invalidateOrderRelated, useFetch } from '../api/hooks';
 import { Modal, Badge, Spinner, ErrorState, EmptyState, Skeleton } from './ui';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
@@ -731,15 +731,19 @@ export function OrderModal({
       danger: true,
     });
     if (!ok) return;
+    // из воронки заказ убираем сразу, окно закрываем сразу; «в корзине»
+    // сообщаем после подтверждения сервера, а при отказе возвращаем заказ
     onDeleted?.(order.id);
     onClose();
-    try {
-      await withRetry(() => api.delete(`/orders/${order.id}`));
-      onUpdated();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить заказ');
-      onUpdated();
-    }
+    await deleteRecord({
+      remove: () => () => onUpdated(),
+      request: () => withRetry(() => api.delete(`/orders/${order.id}`)),
+      onDone: () => {
+        toast.success('Заказ перемещён в корзину');
+        onUpdated();
+      },
+      onFail: (m) => toast.error(m),
+    });
   };
 
   /** CleanerPicker отдаёт целиком новый набор id — не «переключение одного» */

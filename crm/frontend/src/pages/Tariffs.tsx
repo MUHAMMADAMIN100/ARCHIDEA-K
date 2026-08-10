@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
 import { Skeleton, PageHeader, Modal, Badge, ErrorState } from '../components/ui';
@@ -271,14 +271,16 @@ export function Tariffs() {
       danger: true,
     });
     if (!ok) return;
-    setData((d) => (d ? { ...d, tariffs: d.tariffs.filter((x) => x.key !== t.key) } : d));
-    try {
-      await api.delete(`/tariffs/tariff/${t.key}`);
-      toast.success('Услуга перенесена в корзину');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить услугу');
-      reload();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (d) =>
+          d ? { ...d, tariffs: d.tariffs.filter((x) => x.key !== t.key) } : d,
+        ),
+      request: () => api.delete(`/tariffs/tariff/${t.key}`),
+      onDone: () => toast.success('Услуга перенесена в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/tariffs'],
+    });
   };
 
   const removeExtra = async (e: ExtraService) => {
@@ -289,14 +291,16 @@ export function Tariffs() {
       danger: true,
     });
     if (!ok) return;
-    setData((d) => (d ? { ...d, extras: d.extras.filter((x) => x.key !== e.key) } : d));
-    try {
-      await api.delete(`/tariffs/extra/${e.key}`);
-      toast.success('Доп. услуга перенесена в корзину');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Не удалось удалить доп. услугу');
-      reload();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (d) =>
+          d ? { ...d, extras: d.extras.filter((x) => x.key !== e.key) } : d,
+        ),
+      request: () => api.delete(`/tariffs/extra/${e.key}`),
+      onDone: () => toast.success('Доп. услуга перенесена в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/tariffs'],
+    });
   };
 
   return (
@@ -687,12 +691,15 @@ function BanksSection() {
       danger: true,
     });
     if (!ok) return;
-    try {
-      await api.delete(`/banks/${b.id}`);
-      reload();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить банк');
-    }
+    await deleteRecord({
+      remove: () => undefined,
+      request: () => api.delete(`/banks/${b.id}`),
+      onDone: () => {
+        toast.success('Банк удалён');
+        reload();
+      },
+      onFail: (m) => toast.error(m),
+    });
   };
 
   return (

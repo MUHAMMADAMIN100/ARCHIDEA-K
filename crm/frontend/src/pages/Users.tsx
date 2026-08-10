@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ShieldCheck, UserRound, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord, removeFrom } from '../api/hooks';
 import {
   SkeletonCards,
   PageHeader,
@@ -33,14 +33,16 @@ export function UsersPage() {
       danger: true,
     });
     if (!ok) return;
-    setData((list) => (list ? list.filter((x) => x.id !== u.id) : list));
-    try {
-      await withRetry(() => api.delete(`/users/${u.id}`));
-      toast.success('Сотрудник удалён');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить сотрудника');
-      reload();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) =>
+          list ? list.filter((x) => x.id !== u.id) : list,
+        ),
+      request: () => withRetry(() => api.delete(`/users/${u.id}`)),
+      onDone: () => toast.success('Сотрудник удалён'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/users'],
+    });
   };
 
   const toggleActive = async (id: string, isActive: boolean) => {

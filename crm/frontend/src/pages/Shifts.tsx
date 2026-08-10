@@ -12,7 +12,12 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch, invalidate } from '../api/hooks';
+import {
+  useFetch,
+  invalidate,
+  deleteRecord,
+  removeFrom,
+} from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { SkeletonList, PageHeader, Modal, EmptyState, ErrorState, Badge } from '../components/ui';
 import { useToast } from '../components/Toast';
@@ -275,11 +280,15 @@ function ShiftGroupsSection({ canManage }: { canManage: boolean }) {
     });
     if (!ok) return;
 
-    setData((list) => (list ? list.filter((g) => g.id !== group.id) : list));
-    toast.success('Выезд перемещён в корзину');
-    withRetry(() => api.delete(`/shift-groups/${group.id}`)).catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить выезд');
-      reload();
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) =>
+          list ? list.filter((g) => g.id !== group.id) : list,
+        ),
+      request: () => withRetry(() => api.delete(`/shift-groups/${group.id}`)),
+      onDone: () => toast.success('Выезд перемещён в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/shift-groups', '/payroll'],
     });
   };
 
@@ -1496,11 +1505,15 @@ function FinesSection() {
       danger: true,
     });
     if (!ok) return;
-    setFines((list) => (list ? list.filter((x) => x.id !== f.id) : list));
-    toast.success('Штраф удалён');
-    api.delete(`/payroll/fines/${f.id}`).catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить штраф');
-      reload();
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setFines, (list) =>
+          list ? list.filter((x) => x.id !== f.id) : list,
+        ),
+      request: () => api.delete(`/payroll/fines/${f.id}`),
+      onDone: () => toast.success('Штраф удалён'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/payroll'],
     });
   };
 

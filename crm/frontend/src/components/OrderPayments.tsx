@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
+import { deleteRecord } from '../api/hooks';
 import { useToast } from './Toast';
 import { useDialog } from './Dialog';
 import { formatPrice } from '../lib/labels';
@@ -193,14 +194,16 @@ export function OrderPayments({
     });
     if (!ok) return;
     setBusyId(p.id);
-    try {
-      await api.delete(`/orders/${orderId}/payments/${p.id}`);
-      onChanged();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить взнос');
-    } finally {
-      setBusyId(null);
-    }
+    await deleteRecord({
+      remove: () => undefined,
+      request: () => api.delete(`/orders/${orderId}/payments/${p.id}`),
+      onDone: () => {
+        toast.success('Взнос удалён');
+        onChanged();
+      },
+      onFail: (m) => toast.error(m),
+    });
+    setBusyId(null);
   }
 
   return (

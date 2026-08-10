@@ -11,7 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch, invalidate } from '../api/hooks';
+import { useFetch, invalidate, deleteRecord } from '../api/hooks';
 import { Spinner, Badge, ErrorState } from '../components/ui';
 import { PrintSheet } from '../components/common';
 import { COMPANY } from '../lib/company';
@@ -128,14 +128,16 @@ export function OfferView() {
       danger: true,
     });
     if (!ok) return;
-    try {
-      await api.delete(`/proposals/${p.id}`);
-      toast.success('КП перенесено в корзину');
-      invalidate('/proposals');
-      navigate('/offers', { replace: true });
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить КП');
-    }
+    await deleteRecord({
+      remove: () => undefined,
+      request: () => api.delete(`/proposals/${p.id}`),
+      onDone: () => {
+        toast.success('КП перенесено в корзину');
+        navigate('/offers', { replace: true });
+      },
+      onFail: (m) => toast.error(m),
+      refresh: ['/proposals'],
+    });
   };
 
   const copyText = async () => {

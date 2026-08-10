@@ -11,7 +11,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch, invalidate } from '../api/hooks';
+import { useFetch, invalidate, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
@@ -227,15 +227,14 @@ function ProposalsTab() {
       danger: true,
     });
     if (!ok) return;
-    const prevList = data;
-    setData((list) => list?.filter((x) => x.id !== p.id) ?? list);
-    toast.success('КП перенесено в корзину');
-    try {
-      await api.delete(`/proposals/${p.id}`);
-    } catch (e: any) {
-      setData(prevList ?? null);
-      toast.error(e?.response?.data?.message || 'Не удалось удалить КП');
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) => list?.filter((x) => x.id !== p.id) ?? list),
+      request: () => api.delete(`/proposals/${p.id}`),
+      onDone: () => toast.success('КП перенесено в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/proposals'],
+    });
   };
 
   const columns: Column<Proposal>[] = [
@@ -923,15 +922,14 @@ function TemplatesTab() {
       danger: true,
     });
     if (!ok) return;
-    const prev = data;
-    setData((list) => list?.filter((x) => x.id !== t.id) ?? list);
-    toast.success('Шаблон перенесён в корзину');
-    try {
-      await api.delete(`/proposal-templates/${t.id}`);
-    } catch (e: any) {
-      setData(prev ?? null);
-      toast.error(e?.response?.data?.message || 'Не удалось удалить шаблон');
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) => list?.filter((x) => x.id !== t.id) ?? list),
+      request: () => api.delete(`/proposal-templates/${t.id}`),
+      onDone: () => toast.success('Шаблон перенесён в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/proposal-templates'],
+    });
   };
 
   if (error && !data) return <ErrorState text={error ?? undefined} onRetry={reload} />;

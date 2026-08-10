@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, CheckCircle2, ClipboardList, Plus, X } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Badge, EmptyState, ErrorState, Skeleton } from './ui';
 import { useDialog } from './Dialog';
@@ -262,18 +262,17 @@ export function OrderChecklistCard({
     });
     if (!ok) return;
     const baseStatus = checklist.status;
-    setData((prev) => {
-      if (!prev) return prev;
-      const items = prev.items.filter((i) => i.id !== item.id);
-      return { ...prev, items, status: recalcStatus(baseStatus, items) };
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (prev) => {
+          if (!prev) return prev;
+          const items = prev.items.filter((i) => i.id !== item.id);
+          return { ...prev, items, status: recalcStatus(baseStatus, items) };
+        }),
+      request: () => api.delete(`/orders/${orderId}/checklist/items/${item.id}`),
+      onFail: (m) => toast.error(m),
     });
-    try {
-      await api.delete(`/orders/${orderId}/checklist/items/${item.id}`);
-      reload();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить пункт');
-      reload();
-    }
+    reload();
   };
 
   const complete = async () => {

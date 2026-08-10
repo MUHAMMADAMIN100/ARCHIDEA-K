@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { SkeletonList, PageHeader, Badge, EmptyState } from '../components/ui';
 import { useToast } from '../components/Toast';
@@ -109,13 +109,16 @@ export function Tasks() {
 
   // оптимистично: убираем задачу сразу (с повтором при разовом сбое)
   const remove = async (id: string) => {
-    setData((tasks) => (tasks ? tasks.filter((t) => t.id !== id) : tasks));
-    try {
-      await withRetry(() => api.delete(`/tasks/${id}`));
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить задачу');
-      reload();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (tasks) =>
+          tasks ? tasks.filter((t) => t.id !== id) : tasks,
+        ),
+      request: () => withRetry(() => api.delete(`/tasks/${id}`)),
+      onDone: () => toast.success('Задача удалена'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/tasks'],
+    });
   };
 
   // оптимистично: задача появляется в списке сразу

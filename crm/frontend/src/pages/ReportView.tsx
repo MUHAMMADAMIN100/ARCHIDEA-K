@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { COMPANY, companyContacts } from '../lib/company';
-import { useFetch, mutateCache } from '../api/hooks';
+import { useFetch, deleteRecord, removeFromCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, Badge } from '../components/ui';
 import { ScrollArea } from '../components/ScrollArea';
@@ -112,15 +112,19 @@ export function ReportView() {
       danger: true,
     });
     if (!ok) return;
-    // оптимистично: убираем из кэша списка и сразу уходим на список,
-    // запрос удаления — в фоне; при ошибке покажем toast (поллинг вернёт отчёт)
-    mutateCache<Report[]>('/reports', (prev) =>
-      prev.filter((x) => x.id !== r.id),
-    );
-    toast.success('Отчёт удалён');
+    // из списка убираем сразу и сразу же уходим на него — ждать сеть
+    // человеку незачем. Но «удалён» скажем только когда сервер подтвердит:
+    // он вправе отказать, и тогда отчёт вернётся в список на своё место.
     navigate('/reports', { replace: true });
-    api.delete(`/reports/${r.id}`).catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить отчёт');
+    await deleteRecord({
+      remove: () =>
+        removeFromCache<Report[]>('/reports', (prev) =>
+          prev.filter((x) => x.id !== r.id),
+        ),
+      request: () => api.delete(`/reports/${r.id}`),
+      onDone: () => toast.success('Отчёт удалён'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/reports', '/finance'],
     });
   };
 

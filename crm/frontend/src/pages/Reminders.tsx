@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PhoneCall, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, Badge } from '../components/ui';
 import { useToast } from '../components/Toast';
@@ -105,13 +105,16 @@ export function Reminders() {
       danger: true,
     });
     if (!ok) return;
-    setData((list) => (list ? list.filter((x) => x.id !== r.id) : list));
-    try {
-      await withRetry(() => api.delete(`/reminders/${r.id}`));
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить напоминание');
-      reload();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) =>
+          list ? list.filter((x) => x.id !== r.id) : list,
+        ),
+      request: () => withRetry(() => api.delete(`/reminders/${r.id}`)),
+      onDone: () => toast.success('Напоминание перенесено в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/reminders'],
+    });
   };
 
   const columns: Column<Reminder>[] = [

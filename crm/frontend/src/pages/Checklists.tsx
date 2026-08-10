@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, ClipboardList, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
-import { useFetch } from '../api/hooks';
+import { useFetch, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Badge, Modal, PageHeader } from '../components/ui';
 import { DataTable, type Column } from '../components/common';
@@ -128,14 +128,16 @@ export function Checklists() {
       danger: true,
     });
     if (!ok) return;
-    setData((list) => (list ? list.filter((x) => x.id !== t.id) : list));
-    try {
-      await api.delete(`/checklist-templates/${t.id}`);
-      toast.success('Шаблон перемещён в корзину');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось удалить шаблон');
-      reload();
-    }
+    await deleteRecord({
+      remove: () =>
+        removeFrom(setData, (list) =>
+          list ? list.filter((x) => x.id !== t.id) : list,
+        ),
+      request: () => api.delete(`/checklist-templates/${t.id}`),
+      onDone: () => toast.success('Шаблон перемещён в корзину'),
+      onFail: (m) => toast.error(m),
+      refresh: ['/checklist-templates'],
+    });
   };
 
   const columns: Column<ChecklistTemplate>[] = [
