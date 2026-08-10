@@ -9,7 +9,12 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { COMPANY, companyContacts } from '../lib/company';
-import { useFetch, deleteRecord, removeFromCache } from '../api/hooks';
+import {
+  useFetch,
+  deleteRecord,
+  mutateCache,
+  removeFromCache,
+} from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Spinner, Badge } from '../components/ui';
 import { ScrollArea } from '../components/ScrollArea';
