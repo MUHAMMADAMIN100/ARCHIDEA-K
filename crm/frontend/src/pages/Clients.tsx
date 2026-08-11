@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Download, Repeat2, X } from 'lucide-react';
+import { Plus, Download, Repeat2, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
@@ -62,6 +62,8 @@ export interface NewOrderInput {
   finalPrice?: number;
   /** Адрес объекта — тот же, что записан в карточке клиента */
   address?: string;
+  /** Свои доп. услуги строками — как в карточке заказа; в счёт идут отмеченные */
+  customExtras?: { title: string; price: number; checked: boolean }[];
 }
 
 export function Clients() {
@@ -477,6 +479,21 @@ export function AddClientModal({
   const [moreServices, setMoreServices] = useState<
     { key: string; qty: string }[]
   >([]);
+  /*
+   * Свои доп. услуги строками — тот же блок, что в карточке заказа: название,
+   * цена, галочка «в счёт». Раньше их можно было дописать только ПОСЛЕ
+   * создания, открыв заказ заново, — то есть цену клиенту называли без них.
+   */
+  const [extraRows, setExtraRows] = useState<
+    { key: string; title: string; price: string; checked: boolean }[]
+  >(
+    (initial?.order?.customExtras ?? []).map((r, i) => ({
+      key: `e${i}`,
+      title: r.title,
+      price: r.price ? String(r.price) : '',
+      checked: r.checked,
+    })),
+  );
   const [serviceKey, setServiceKey] = useState(
     initial?.order?.serviceKey ?? 'GENERAL',
   );
@@ -573,7 +590,13 @@ export function AddClientModal({
     };
   });
   const moreSum = moreRows.reduce((sum, r) => sum + r.total, 0);
-  const computed = units * unitPrice + moreSum;
+  // доп. услуги: в счёт идут только отмеченные — ровно как в карточке заказа
+  const extrasSum = extraRows.reduce(
+    (sum, r) =>
+      sum + (r.checked ? Math.max(0, Math.round(Number(r.price) || 0)) : 0),
+    0,
+  );
+  const computed = units * unitPrice + moreSum + extrasSum;
 
   useEffect(() => {
     if (!manualPrice) setPrice(computed ? String(computed) : '');
@@ -618,6 +641,18 @@ export function AddClientModal({
           additionalServices: moreRows
             .filter((r) => r.qtyN > 0)
             .map((r) => ({ key: r.key, qty: r.qtyN })),
+          /*
+           * Строки без названия не отправляем: пустую строку человек скорее
+           * всего добавил и бросил, а сервер бы её честно сохранил, и в
+           * карточке заказа висела бы безымянная услуга.
+           */
+          customExtras: extraRows
+            .filter((r) => r.title.trim())
+            .map((r) => ({
+              title: r.title.trim(),
+              price: Math.max(0, Math.round(Number(r.price) || 0)),
+              checked: r.checked,
+            })),
           dirtLevel: hasLevels ? dirtLevel : undefined,
           area: isFurniture ? 0 : toInt(area),
           seats: isFurniture ? toInt(seats) : undefined,
@@ -942,6 +977,118 @@ export function AddClientModal({
             </div>
 
             {/*
+              Доп. услуги — тот же блок, что в карточке заказа (просьба
+              владельца: «вот такой»). Строки свободные: название и цена,
+              галочка решает, идёт ли строка в счёт, корзинка убирает.
+            */}
+            <div className="space-y-3 rounded-xl border border-navy-100 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-navy-800">
+                  Доп. услуги
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-navy-600">
+                    {extrasSum > 0 ? formatPrice(extrasSum) : 'не добавлены'}
+                  </span>
+                  <button
+                    type="button"
+                    className="press flex h-7 w-7 items-center justify-center rounded-lg border border-navy-200 bg-white text-navy-600 hover:bg-navy-50"
+                    aria-label="Добавить доп. услугу"
+                    title="Добавить доп. услугу"
+                    onClick={() =>
+                      setExtraRows((prev) => [
+                        ...prev,
+                        {
+                          key: `e${Date.now()}_${prev.length}`,
+                          title: '',
+                          price: '',
+                          checked: true,
+                        },
+                      ])
+                    }
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {extraRows.length === 0 && (
+                <p className="text-xs text-navy-600">
+                  Пока не добавлены. Нажмите «плюс», чтобы вписать свою услугу
+                  и её цену.
+                </p>
+              )}
+
+              <div className="space-y-1.5">
+                {extraRows.map((r, i) => (
+                  <div
+                    key={r.key}
+                    className={`flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-2 ${
+                      r.checked
+                        ? 'border-brand-400 bg-brand-50/60'
+                        : 'border-navy-100'
+                    }`}
+                  >
+                    <input
+                      className="input input-sm min-w-0 flex-1"
+                      value={r.title}
+                      placeholder="Название услуги"
+                      maxLength={120}
+                      onChange={(ev) =>
+                        setExtraRows((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, title: ev.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label="Название доп. услуги"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      className="input input-sm w-24 shrink-0"
+                      value={r.price}
+                      placeholder="Цена"
+                      onChange={(ev) =>
+                        setExtraRows((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, price: ev.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label="Цена доп. услуги"
+                    />
+                    {/* галочка: включить строку в сумму заявки */}
+                    <input
+                      type="checkbox"
+                      checked={r.checked}
+                      onChange={(ev) =>
+                        setExtraRows((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, checked: ev.target.checked } : x,
+                          ),
+                        )
+                      }
+                      className="h-4 w-4 shrink-0 accent-brand-600"
+                      aria-label="Включить в сумму заявки"
+                      title="Включить в сумму заявки"
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg p-1 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                      aria-label="Удалить услугу"
+                      onClick={() =>
+                        setExtraRows((prev) => prev.filter((_, j) => j !== i))
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/*
               Скидка стоит рядом с итогом (решение владельца): раньше она
               была в самом верху формы, среди контактов, и её задавали
               вслепую — не видя суммы, из которой она вычитается.
@@ -1003,10 +1150,23 @@ export function AddClientModal({
                               {r.total} сомони
                             </span>
                           ))}
-                        {moreSum > 0 && (
+                        {extraRows
+                          .filter(
+                            (r) =>
+                              r.checked && Math.round(Number(r.price) || 0) > 0,
+                          )
+                          .map((r, i) => (
+                            <span key={`x${i}`} className="block">
+                              {r.title.trim() || 'Доп. услуга'}:{' '}
+                              {Math.round(Number(r.price) || 0)} сомони
+                            </span>
+                          ))}
+                        {(moreSum > 0 || extrasSum > 0) && (
                           <span className="block font-semibold text-navy-800">
-                            Итого: {units * unitPrice} + {moreSum} = {computed}{' '}
-                            сомони
+                            Итого: {[units * unitPrice, moreSum, extrasSum]
+                              .filter((n) => n > 0)
+                              .join(' + ')}{' '}
+                            = {computed} сомони
                           </span>
                         )}
                       </span>

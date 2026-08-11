@@ -1253,6 +1253,30 @@ export function Funnel() {
 // ───────────── Расшифровка счётчика над колонкой ─────────────
 
 /**
+ * Статусы клиента в строке списка — те же метки, что на карточках воронки.
+ *
+ * В расшифровке этапа и в архиве имя стояло голым: чтобы узнать, что «Шукрона»
+ * — VIP, приходилось открывать карточку. Статус — то, по чему решают, как
+ * говорить с клиентом, поэтому он должен быть виден в любом списке.
+ */
+function ClientTagChips({ order }: { order: Order }) {
+  const tags = order.client?.tags ?? [];
+  if (tags.length === 0) return null;
+  return (
+    <div className="mt-0.5 flex flex-wrap gap-1">
+      {tags.map((t) => (
+        <span
+          key={t}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TAG_COLOR[t]}`}
+        >
+          {TAG_LABEL[t]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Все заказы одного этапа списком: суммы, объём, ответственный. На доске
  * карточки видны не все сразу (колонка скроллится), а здесь этап виден
  * целиком — с итогом по деньгам, которого на доске нет вообще.
@@ -1303,6 +1327,7 @@ function ArchiveModal({
                 <div className="font-medium text-navy-900">
                   {o.client?.fullName}
                 </div>
+                <ClientTagChips order={o} />
                 <div className="text-xs text-navy-600">
                   закрыт {o.closedAt ? cardDate(o.closedAt) : cardDate(o.createdAt)}
                 </div>
@@ -1396,6 +1421,7 @@ function StageOrdersModal({
             cell: (o) => (
               <div>
                 <div className="font-medium text-navy-900">{o.client?.fullName}</div>
+                <ClientTagChips order={o} />
                 <div className="text-xs text-navy-600">{cardDate(o.createdAt)}</div>
               </div>
             ),
