@@ -335,6 +335,16 @@ export function Modal({
       // items-center: окно всегда в центре экрана, как бы страница ни была прокручена
       className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-navy-950/35 p-3 sm:p-8"
       onClick={onClose}
+      /*
+       * Esc закрывает окно — как везде. Крестик и клик по фону работали,
+       * а привычная клавиша нет: люди жали Esc и решали, что окно зависло.
+       * tabIndex нужен, чтобы контейнер мог принять нажатие клавиши, когда
+       * фокус не в поле ввода.
+       */
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
+      tabIndex={-1}
     >
       {/*
        * Длинная форма прокручивается ВНУТРИ окна, а не уводит вниз весь оверлей
