@@ -8,7 +8,7 @@ import {
 } from '@hello-pangea/dnd';
 import { ChevronLeft, ChevronRight, FolderClosed } from 'lucide-react';
 import { api } from '../api/client';
-import { invalidateOrderRelated, useFetch } from '../api/hooks';
+import { invalidateOrderRelated, useFetch, withMutation } from '../api/hooks';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
@@ -1185,17 +1185,24 @@ export function Funnel() {
 
             void (async () => {
               try {
-                const client = (await api.post('/clients', payload)).data as {
-                  id: string;
-                };
-                if (order) {
-                  await api.post('/orders', {
-                    clientId: client.id,
-                    source: payload.source,
-                    managerId: payload.managerId,
-                    ...order,
-                  });
-                }
+                /*
+                 * Оба запроса — под защитой от гонки с чтением: живой канал
+                 * узнаёт о создании клиента и перечитывает доску раньше, чем
+                 * создан заказ. Без защиты временная карточка на секунду
+                 * перетиралась ответом без заказа и «мигала».
+                 */
+                await withMutation(async () => {
+                  const client = (await api.post('/clients', payload))
+                    .data as { id: string };
+                  if (order) {
+                    await api.post('/orders', {
+                      clientId: client.id,
+                      source: payload.source,
+                      managerId: payload.managerId,
+                      ...order,
+                    });
+                  }
+                });
                 toast.success(
                   order ? 'Клиент и заявка созданы' : 'Клиент создан',
                 );
