@@ -25,17 +25,124 @@ export interface ProposalTemplateValues {
   excluded: string;
 }
 
-const PLACEHOLDER = /\{\{\s*(\w+)\s*\}\}/g;
+/**
+ * Как подстановка называется по-русски.
+ *
+ * Раньше в шаблоне стояло `{{client}}`, и человеку, который не работал с
+ * шаблонами, это ничего не говорило: непонятно, что за скобки, почему
+ * по-английски и можно ли их стирать. Теперь в тексте пишется
+ * `{{Имя клиента}}` — и объяснять нечего.
+ *
+ * Английские названия продолжают работать (см. resolveKey): шаблоны, где
+ * они остались, ломать нельзя.
+ */
+export const PLACEHOLDER_LABELS: Record<keyof ProposalTemplateValues, string> = {
+  client: 'Имя клиента',
+  phone: 'Телефон',
+  address: 'Адрес объекта',
+  area: 'Площадь',
+  pricePerSqm: 'Цена за единицу',
+  total: 'Итоговая сумма',
+  discount: 'Скидка',
+  manager: 'Менеджер',
+  date: 'Дата составления',
+  validUntil: 'Срок действия',
+  items: 'Список работ и цен',
+  included: 'Что входит',
+  excluded: 'Что не входит',
+};
 
-/** Заменяет {{ключ}} на значение из values. Неизвестный ключ и пустое значение → '' */
+/** «  имя   КЛИЕНТА » → «имя клиента»: регистр и лишние пробелы не важны */
+function normalize(token: string): string {
+  return token.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Как ещё человек может назвать ту же подстановку.
+ *
+ * Люди пишут по-своему: «Клиент» вместо «Имя клиента», «Итого» вместо
+ * «Итоговая сумма». Раз мы позвали их писать по-русски, надо понимать и
+ * привычные слова — иначе строка молча уйдёт клиенту пустой.
+ */
+const ALIASES: Record<string, keyof ProposalTemplateValues> = {
+  клиент: 'client',
+  'фио клиента': 'client',
+  'имя': 'client',
+  'номер телефона': 'phone',
+  'телефон клиента': 'phone',
+  адрес: 'address',
+  'адрес клиента': 'address',
+  объект: 'address',
+  объём: 'area',
+  'объём работ': 'area',
+  'площадь объекта': 'area',
+  'цена за м2': 'pricePerSqm',
+  'цена за м²': 'pricePerSqm',
+  'цена за единицу измерения': 'pricePerSqm',
+  сумма: 'total',
+  итого: 'total',
+  'итого к оплате': 'total',
+  'общая сумма': 'total',
+  'ответственный менеджер': 'manager',
+  дата: 'date',
+  'действительно до': 'validUntil',
+  'срок действия кп': 'validUntil',
+  смета: 'items',
+  'список позиций': 'items',
+  'состав работ': 'items',
+};
+
+/** Русское название → внутренний ключ */
+const BY_LABEL = new Map<string, keyof ProposalTemplateValues>([
+  ...(
+    Object.entries(PLACEHOLDER_LABELS) as [
+      keyof ProposalTemplateValues,
+      string,
+    ][]
+  ).map(
+    ([key, label]) =>
+      [normalize(label), key] as [string, keyof ProposalTemplateValues],
+  ),
+  ...(
+    Object.entries(ALIASES) as [string, keyof ProposalTemplateValues][]
+  ).map(([label, key]) => [normalize(label), key] as [string, keyof ProposalTemplateValues]),
+]);
+
+/** Какому значению соответствует то, что человек написал в скобках */
+function resolveKey(token: string): keyof ProposalTemplateValues | null {
+  const byLabel = BY_LABEL.get(normalize(token));
+  if (byLabel) return byLabel;
+  // старое английское название: оно осталось в части шаблонов
+  const raw = token.trim();
+  if (raw in PLACEHOLDER_LABELS) return raw as keyof ProposalTemplateValues;
+  return null;
+}
+
+/*
+ * Внутри скобок теперь бывают русские буквы и пробелы, поэтому берём всё
+ * до закрывающих скобок, а не только латиницу. Длину ограничиваем: без
+ * ограничения незакрытая скобка в начале письма «съела» бы весь текст до
+ * следующей пары в конце.
+ */
+const PLACEHOLDER = /\{\{\s*([^{}\n]{1,60}?)\s*\}\}/g;
+
+/**
+ * Заменяет {{Имя клиента}} (или старое {{client}}) на значение из values.
+ *
+ * Незнакомое название даёт пустую строку — как и раньше. Скобки в письме
+ * клиенту недопустимы: лучше пустое место, чем «{{Клинт}}» в предложении на
+ * несколько тысяч сомони. Найти опечатку помогает образец готового КП в
+ * окне правки шаблона: там незнакомая подстановка видна сразу.
+ */
 export function renderPlaceholders(
   text: string | null | undefined,
   values: Partial<ProposalTemplateValues>,
 ): string {
   if (!text) return '';
-  return text.replace(PLACEHOLDER, (_match, key: string) => {
-    const value = (values as Record<string, string | undefined>)[key];
-    return value ?? '';
+  return text.replace(PLACEHOLDER, (_match, token: string) => {
+    const key = resolveKey(token);
+    if (!key) return '';
+    return values[key] ?? '';
   });
 }
 

@@ -50,19 +50,103 @@ import type {
 const STATUSES: ProposalStatus[] = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED'];
 
 /** Подстановки, доступные в теле шаблона КП (ТЗ 9.1) — сверено с template-render.ts бэкенда */
-const PLACEHOLDER_HINTS: { key: string; hint: string }[] = [
-  { key: 'client', hint: 'имя клиента' },
-  { key: 'phone', hint: 'телефон клиента' },
-  { key: 'address', hint: 'адрес объекта' },
-  { key: 'area', hint: 'площадь/объём' },
-  { key: 'pricePerSqm', hint: 'цена за единицу' },
-  { key: 'total', hint: 'итоговая сумма' },
-  { key: 'discount', hint: 'скидка' },
-  { key: 'manager', hint: 'менеджер' },
-  { key: 'date', hint: 'дата составления' },
-  { key: 'validUntil', hint: 'срок действия' },
-  { key: 'items', hint: 'список позиций' },
+/**
+ * Что можно подставить в шаблон.
+ *
+ * Названия русские и совпадают с сервером (template-render.ts): человеку,
+ * который открыл шаблон впервые, «{{Имя клиента}}» понятно без объяснений,
+ * а «{{client}}» — нет. Старые английские названия сервер тоже понимает,
+ * поэтому шаблоны, где их не переводили, продолжают работать.
+ *
+ * `sample` — значение для образца готового КП: по нему сразу видно, что
+ * подстановка это МЕСТО ДЛЯ ДАННЫХ, а не ошибка в тексте.
+ */
+const PLACEHOLDER_HINTS: { key: string; hint: string; sample: string }[] = [
+  { key: 'Имя клиента', hint: 'как зовут клиента', sample: 'Курбонали' },
+  { key: 'Телефон', hint: 'его номер', sample: '+992 10 222 20 02' },
+  { key: 'Адрес объекта', hint: 'куда едет бригада', sample: 'Рудаки 21, кв. 5' },
+  { key: 'Площадь', hint: 'сколько убирать', sample: '120 м²' },
+  { key: 'Цена за единицу', hint: 'цена за м² или за место', sample: '32' },
+  { key: 'Итоговая сумма', hint: 'сколько всего платит клиент', sample: '3 840' },
+  { key: 'Скидка', hint: 'сколько скинули', sample: '200' },
+  { key: 'Менеджер', hint: 'кто составил предложение', sample: 'Аниса Мукими' },
+  { key: 'Дата составления', hint: 'когда составлено', sample: '12.08.2026' },
+  { key: 'Срок действия', hint: 'до какого числа в силе', sample: '19.08.2026' },
+  {
+    key: 'Список работ и цен',
+    hint: 'смета целиком',
+    sample: '• Генеральная уборка 120 м² × 32 сомони = 3 840 сомони',
+  },
+  {
+    key: 'Что входит',
+    hint: 'что делает бригада',
+    sample: '• Мытьё полов и плинтусов\n• Протирка мебели снаружи',
+  },
+  {
+    key: 'Что не входит',
+    hint: 'за что берём отдельно',
+    sample: '• Вынос строительного мусора',
+  },
 ];
+
+/** Русское название и привычные слова → одно и то же значение образца */
+const SAMPLE_BY_NAME: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  const put = (name: string, value: string) => {
+    map[name.trim().toLowerCase().replace(/\s+/g, ' ')] = value;
+  };
+  for (const p of PLACEHOLDER_HINTS) put(p.key, p.sample);
+  // старые английские названия — их сервер тоже понимает
+  const old: [string, string][] = [
+    ['client', 'Имя клиента'],
+    ['phone', 'Телефон'],
+    ['address', 'Адрес объекта'],
+    ['area', 'Площадь'],
+    ['pricePerSqm', 'Цена за единицу'],
+    ['total', 'Итоговая сумма'],
+    ['discount', 'Скидка'],
+    ['manager', 'Менеджер'],
+    ['date', 'Дата составления'],
+    ['validUntil', 'Срок действия'],
+    ['items', 'Список работ и цен'],
+    ['included', 'Что входит'],
+    ['excluded', 'Что не входит'],
+  ];
+  for (const [eng, ru] of old) {
+    const hit = PLACEHOLDER_HINTS.find((p) => p.key === ru);
+    if (hit) put(eng, hit.sample);
+  }
+  // как ещё называют то же самое
+  const aliases: [string, string][] = [
+    ['клиент', 'Имя клиента'],
+    ['адрес', 'Адрес объекта'],
+    ['объект', 'Адрес объекта'],
+    ['объём', 'Площадь'],
+    ['сумма', 'Итоговая сумма'],
+    ['итого', 'Итоговая сумма'],
+    ['дата', 'Дата составления'],
+    ['смета', 'Список работ и цен'],
+  ];
+  for (const [word, ru] of aliases) {
+    const hit = PLACEHOLDER_HINTS.find((p) => p.key === ru);
+    if (hit) put(word, hit.sample);
+  }
+  return map;
+})();
+
+/**
+ * Образец: подставляем в шаблон примерные данные.
+ *
+ * Незнакомое название помечаем прямо в образце. На сервере такая подстановка
+ * даёт пустое место — то есть кусок текста молча пропал бы из предложения
+ * клиенту. Здесь опечатку видно до отправки.
+ */
+function renderSample(text: string): string {
+  return text.replace(/\{\{\s*([^{}\n]{1,60}?)\s*\}\}/g, (_m, token: string) => {
+    const value = SAMPLE_BY_NAME[token.trim().toLowerCase().replace(/\s+/g, ' ')];
+    return value ?? `[✗ нет такой подстановки: ${token.trim()}]`;
+  });
+}
 
 interface ProposalItemPayload {
   title: string;
@@ -1068,21 +1152,41 @@ function TemplateModal({
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
-        {/* Подсказка по подстановкам — иначе пользователь о них не узнает */}
-        <div className="rounded-xl border border-navy-100 bg-navy-50/60 p-3 text-xs text-navy-600">
-          <div className="mb-1.5 font-semibold text-navy-700">
-            В тексте можно использовать подстановки — при отправке они заменятся реальными данными:
+        {/*
+          Объяснение подстановок обычными словами.
+          Раньше здесь был перечень вида «{{client}} — имя клиента»: человек,
+          который открыл шаблон впервые, не понимал ни что это за скобки, ни
+          можно ли их стирать.
+        */}
+        <div className="rounded-xl border border-navy-100 bg-navy-50/60 p-3 text-sm text-navy-700">
+          <div className="font-semibold text-navy-800">
+            Шаблон пишется один раз — данные подставятся сами
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <p className="mt-1 text-xs leading-relaxed text-navy-600">
+            Пишите текст как обычное письмо. Там, где должно встать имя, адрес
+            или сумма, вставьте слово из списка ниже{' '}
+            <b>в двойных фигурных скобках</b>. Когда вы создадите КП по этому
+            шаблону, вместо них встанут данные заказа: вместо{' '}
+            <code className="rounded bg-white px-1 py-0.5">{'{{Имя клиента}}'}</code>{' '}
+            — «Курбонали», вместо{' '}
+            <code className="rounded bg-white px-1 py-0.5">{'{{Итоговая сумма}}'}</code>{' '}
+            — «3 840». Скобки клиент не увидит никогда.
+          </p>
+          <div className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
             {PLACEHOLDER_HINTS.map((p) => (
-              <span key={p.key}>
-                <code className="rounded bg-white px-1 py-0.5 font-mono text-navy-800">
+              <div key={p.key} className="text-xs text-navy-600">
+                <code className="rounded bg-white px-1 py-0.5 text-navy-800">
                   {`{{${p.key}}}`}
                 </code>{' '}
                 — {p.hint}
-              </span>
+              </div>
             ))}
           </div>
+          <p className="mt-2 text-xs text-navy-600">
+            Слово можно писать как удобно — «{'{{Клиент}}'}» и «{'{{имя клиента}}'}»
+            система поймёт одинаково. Если ошибётесь в написании, это будет
+            видно в образце внизу окна.
+          </p>
         </div>
 
         <div>
@@ -1091,7 +1195,7 @@ function TemplateModal({
             className="input min-h-[70px]"
             value={intro}
             onChange={(e) => setIntro(e.target.value)}
-            placeholder="Уважаемый(ая) {{client}}! Благодарим за интерес к нашим услугам…"
+            placeholder="Уважаемый(ая) {{Имя клиента}}! Благодарим за интерес к нашим услугам…"
           />
         </div>
 
@@ -1102,7 +1206,7 @@ function TemplateModal({
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder={
-              'Адрес объекта: {{address}}\nОбъём работ: {{area}}\nЦена за единицу: {{pricePerSqm}} сомони\n\n{{items}}\n\nИтоговая стоимость: {{total}} сомони'
+              'Адрес объекта: {{Адрес объекта}}\nОбъём работ: {{Площадь}}\nЦена за единицу: {{Цена за единицу}} сомони\n\n{{Список работ и цен}}\n\nИтоговая стоимость: {{Итоговая сумма}} сомони'
             }
           />
         </div>
@@ -1113,7 +1217,7 @@ function TemplateModal({
             className="input min-h-[70px]"
             value={conditions}
             onChange={(e) => setConditions(e.target.value)}
-            placeholder="Предложение действительно до {{validUntil}}. Подготовил: {{manager}}, {{date}}."
+            placeholder="Предложение действительно до {{Срок действия}}. Подготовил: {{Менеджер}}, {{Дата составления}}."
           />
         </div>
 
@@ -1149,6 +1253,25 @@ function TemplateModal({
               Активен (доступен для выбора в новых КП)
             </label>
           </div>
+        </div>
+
+        {/*
+          Образец готового предложения. Самое доходчивое объяснение
+          подстановок — увидеть, во что они превращаются.
+        */}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+          <div className="text-sm font-semibold text-navy-800">
+            Так это увидит клиент
+          </div>
+          <div className="mt-0.5 text-xs text-navy-600">
+            Данные здесь взяты для примера — в настоящем КП встанут данные заказа.
+          </div>
+          <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs leading-relaxed text-navy-800">
+            {renderSample([intro, body, conditions]
+              .map((part) => (part ?? '').trim())
+              .filter(Boolean)
+              .join('\n\n')) || 'Пока пусто — напишите основной текст выше.'}
+          </pre>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
