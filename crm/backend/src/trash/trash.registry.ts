@@ -87,6 +87,16 @@ export interface TrashEntry {
   cascade?: TrashCascadeRule[];
   /** Проверка перед безвозвратным удалением — бросает исключение при запрете */
   purgeGuard?: (db: TrashDb, id: string) => Promise<void>;
+  /**
+   * Что вернуть записи при восстановлении СВЕРХ снятия отметки об удалении.
+   *
+   * Удаление гасит isActive, а восстановление его не возвращало: клинер
+   * возвращался из корзины «отключённым» и пропадал из «Команды» вовсе —
+   * человек восстанавливал и не находил. Найдено приёмочным прогоном.
+   * Сотрудникам (user) доступ намеренно НЕ включаем обратно: вернуть
+   * учётную запись в систему должен осознанный клик, а не восстановление.
+   */
+  restoreExtra?: Record<string, unknown>;
 }
 
 const STAGE_LABEL: Record<FunnelStage, string> = {
@@ -192,6 +202,7 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
     model: 'Cleaner',
     entity: 'CLEANER',
     label: 'Клинер',
+    restoreExtra: { isActive: true },
     financial: false,
     include: { brigade: { select: { name: true } } },
     title: (row) => row.fullName,
@@ -303,6 +314,7 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
   },
 
   tariff: {
+    restoreExtra: { isActive: true },
     model: 'Tariff',
     entity: 'SERVICE',
     label: 'Услуга',
@@ -325,6 +337,7 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
   },
 
   extraService: {
+    restoreExtra: { isActive: true },
     model: 'ExtraService',
     entity: 'SERVICE',
     label: 'Доп. услуга',

@@ -290,7 +290,12 @@ export class TrashService {
       const deletedAt = row.deletedAt as Date;
       let restored: any;
       try {
-        restored = await delegate.update({ where: { id }, data: restoreData, include: entry.include });
+        restored = await delegate.update({
+          where: { id },
+          // restoreExtra: удаление гасит isActive — возвращаем видимость
+          data: { ...restoreData, ...(entry.restoreExtra ?? {}) },
+          include: entry.include,
+        });
       } catch (e) {
         // запись успели очистить безвозвратно между поиском и восстановлением
         if (isRecordNotFound(e)) {
