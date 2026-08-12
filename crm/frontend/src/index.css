@@ -73,6 +73,45 @@
     scrollbar-width: auto;
     scrollbar-color: #b2b8c4 #f6f7f9;
   }
+  /*
+   * Прокрутка внутри окна.
+   *
+   * Полоса шла по самому краю содержимого и упиралась в кнопки «Отмена» и
+   * «Создать»: между ней, полями и кнопками не было ни отступа, ни воздуха.
+   * Тянешь полосу — рискуешь задеть кнопку.
+   *
+   * Прозрачная рамка у ползунка делает видимую полоску тоньше самой дорожки,
+   * то есть создаёт отступ с обеих сторон. `scrollbar-gutter: stable`
+   * оставляет место под полосу заранее — иначе содержимое дёргается вбок в
+   * тот момент, когда форма становится длиннее экрана.
+   */
+  .modal-scroll {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #b2b8c4 transparent;
+  }
+  .modal-scroll::-webkit-scrollbar {
+    width: 12px;
+  }
+  .modal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /*
+   * Видимая полоска — 6 px: за неё удобно взяться мышью, но она не спорит
+   * с содержимым. Тоньше делать нельзя — в светло-сером на белом человек
+   * её попросту не находит.
+   */
+  .modal-scroll::-webkit-scrollbar-thumb {
+    background: #b2b8c4;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  .modal-scroll::-webkit-scrollbar-thumb:hover {
+    background: #858d9d;
+    background-clip: content-box;
+  }
+
   .board-scroll::-webkit-scrollbar {
     height: 12px;
   }
