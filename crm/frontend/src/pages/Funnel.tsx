@@ -13,6 +13,8 @@ import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
 import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
+import { PeriodFilter, type Period } from '../components/common';
+import { rangeOf } from '../lib/date';
 import { OrderModal } from '../components/OrderModal';
 import { formatPhone } from '../lib/contact';
 import {
@@ -116,7 +118,8 @@ function OrderCardBody({
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 font-semibold text-navy-900">
+        {/* на телефоне шрифт мельче: в половину экрана должно влезть имя целиком */}
+        <div className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-navy-900 sm:text-base">
           {o.client?.fullName}
         </div>
         {/*
@@ -165,11 +168,11 @@ function OrderCardBody({
       )}
       {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
       {o.client?.phone && (
-        <div className="mt-0.5 text-xs font-medium text-brand-600">
+        <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-brand-600 sm:text-xs">
           {formatPhone(o.client.phone)}
         </div>
       )}
-      <div className="mt-1 text-xs text-navy-600">
+      <div className="mt-1 text-[11px] leading-snug text-navy-600 sm:text-xs">
         {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
       </div>
       {/*
@@ -182,14 +185,14 @@ function OrderCardBody({
       */}
       <div className="mt-2 flex items-center justify-between">
         {(o.paidAmount ?? 0) > 0 && orderDue(o) === 0 ? (
-          <span className="text-sm font-bold text-emerald-700">
+          <span className="text-[13px] font-bold text-emerald-700 sm:text-sm">
             Оплачен
             <span className="ml-1 text-xs font-medium text-navy-600">
               {formatPrice(orderTotal(o))}
             </span>
           </span>
         ) : orderDebt(o) > 0 ? (
-          <span className="text-sm font-bold text-red-700">
+          <span className="text-[13px] font-bold text-red-700 sm:text-sm">
             Долг {formatPrice(orderDebt(o))}
             {(o.paidAmount ?? 0) > 0 && (
               <span className="ml-1 text-xs font-medium text-navy-600">
@@ -198,7 +201,7 @@ function OrderCardBody({
             )}
           </span>
         ) : (
-          <span className="text-sm font-bold text-navy-700">
+          <span className="text-[13px] font-bold text-navy-700 sm:text-sm">
             {formatPrice(orderTotal(o))}
           </span>
         )}
@@ -208,7 +211,7 @@ function OrderCardBody({
       </div>
 
       {/* Менеджер и дата заявки */}
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-navy-100 pt-1.5 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-navy-100 pt-1.5 text-[10px] sm:text-[11px]">
         <span className="shrink-0 text-navy-600">{cardDate(o.createdAt)}</span>
         {/* чип менеджера — сразу видно, кто ведёт заказ */}
         <span className="min-w-0 truncate rounded-md bg-navy-100 px-1.5 py-0.5 font-medium text-navy-600">
@@ -343,9 +346,25 @@ export function Funnel() {
   const scrollBoard = (dir: -1 | 1) =>
     boardRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
+  /*
+   * Период воронки — по ДАТЕ ОФОРМЛЕНИЯ заявки (решение владельца).
+   * По умолчанию текущий месяц: раньше это правило было зашито намертво,
+   * теперь им управляет человек — можно посмотреть неделю, квартал или
+   * свой отрезок, не заглядывая в архив.
+   */
+  const [period, setPeriod] = useState<Period>(() => rangeOf('month'));
+  const boardUrl = `/orders/board${
+    period.from || period.to
+      ? `?${period.from ? `from=${period.from}&` : ''}${
+          period.to ? `to=${period.to}` : ''
+        }`
+      : ''
+  }`;
+
   const { data, loading, error, reload, setData } = useFetch<BoardColumn[]>(
-    '/orders/board',
+    boardUrl,
     {
+      deps: [period.from, period.to],
       pollMs: 10000,
       pollPaused: () => draggingRef.current || inFlightRef.current > 0,
     },
@@ -715,6 +734,10 @@ export function Funnel() {
    */
   const renderFilters = (mobile: boolean) => (
     <>
+      {/* период — по дате оформления заявки; виден всем ролям */}
+      <div className={mobile ? 'w-full' : 'flex-none'}>
+        <PeriodFilter value={period} onChange={setPeriod} />
+      </div>
       {canFilter && (
         <>
           {!mobile && (
@@ -840,7 +863,13 @@ export function Funnel() {
               return (
               <div
                 key={col.stage}
-                className={`flex w-[74vw] shrink-0 snap-start flex-col sm:w-72 ${
+                /*
+                 * Ширина колонки на телефоне — ровно половина экрана за
+                 * вычетом отступов: два этапа с карточками видны разом
+                 * (просьба владельца). Было 74vw — влезал один и «огрызок»
+                 * второго, и понять, что доска листается, было тяжело.
+                 */
+                className={`flex w-[calc(50vw-1rem)] shrink-0 snap-start flex-col sm:w-72 ${
                   isDue
                     ? /*
                        * Прилипает к левому краю: список должников виден, до

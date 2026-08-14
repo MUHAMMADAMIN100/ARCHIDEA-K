@@ -27,7 +27,12 @@ import {
 import { seesFinance } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { resolveManager } from '../common/resolve-manager';
-import { dayKey, formatDate, parseDate } from '../common/time/dushanbe';
+import {
+  dayKey,
+  formatDate,
+  momentRange,
+  parseDate,
+} from '../common/time/dushanbe';
 import {
   calculatePrice,
   CustomExtra,
@@ -397,10 +402,19 @@ export class OrdersService {
       stage?: FunnelStage;
       managerId?: string;
       search?: string;
+      /** Период по ДАТЕ ОФОРМЛЕНИЯ заявки, «ГГГГ-ММ-ДД» */
+      from?: string;
+      to?: string;
     },
   ) {
     const where: Prisma.OrderWhereInput = this.scopeWhere(user);
     if (q.stage) where.stage = q.stage;
+    /*
+     * Период считаем по дате оформления — по ней же воронка и раньше
+     * отбирала текущий месяц (решение владельца). Даты приходят днями по
+     * Душанбе, поэтому границы разворачиваем в местные сутки целиком.
+     */
+    if (q.from || q.to) where.createdAt = momentRange(q.from, q.to);
     if (seesAll(user) && q.managerId) where.managerId = q.managerId;
     if (q.search) {
       const term = q.search.trim();
@@ -422,8 +436,8 @@ export class OrdersService {
   }
 
   /** Доска воронки: заказы, сгруппированные по этапам */
-  async board(user: AuthUser) {
-    const orders = await this.list(user, {});
+  async board(user: AuthUser, period?: { from?: string; to?: string }) {
+    const orders = await this.list(user, period ?? {});
 
     /*
      * Сколько всего раз клиент к нам обращался — считаем по всем его
@@ -465,8 +479,15 @@ export class OrdersService {
        * папке «Архив»: на доске от него только счётчик, содержимое
        * подтягивается отдельным запросом, когда папку открыли.
        */
+      /*
+       * Когда период выбран руками, месячное правило закрытых колонок не
+       * применяем: человек попросил конкретный отрезок — он и должен его
+       * увидеть целиком, а не «текущий месяц и не больше двадцати».
+       */
+      const custom = !!(period?.from || period?.to);
       const closed = OrdersService.CLOSED_STAGES.includes(stage);
-      const shown = closed ? this.splitClosed(inStage).shown : inStage;
+      const shown =
+        closed && !custom ? this.splitClosed(inStage).shown : inStage;
 
       return {
         stage,

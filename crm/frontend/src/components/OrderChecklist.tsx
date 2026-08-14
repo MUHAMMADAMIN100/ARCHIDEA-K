@@ -7,7 +7,7 @@ import { Badge, EmptyState, ErrorState, Skeleton } from './ui';
 import { useDialog } from './Dialog';
 import { useToast } from './Toast';
 import { formatDateTimeTz } from '../lib/date';
-import { tempId } from '../lib/util';
+import { isTempId, tempId } from '../lib/util';
 import type {
   ChecklistStatus,
   ChecklistTemplate,
@@ -102,7 +102,14 @@ export function OrderChecklistCard({
     error,
     reload,
     setData,
-  } = useFetch<OrderChecklist | null>(`/orders/${orderId}/checklist`);
+  } = useFetch<OrderChecklist | null>(
+    /*
+     * У только что созданного заказа временный номер (temp_…) — на сервере
+     * его ещё нет, и запрос дал бы «Не удалось загрузить чек-лист» на
+     * рабочей карточке. Ждём настоящий номер: null отключает загрузку.
+     */
+    isTempId(orderId) ? null : `/orders/${orderId}/checklist`,
+  );
 
   const noChecklistYet = !loading && !error && !checklist;
   const templates = useFetch<ChecklistTemplate[]>(

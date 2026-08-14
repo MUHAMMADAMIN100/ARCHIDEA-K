@@ -11,7 +11,7 @@ import { DatePicker } from './DatePicker';
 import { TimePicker } from './TimePicker';
 import { CleanerPicker, Tabs, UserPicker } from './common';
 import { NameInput, PhoneInput } from './ContactFields';
-import { withRetry } from '../lib/util';
+import { isTempId, withRetry } from '../lib/util';
 import { isValidPersonName, normalizePhone } from '../lib/contact';
 import { formatDateTz, formatDateTimeTz, toDateTimeInput } from '../lib/date';
 import { OrderChecklistCard } from './OrderChecklist';
@@ -425,6 +425,14 @@ export function OrderModal({
 
   /** Раздельная загрузка деталей заказа — своя ошибка и кнопка «Повторить» (диагноз бага 3.1, п.2 ТЗ) */
   const loadDetail = (id: string) => {
+    /*
+     * Заказ, только что созданный на экране, живёт под временным номером
+     * (temp_…): на сервере его ещё нет. Запрос за ним обречён на «не
+     * найдено», и человек видел жёлтую полосу «не удалось обновить данные»
+     * на совершенно рабочей карточке. Показываем то, что уже знаем, и ждём
+     * настоящий номер — он придёт со сверкой списка.
+     */
+    if (isTempId(id)) return;
     setDetailError(false);
     api
       .get<Order>(`/orders/${id}`)

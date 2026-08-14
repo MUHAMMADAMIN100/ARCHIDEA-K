@@ -11,6 +11,7 @@ import {
   AuthUser,
   seesAll,
 } from '../common/decorators/current-user.decorator';
+import { momentRange } from '../common/time/dushanbe';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { resolveManager } from '../common/resolve-manager';
 import { normalizePhone as canonicalPhone } from '../common/validation/contact';
@@ -52,9 +53,14 @@ export class ClientsService {
       sort?: 'recent' | 'name';
       /** ТЗ 9.4 — только повторные клиенты */
       repeat?: boolean;
+      /** Период по дате появления клиента в базе, «ГГГГ-ММ-ДД» */
+      from?: string;
+      to?: string;
     },
   ) {
     const where: Prisma.ClientWhereInput = { ...NOT_DELETED };
+    // период — по дате появления клиента в базе (когда его завели)
+    if (q.from || q.to) where.createdAt = momentRange(q.from, q.to);
     if (!seesAll(user)) where.managerId = user.id;
     else if (q.managerId) where.managerId = q.managerId;
 

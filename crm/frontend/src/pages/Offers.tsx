@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -1144,6 +1144,44 @@ function TemplateModal({
     });
   };
 
+  /*
+   * Куда вставлять метку. Держим ссылки на три поля и запоминаем последнее,
+   * где стоял курсор: человек пишет в «Основном тексте», тянется к кнопке —
+   * фокус уходит на неё, и без этой памяти метка падала бы неизвестно куда.
+   */
+  const introRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const condRef = useRef<HTMLTextAreaElement>(null);
+  type MarkField = 'intro' | 'body' | 'conditions';
+  const lastField = useRef<MarkField>('body');
+
+  const insertMark = (name: string) => {
+    const mark = `{{${name}}}`;
+    const map: Record<
+      MarkField,
+      {
+        ref: React.RefObject<HTMLTextAreaElement>;
+        value: string;
+        set: (v: string) => void;
+      }
+    > = {
+      intro: { ref: introRef, value: intro, set: setIntro },
+      body: { ref: bodyRef, value: body, set: setBody },
+      conditions: { ref: condRef, value: conditions, set: setConditions },
+    };
+    const target = map[lastField.current];
+    const el = target.ref.current;
+    const at = el ? (el.selectionStart ?? target.value.length) : target.value.length;
+    const next = target.value.slice(0, at) + mark + target.value.slice(at);
+    target.set(next);
+    // возвращаем курсор сразу за вставленной меткой — можно писать дальше
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(at + mark.length, at + mark.length);
+    });
+  };
+
   return (
     <Modal open onClose={onClose} title={template ? 'Правка шаблона КП' : 'Новый шаблон КП'} wide>
       <div className="space-y-3">
@@ -1153,45 +1191,47 @@ function TemplateModal({
         </div>
 
         {/*
-          Объяснение подстановок обычными словами.
-          Раньше здесь был перечень вида «{{client}} — имя клиента»: человек,
-          который открыл шаблон впервые, не понимал ни что это за скобки, ни
-          можно ли их стирать.
+          Подстановки вставляются КНОПКАМИ.
+          Раньше здесь был перечень со скобками — «{{client}} — имя клиента».
+          Человек, открывший шаблон впервые, не понимал, что это за знаки,
+          можно ли их стирать и почему по-английски. Теперь скобки печатать
+          не нужно и в объяснении их нет: ставишь курсор в текст, жмёшь
+          нужную кнопку — метка встаёт сама.
         */}
         <div className="rounded-xl border border-navy-100 bg-navy-50/60 p-3 text-sm text-navy-700">
           <div className="font-semibold text-navy-800">
             Шаблон пишется один раз — данные подставятся сами
           </div>
           <p className="mt-1 text-xs leading-relaxed text-navy-600">
-            Пишите текст как обычное письмо. Там, где должно встать имя, адрес
-            или сумма, вставьте слово из списка ниже{' '}
-            <b>в двойных фигурных скобках</b>. Когда вы создадите КП по этому
-            шаблону, вместо них встанут данные заказа: вместо{' '}
-            <code className="rounded bg-white px-1 py-0.5">{'{{Имя клиента}}'}</code>{' '}
-            — «Курбонали», вместо{' '}
-            <code className="rounded bg-white px-1 py-0.5">{'{{Итоговая сумма}}'}</code>{' '}
-            — «3 840». Скобки клиент не увидит никогда.
+            Пишите как обычное письмо. Там, где должно встать имя клиента,
+            адрес или сумма, поставьте курсор и нажмите нужную кнопку ниже —
+            система подставит туда данные заказа, когда вы будете создавать
+            КП. Внизу окна показан образец: там сразу видно, что получится.
           </p>
-          <div className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {PLACEHOLDER_HINTS.map((p) => (
-              <div key={p.key} className="text-xs text-navy-600">
-                <code className="rounded bg-white px-1 py-0.5 text-navy-800">
-                  {`{{${p.key}}}`}
-                </code>{' '}
-                — {p.hint}
-              </div>
+              <button
+                key={p.key}
+                type="button"
+                title={`Подставится: ${p.hint}`}
+                onClick={() => insertMark(p.key)}
+                className="press rounded-lg border border-navy-200 bg-white px-2 py-1 text-xs font-medium text-navy-700 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
+              >
+                {p.key}
+              </button>
             ))}
           </div>
           <p className="mt-2 text-xs text-navy-600">
-            Слово можно писать как удобно — «{'{{Клиент}}'}» и «{'{{имя клиента}}'}»
-            система поймёт одинаково. Если ошибётесь в написании, это будет
-            видно в образце внизу окна.
+            Кнопка ставит метку туда, где стоял курсор. Если поле ещё не
+            выбрано — метка встанет в конец основного текста.
           </p>
         </div>
 
         <div>
           <label className="label">Вступление (необязательно)</label>
           <textarea
+            ref={introRef}
+            onFocus={() => (lastField.current = 'intro')}
             className="input min-h-[70px]"
             value={intro}
             onChange={(e) => setIntro(e.target.value)}
@@ -1202,6 +1242,8 @@ function TemplateModal({
         <div>
           <label className="label">Основной текст *</label>
           <textarea
+            ref={bodyRef}
+            onFocus={() => (lastField.current = 'body')}
             className="input min-h-[140px]"
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -1214,6 +1256,8 @@ function TemplateModal({
         <div>
           <label className="label">Условия (необязательно)</label>
           <textarea
+            ref={condRef}
+            onFocus={() => (lastField.current = 'conditions')}
             className="input min-h-[70px]"
             value={conditions}
             onChange={(e) => setConditions(e.target.value)}

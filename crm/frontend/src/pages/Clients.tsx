@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Download, Repeat2, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
@@ -6,7 +6,14 @@ import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, Badge, Modal, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
-import { Column, DataTable, FilterReset, SearchInput } from '../components/common';
+import {
+  Column,
+  DataTable,
+  FilterReset,
+  PeriodFilter,
+  SearchInput,
+  type Period,
+} from '../components/common';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import {
   TAG_LABEL,
@@ -80,16 +87,29 @@ export function Clients() {
   const [ordersFor, setOrdersFor] = useState<Client | null>(null);
   const toast = useToast();
 
+  /*
+   * Период базы клиентов — всё время по умолчанию: список клиентов это
+   * справочник, а не отчёт, и обрезать его молча нельзя. Фильтр нужен,
+   * чтобы посмотреть «кто пришёл за неделю/месяц».
+   */
+  const [period, setPeriod] = useState<Period>({ from: '', to: '' });
+
   const query = new URLSearchParams();
   if (search) query.set('search', search);
   if (tag) query.set('tag', tag);
   if (source) query.set('source', source);
   query.set('sort', sort);
   if (ordersFilter === 'repeat') query.set('repeat', 'true');
+  // период — по дате появления клиента в базе
+  if (period.from) query.set('from', period.from);
+  if (period.to) query.set('to', period.to);
 
   const { data, loading, error, reload, setData } = useFetch<Client[]>(
     `/clients?${query.toString()}`,
-    { deps: [search, tag, source, sort, ordersFilter], pollMs: 15000 },
+    {
+      deps: [search, tag, source, sort, ordersFilter, period.from, period.to],
+      pollMs: 15000,
+    },
   );
 
   // «Без заказов» бэкенд не фильтрует отдельным параметром — считаем на клиенте
@@ -319,6 +339,9 @@ export function Clients() {
         <div className="col-span-2 sm:min-w-[200px] sm:flex-1">
           <SearchInput value={search} onChange={setSearch} placeholder="Поиск по имени или телефону" />
         </div>
+        <div className="col-span-2 sm:flex-none">
+          <PeriodFilter value={period} onChange={setPeriod} />
+        </div>
         <select className="input w-full sm:w-[180px] sm:flex-none" value={tag} onChange={(e) => setTag(e.target.value)}>
           <option value="">Все статусы</option>
           {TAGS.map((t) => (
@@ -485,12 +508,20 @@ export function AddClientModal({
    * создания, открыв заказ заново, — то есть цену клиенту называли без них.
    */
   const [extraRows, setExtraRows] = useState<
-    { key: string; title: string; price: string; checked: boolean }[]
+    {
+      key: string;
+      title: string;
+      price: string;
+      /** Сколько мест/штук. Пусто — строка в счёт не идёт */
+      qty: string;
+      checked: boolean;
+    }[]
   >(
     (initial?.order?.customExtras ?? []).map((r, i) => ({
       key: `e${i}`,
       title: r.title,
       price: r.price ? String(r.price) : '',
+      qty: '1',
       checked: r.checked,
     })),
   );
@@ -511,6 +542,36 @@ export function AddClientModal({
   const [pricePerUnit, setPricePerUnit] = useState('');
   const [manualPrice, setManualPrice] = useState(false);
   const { data: tariffs } = useFetch<Tariffs>('/tariffs');
+
+  /*
+   * «Химчистка мягкой мебели» стоит в форме сразу (просьба владельца):
+   * её заказывают часто, и менеджеру остаётся вписать число мест. Цена
+   * берётся из справочника «Услуги и цены» — меняется в одном месте.
+   * Добавляем один раз и только в НОВУЮ заявку: при правке существующего
+   * заказа в форме уже свои строки.
+   */
+  const defaultExtraAdded = useRef(false);
+  useEffect(() => {
+    if (defaultExtraAdded.current || initial?.order) return;
+    const preset = (tariffs?.extras ?? []).find(
+      (e) => e.key === 'upholsteryDry',
+    );
+    if (!preset) return;
+    defaultExtraAdded.current = true;
+    setExtraRows((prev) =>
+      prev.length
+        ? prev
+        : [
+            {
+              key: 'preset-upholstery',
+              title: preset.title,
+              price: String(preset.price),
+              qty: '',
+              checked: true,
+            },
+          ],
+    );
+  }, [tariffs, initial]);
   /*
    * Список ответственных — ВЕСЬ действующий штат, включая руководителей.
    *
@@ -591,9 +652,16 @@ export function AddClientModal({
   });
   const moreSum = moreRows.reduce((sum, r) => sum + r.total, 0);
   // доп. услуги: в счёт идут только отмеченные — ровно как в карточке заказа
+  /*
+   * Доп. услуги: цена × количество. Пустое количество означает «не берём» —
+   * поэтому «Химчистка мягкой мебели» стоит в форме заранее, но в сумму не
+   * лезет, пока менеджер не впишет число мест.
+   */
+  const extraTotal = (r: { price: string; qty: string }) =>
+    Math.max(0, Math.round(Number(r.price) || 0)) *
+    Math.max(0, Math.round(Number(r.qty) || 0));
   const extrasSum = extraRows.reduce(
-    (sum, r) =>
-      sum + (r.checked ? Math.max(0, Math.round(Number(r.price) || 0)) : 0),
+    (sum, r) => sum + (r.checked ? extraTotal(r) : 0),
     0,
   );
   const computed = units * unitPrice + moreSum + extrasSum;
@@ -646,13 +714,22 @@ export function AddClientModal({
            * всего добавил и бросил, а сервер бы её честно сохранил, и в
            * карточке заказа висела бы безымянная услуга.
            */
+          /*
+           * В заказ уходит готовая строка: «Химчистка мягкой мебели × 3» и
+           * её итог. Так карточка заказа и КП показывают, из чего сложилась
+           * сумма, без обратного пересчёта.
+           */
           customExtras: extraRows
-            .filter((r) => r.title.trim())
-            .map((r) => ({
-              title: r.title.trim(),
-              price: Math.max(0, Math.round(Number(r.price) || 0)),
-              checked: r.checked,
-            })),
+            .filter((r) => r.title.trim() && extraTotal(r) > 0)
+            .map((r) => {
+              const qty = Math.max(0, Math.round(Number(r.qty) || 0));
+              return {
+                title:
+                  qty > 1 ? `${r.title.trim()} × ${qty}` : r.title.trim(),
+                price: extraTotal(r),
+                checked: r.checked,
+              };
+            }),
           dirtLevel: hasLevels ? dirtLevel : undefined,
           area: isFurniture ? 0 : toInt(area),
           seats: isFurniture ? toInt(seats) : undefined,
@@ -1002,6 +1079,7 @@ export function AddClientModal({
                           key: `e${Date.now()}_${prev.length}`,
                           title: '',
                           price: '',
+                          qty: '1',
                           checked: true,
                         },
                       ])
@@ -1014,8 +1092,8 @@ export function AddClientModal({
 
               {extraRows.length === 0 && (
                 <p className="text-xs text-navy-600">
-                  Пока не добавлены. Нажмите «плюс», чтобы вписать свою услугу
-                  и её цену.
+                  Нажмите «плюс», чтобы вписать свою услугу, её цену и
+                  количество.
                 </p>
               )}
 
@@ -1046,7 +1124,7 @@ export function AddClientModal({
                     <input
                       type="number"
                       min={0}
-                      className="input input-sm w-24 shrink-0"
+                      className="input input-sm w-20 shrink-0"
                       value={r.price}
                       placeholder="Цена"
                       onChange={(ev) =>
@@ -1058,6 +1136,32 @@ export function AddClientModal({
                       }
                       aria-label="Цена доп. услуги"
                     />
+                    {/*
+                      Количество мест. Пока пусто — строка в сумму не идёт:
+                      «Химчистка мягкой мебели» стоит в форме заранее, но
+                      деньги за неё добавятся только когда впишут число.
+                    */}
+                    <input
+                      type="number"
+                      min={0}
+                      className="input input-sm w-16 shrink-0"
+                      value={r.qty}
+                      placeholder="Кол-во"
+                      onChange={(ev) =>
+                        setExtraRows((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, qty: ev.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label="Количество"
+                      title="Сколько мест или штук"
+                    />
+                    {extraTotal(r) > 0 && (
+                      <span className="shrink-0 text-xs font-semibold tabular-nums text-navy-700">
+                        = {formatPrice(extraTotal(r))}
+                      </span>
+                    )}
                     {/* галочка: включить строку в сумму заявки */}
                     <input
                       type="checkbox"

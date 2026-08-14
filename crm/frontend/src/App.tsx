@@ -1,5 +1,11 @@
-import { Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Suspense, useEffect, useRef } from 'react';
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import { useLiveUpdates } from './api/live';
 import { Spinner } from './components/ui';
@@ -94,6 +100,34 @@ function TrashOnly({ children }: { children: JSX.Element }) {
   return children;
 }
 
+/**
+ * Начальный экран — всегда воронка.
+ *
+ * Браузер восстанавливает вчерашнюю вкладку: сотрудник открывал CRM и
+ * попадал на «Аналитику», где закрыл её накануне, хотя работа начинается
+ * с воронки. Один раз за загрузку страницы уводим на неё — но только с
+ * «случайного» адреса: ссылки из уведомлений и Телеграма (карточка заказа,
+ * задача, ведомость) должны открываться там, куда ведут.
+ */
+function StartOnFunnel({ ready }: { ready: boolean }) {
+  const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const done = useRef(false);
+
+  useEffect(() => {
+    if (!ready || done.current) return;
+    done.current = true;
+    // адрес с параметрами — это переход по ссылке, его не трогаем
+    if (search) return;
+    // разделы верхнего уровня без параметров считаем «восстановленной вкладкой»
+    const deepLink = pathname.split('/').filter(Boolean).length > 1;
+    if (deepLink || pathname === '/') return;
+    navigate('/', { replace: true });
+  }, [ready, pathname, search, navigate]);
+
+  return null;
+}
+
 export default function App() {
   const { user, loading } = useAuth();
   /*
@@ -105,6 +139,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <StartOnFunnel ready={!loading && !!user} />
       <Suspense fallback={<Spinner />}>
         <Routes>
         <Route

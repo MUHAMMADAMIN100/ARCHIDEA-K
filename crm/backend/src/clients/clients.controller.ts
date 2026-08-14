@@ -35,12 +35,16 @@ export class ClientsController {
     @Query('managerId') managerId?: string,
     @Query('sort') sort?: 'recent' | 'name',
     @Query('repeat') repeat?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     return this.service.list(user, {
       search,
       tag,
       source,
       managerId,
+      from,
+      to,
       sort,
       // ТЗ 9.4 — фильтр «повторные клиенты»
       repeat: repeat === 'true' || repeat === '1',

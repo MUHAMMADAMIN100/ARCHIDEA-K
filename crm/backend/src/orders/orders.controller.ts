@@ -43,8 +43,12 @@ export class OrdersController {
   }
 
   @Get('board')
-  board(@CurrentUser() user: AuthUser) {
-    return this.service.board(user);
+  board(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.board(user, { from, to });
   }
 
   /**
