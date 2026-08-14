@@ -107,6 +107,21 @@ export class BrigadesController {
     }
   }
 
+  /**
+   * Назначить бригадира могут руководитель и управляющий (решение владельца).
+   *
+   * Право `ops:manage` шире: по нему менеджер ведёт состав бригад и выезды, и
+   * этого у него никто не отнимал. Бригадир — вопрос старшинства в команде, а
+   * не ежедневная работа с составом, поэтому проверка отдельная и узкая.
+   */
+  private assertCanSetLeader(user: AuthUser) {
+    if (user.role !== Role.DIRECTOR && user.role !== Role.SUPERVISOR) {
+      throw new ForbiddenException(
+        'Назначать бригадира может руководитель или управляющий',
+      );
+    }
+  }
+
   @Get()
   list() {
     return this.service.listBrigades();
@@ -125,6 +140,7 @@ export class BrigadesController {
     @Body() dto: UpdateBrigadeDto,
   ) {
     this.assertManages(user);
+    if (dto.leaderId !== undefined) this.assertCanSetLeader(user);
     return this.service.updateBrigade(id, dto);
   }
 

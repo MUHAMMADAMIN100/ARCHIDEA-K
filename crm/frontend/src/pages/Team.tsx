@@ -107,6 +107,46 @@ export function Team() {
     });
   };
 
+  /*
+   * Назначить бригадиром.
+   *
+   * Кнопки для этого не было вовсе: бригадир задавался только запросом к
+   * серверу. Поэтому у «Бригады №1» в шапке годами стояло имя из удалённой
+   * записи, а поправить это из приложения было нельзя. Меняет старшего в
+   * бригаде руководитель или управляющий — то же самое проверяет сервер.
+   */
+  const canSetLeader = user?.role === 'DIRECTOR' || user?.role === 'SUPERVISOR';
+
+  const makeLeader = async (b: Brigade, c: Cleaner) => {
+    const ok = await dialog.confirm({
+      title: 'Назначить бригадиром?',
+      message: `${c.fullName} станет бригадиром бригады «${b.name}»${
+        b.leader ? `, вместо: ${b.leader.fullName}` : ''
+      }.`,
+      confirmText: 'Назначить',
+    });
+    if (!ok) return;
+    // сразу на экране: звёздочка и метка переезжают, не дожидаясь сервера
+    setBrigades((bs) =>
+      bs
+        ? bs.map((x) => {
+            if (x.id === b.id) {
+              return { ...x, leaderId: c.id, leader: { id: c.id, fullName: c.fullName } };
+            }
+            // бригадиром человек бывает только в одной бригаде — так устроен сервер
+            return x.leaderId === c.id ? { ...x, leaderId: null, leader: null } : x;
+          })
+        : bs,
+    );
+    try {
+      await api.patch(`/brigades/${b.id}`, { leaderId: c.id });
+      toast.success(`${c.fullName} — бригадир`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Не удалось назначить бригадира');
+    }
+    reloadAll();
+  };
+
   // создание/редактирование клинера — оптимистично в плоском списке,
   // вложенную структуру бригад досогласуем фоновым тихим reload
   const upsertCleaner = (
@@ -352,6 +392,21 @@ export function Team() {
                             title="Обязанности"
                           >
                             <BadgeCheck className="h-4 w-4" />
+                          </button>
+                        )}
+                        {/*
+                          Звёздочка стоит рядом с карандашом и мусоркой — в том
+                          же ряду действий над человеком. У самого бригадира её
+                          нет: он уже бригадир, нажимать не на что.
+                        */}
+                        {canSetLeader && !isLeader && (
+                          <button
+                            onClick={() => makeLeader(b, c as Cleaner)}
+                            className="press shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-amber-50 hover:text-amber-600"
+                            title="Назначить бригадиром"
+                            aria-label={`Назначить бригадиром: ${c.fullName}`}
+                          >
+                            <Star className="h-4 w-4" />
                           </button>
                         )}
                         <button

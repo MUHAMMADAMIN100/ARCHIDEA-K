@@ -44,16 +44,21 @@ type BrigadeMember = { id: string; fullName: string };
  * бригадира в состав при выдаче, чтобы дыра не зависела от того, каким
  * способом его когда-то назначили.
  *
- * Уволенного бригадира не дописываем: удаление клинера убирает его из
- * состава, и возвращать его в список — значит воскрешать удалённого.
+ * Уволенного бригадира не дописываем и в шапке не показываем — считаем, что
+ * бригадир не назначен. Именно из-за этого вышла путаница у «Бригады №1»: в
+ * шапке стояло «бригадир: Кибриё», хотя эта запись удалена, а работает
+ * другая — «Кибрие» в списке. Человек читает имя в шапке, не находит его в
+ * списке и не понимает, где правда. Пусто честнее: видно, что бригадира
+ * надо назначить заново.
  */
 function withLeaderInList<
   L extends BrigadeMember & { deletedAt: Date | null },
   C extends BrigadeMember,
-  B extends { leader: L | null; cleaners: C[] },
+  B extends { leader: L | null; leaderId: string | null; cleaners: C[] },
 >(brigade: B): B {
   const leader = brigade.leader;
-  if (!leader || leader.deletedAt) return brigade;
+  if (!leader) return brigade;
+  if (leader.deletedAt) return { ...brigade, leader: null, leaderId: null };
   if (brigade.cleaners.some((c) => c.id === leader.id)) return brigade;
   const { deletedAt: _skip, ...member } = leader;
   const cleaners = [...brigade.cleaners, member as unknown as C].sort((a, z) =>
@@ -237,8 +242,10 @@ export class CleanersService {
     const patch: any = {};
     if (data.name !== undefined) patch.name = data.name.trim();
     if (data.leaderId !== undefined && data.leaderId) {
-      const leader = await this.prisma.cleaner.findUnique({
-        where: { id: data.leaderId },
+      // удалённого бригадиром не ставим: в шапке он всё равно не покажется,
+      // и бригада молча осталась бы без бригадира
+      const leader = await this.prisma.cleaner.findFirst({
+        where: { id: data.leaderId, ...NOT_DELETED },
       });
       if (!leader) throw new NotFoundException('Клинер не найден');
     }
