@@ -109,6 +109,30 @@ function TrashOnly({ children }: { children: JSX.Element }) {
  * «случайного» адреса: ссылки из уведомлений и Телеграма (карточка заказа,
  * задача, ведомость) должны открываться там, куда ведут.
  */
+/**
+ * Как страница оказалась открыта — об этом сообщает сам браузер.
+ *
+ * «reload» — человек нажал F5 или кнопку обновления.
+ * «back_forward» — вернулся стрелками браузера.
+ * «navigate» — открыл заново: с закладки, ярлыка, новой вкладкой,
+ *   а также когда браузер восстанавливает вчерашнюю сессию.
+ *
+ * Различать это важно: обновление страницы означает «покажи мне то же
+ * самое ещё раз», и уводить человека с календаря на воронку в такой
+ * момент — грубость.
+ */
+function isFreshOpen(): boolean {
+  try {
+    const nav = performance.getEntriesByType(
+      'navigation',
+    )[0] as PerformanceNavigationTiming | undefined;
+    // тип неизвестен (старый браузер) — считаем новым открытием, как раньше
+    return !nav || nav.type === 'navigate';
+  } catch {
+    return true;
+  }
+}
+
 function StartOnFunnel({ ready }: { ready: boolean }) {
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
@@ -117,9 +141,15 @@ function StartOnFunnel({ ready }: { ready: boolean }) {
   useEffect(() => {
     if (!ready || done.current) return;
     done.current = true;
+    /*
+     * Обновление страницы и «назад» оставляют человека там же (решение
+     * владельца). Раньше правило считало новым заходом любую загрузку —
+     * и F5 на календаре выбрасывал на воронку.
+     */
+    if (!isFreshOpen()) return;
     // адрес с параметрами — это переход по ссылке, его не трогаем
     if (search) return;
-    // разделы верхнего уровня без параметров считаем «восстановленной вкладкой»
+    // вложенный адрес (карточка клиента, заказа) — тоже осознанная ссылка
     const deepLink = pathname.split('/').filter(Boolean).length > 1;
     if (deepLink || pathname === '/') return;
     navigate('/', { replace: true });
