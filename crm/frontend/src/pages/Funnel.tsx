@@ -117,9 +117,16 @@ function OrderCardBody({
     idx >= 0 && idx < PIPELINE.length - 1 ? PIPELINE[idx + 1] : null;
   return (
     <>
-      <div className="flex items-start justify-between gap-2">
+      {/*
+        На телефоне имя занимает ВСЮ строку, значки уходят под него.
+        В одну строку они не помещаются: колонка шириной в полэкрана, и
+        «КРУПНЫЙ» с «Потенциальный» отжимали имя в полоску шириной в букву —
+        «Мухаммад комп заведение» рассыпался по одной букве в строку.
+        На компьютере места хватает, там всё остаётся в одну строку.
+      */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-2">
         {/* на телефоне шрифт мельче: в половину экрана должно влезть имя целиком */}
-        <div className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-navy-900 sm:text-base">
+        <div className="min-w-0 break-words text-[13px] font-semibold leading-snug text-navy-900 sm:min-w-[8rem] sm:flex-1 sm:text-base">
           {o.client?.fullName}
         </div>
         {/*
@@ -127,7 +134,7 @@ function OrderCardBody({
           воронке работают глазами, и «VIP» или «Отказник» должны читаться
           до того, как карточку открыли.
         */}
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        <div className="flex flex-wrap items-center gap-1 sm:shrink-0 sm:justify-end">
           {/*
             Повторный клиент — мигающая точка.
             Человек обращается к нам не в первый раз: это видно до того, как
