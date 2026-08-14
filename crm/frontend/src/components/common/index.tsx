@@ -23,6 +23,117 @@ import type { Brigade, Cleaner, Manager } from '../../types';
 
 // ─────────────────────────── Таблица ───────────────────────────
 
+/**
+ * Какие номера страниц показать в листателе.
+ *
+ * Раньше внизу стояло скупое «‹ 1 / 2 ›»: чтобы попасть на пятую страницу,
+ * надо было четыре раза нажать «дальше». Теперь номера видны и по ним
+ * прыгают сразу. Все пятьдесят номеров в строку не влезут, поэтому
+ * показываем первую, последнюю, текущую с соседями, а разрывы обозначаем
+ * многоточием: 1 … 24 25 26 27 28 … 50.
+ *
+ * @param siblings сколько соседей текущей страницы показывать с каждой стороны
+ */
+export function pageList(
+  current: number,
+  pages: number,
+  siblings: number,
+): (number | '…')[] {
+  // короткий список умещается целиком — многоточие только запутает
+  const maxPlain = siblings * 2 + 5;
+  if (pages <= maxPlain) {
+    return Array.from({ length: pages }, (_, i) => i + 1);
+  }
+
+  const left = Math.max(2, current - siblings);
+  const right = Math.min(pages - 1, current + siblings);
+  const items: (number | '…')[] = [1];
+
+  /*
+   * Многоточие ставим, только когда за ним прячется больше одной страницы.
+   * Иначе «1 … 3» занимает столько же места, сколько честное «1 2 3», но
+   * прячет номер, по которому человек хотел щёлкнуть.
+   */
+  if (left > 3) items.push('…');
+  else if (left === 3) items.push(2);
+
+  for (let p = left; p <= right; p += 1) items.push(p);
+
+  if (right < pages - 2) items.push('…');
+  else if (right === pages - 2) items.push(pages - 1);
+
+  items.push(pages);
+  return items;
+}
+
+/** Ряд номеров страниц. Считает от 1, наружу отдаёт номер страницы с 0. */
+function Pager({
+  current,
+  pages,
+  siblings,
+  onGo,
+  className = '',
+}: {
+  /** текущая страница, считая с нуля */
+  current: number;
+  pages: number;
+  siblings: number;
+  onGo: (page: number) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`items-center gap-1 ${className}`}>
+      <button
+        type="button"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-600 hover:bg-navy-50 disabled:opacity-40 disabled:hover:bg-transparent"
+        onClick={() => onGo(current - 1)}
+        disabled={current === 0}
+        aria-label="Предыдущая страница"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+
+      {pageList(current + 1, pages, siblings).map((item, i) =>
+        item === '…' ? (
+          <span
+            key={`gap-${i}`}
+            aria-hidden="true"
+            className="flex h-8 w-6 items-end justify-center text-navy-400"
+          >
+            …
+          </span>
+        ) : (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onGo(item - 1)}
+            aria-label={`Страница ${item}`}
+            aria-current={item === current + 1 ? 'page' : undefined}
+            className={`flex h-8 min-w-[2rem] items-center justify-center rounded-lg px-1 text-sm tabular-nums transition ${
+              item === current + 1
+                ? // тот же синий, что у главных кнопок системы — цвет логотипа
+                  'bg-brand-500 font-semibold text-white hover:bg-brand-600'
+                : 'text-navy-700 hover:bg-navy-50'
+            }`}
+          >
+            {item}
+          </button>
+        ),
+      )}
+
+      <button
+        type="button"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-600 hover:bg-navy-50 disabled:opacity-40 disabled:hover:bg-transparent"
+        onClick={() => onGo(current + 1)}
+        disabled={current >= pages - 1}
+        aria-label="Следующая страница"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 export interface Column<T> {
   key: string;
   title: string;
@@ -200,34 +311,27 @@ export function DataTable<T>({
         </ScrollArea>
       </div>
 
+      {/*
+        Номера страниц по центру. На телефоне соседей меньше — иначе ряд
+        не помещается в 320 px и уезжает вбок вместе со страницей.
+      */}
       {pages > 1 && (
-        <div className="flex items-center justify-between text-sm text-navy-600">
-          <span>
-            {current * perPage + 1}–
-            {Math.min((current + 1) * perPage, list.length)} из {list.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              className="btn-ghost px-2 py-1 disabled:opacity-40"
-              onClick={() => setPage(current - 1)}
-              disabled={current === 0}
-              aria-label="Предыдущая страница"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="px-2">
-              {current + 1} / {pages}
-            </span>
-            <button
-              className="btn-ghost px-2 py-1 disabled:opacity-40"
-              onClick={() => setPage(current + 1)}
-              disabled={current >= pages - 1}
-              aria-label="Следующая страница"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <nav className="pt-1" aria-label="Страницы">
+          <Pager
+            current={current}
+            pages={pages}
+            siblings={1}
+            onGo={setPage}
+            className="flex justify-center sm:hidden"
+          />
+          <Pager
+            current={current}
+            pages={pages}
+            siblings={2}
+            onGo={setPage}
+            className="hidden justify-center sm:flex"
+          />
+        </nav>
       )}
     </div>
   );
