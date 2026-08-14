@@ -251,30 +251,42 @@ function OrderCardBody({
               Вернуть в работу
             </button>
           ) : (
-            <div className="flex items-center justify-between gap-1">
+            /*
+              Три кнопки в карточке шириной в полэкрана.
+
+              Стояли враспор и не сжимались, поэтому вылезали за края
+              карточки — на снимке владельца «Назад» и «Далее» пересекали
+              рамку. Теперь отступы меньше, ничего не сжимается ниже своего
+              содержимого, а на самых узких экранах слова уступают место
+              стрелкам: смысл кнопки от этого не теряется, а «Отказ» —
+              единственное действие без стрелки — остаётся словом всегда.
+            */
+            <div className="flex items-center justify-between gap-0.5">
               <button
                 onClick={() => prevStage && onChange(o.id, prevStage)}
                 disabled={!prevStage}
-                className="press flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30"
+                className="press flex shrink-0 items-center gap-0.5 rounded-lg px-1 py-1 text-[11px] font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30 sm:px-1.5 sm:text-xs"
                 title={prevStage ? STAGE_LABEL[prevStage] : ''}
+                aria-label="Предыдущий этап"
               >
-                <ChevronLeft className="h-4 w-4" />
-                Назад
+                <ChevronLeft className="h-4 w-4 shrink-0" />
+                <span className="hidden min-[400px]:inline">Назад</span>
               </button>
               <button
                 onClick={() => onChange(o.id, 'REJECTED')}
-                className="press rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50"
+                className="press shrink-0 rounded-lg px-1 py-1 text-[11px] font-medium text-red-500 hover:bg-red-50 sm:px-2 sm:text-xs"
               >
                 Отказ
               </button>
               <button
                 onClick={() => nextStage && onChange(o.id, nextStage)}
                 disabled={!nextStage}
-                className="press flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30"
+                className="press flex shrink-0 items-center gap-0.5 rounded-lg px-1 py-1 text-[11px] font-medium text-navy-600 hover:bg-navy-50 disabled:opacity-30 sm:px-1.5 sm:text-xs"
                 title={nextStage ? STAGE_LABEL[nextStage] : ''}
+                aria-label="Следующий этап"
               >
-                Далее
-                <ChevronRight className="h-4 w-4" />
+                <span className="hidden min-[400px]:inline">Далее</span>
+                <ChevronRight className="h-4 w-4 shrink-0" />
               </button>
             </div>
           )}
@@ -350,8 +362,23 @@ export function Funnel() {
   // стрелки прокрутки: гаснут на краях доски — дальше листать нечего
   const prevBtnRef = useRef<HTMLButtonElement>(null);
   const nextBtnRef = useRef<HTMLButtonElement>(null);
-  const scrollBoard = (dir: -1 | 1) =>
-    boardRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  /*
+   * Шаг стрелки — ровно одна колонка.
+   *
+   * Раньше здесь стояло 320 px на все случаи. На телефоне колонка — полэкрана
+   * (около 170 px), и стрелка проскакивала полтора статуса, останавливаясь
+   * между ними. Пока доску возили пальцем, это сглаживалось; теперь на
+   * телефоне пальцем её не двигают, и стрелка обязана доводить до соседнего
+   * статуса сама. Ширину берём у первой колонки — она меняется с экраном.
+   */
+  const scrollBoard = (dir: -1 | 1) => {
+    const box = boardRef.current;
+    if (!box) return;
+    const first = box.firstElementChild as HTMLElement | null;
+    const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
+    const step = first ? first.getBoundingClientRect().width + gap : 320;
+    box.scrollBy({ left: dir * step, behavior: 'smooth' });
+  };
 
   /*
    * Период воронки — по ДАТЕ ОФОРМЛЕНИЯ заявки (решение владельца).

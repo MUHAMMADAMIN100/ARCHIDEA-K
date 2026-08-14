@@ -13,21 +13,54 @@ import {
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { dayKey, dayUTC } from '../common/time/dushanbe';
 
+const brigadeMemberSelect = {
+  id: true,
+  fullName: true,
+  phone: true,
+  rate: true,
+  duties: true,
+  isActive: true,
+  brigadeId: true,
+};
+
 const brigadeInclude = {
-  leader: { select: { id: true, fullName: true } },
+  // те же поля, что у остальных: бригадир показывается такой же карточкой
+  leader: { select: { ...brigadeMemberSelect, deletedAt: true } },
   cleaners: {
     orderBy: { fullName: 'asc' as const },
-    select: {
-      id: true,
-      fullName: true,
-      phone: true,
-      rate: true,
-      duties: true,
-      isActive: true,
-      brigadeId: true,
-    },
+    select: brigadeMemberSelect,
   },
 };
+
+type BrigadeMember = { id: string; fullName: string };
+
+/**
+ * Бригадир обязан стоять в списке своей бригады.
+ *
+ * Бригадир и состав — две разные связи. Назначение бригадира через
+ * приложение записывает его и в состав, но у бригад, заведённых раньше,
+ * связь состава осталась пустой: в шапке «бригадир: Кибриё», а карточки её
+ * в списке нет — как будто человека в бригаде не существует. Дописываем
+ * бригадира в состав при выдаче, чтобы дыра не зависела от того, каким
+ * способом его когда-то назначили.
+ *
+ * Уволенного бригадира не дописываем: удаление клинера убирает его из
+ * состава, и возвращать его в список — значит воскрешать удалённого.
+ */
+function withLeaderInList<
+  L extends BrigadeMember & { deletedAt: Date | null },
+  C extends BrigadeMember,
+  B extends { leader: L | null; cleaners: C[] },
+>(brigade: B): B {
+  const leader = brigade.leader;
+  if (!leader || leader.deletedAt) return brigade;
+  if (brigade.cleaners.some((c) => c.id === leader.id)) return brigade;
+  const { deletedAt: _skip, ...member } = leader;
+  const cleaners = [...brigade.cleaners, member as unknown as C].sort((a, z) =>
+    a.fullName.localeCompare(z.fullName, 'ru'),
+  );
+  return { ...brigade, cleaners };
+}
 
 @Injectable()
 export class CleanersService {
@@ -177,19 +210,21 @@ export class CleanersService {
 
   // ─────────────── БРИГАДЫ ───────────────
 
-  listBrigades() {
-    return this.prisma.brigade.findMany({
+  async listBrigades() {
+    const brigades = await this.prisma.brigade.findMany({
       include: brigadeInclude,
       orderBy: { createdAt: 'asc' },
     });
+    return brigades.map(withLeaderInList);
   }
 
-  createBrigade(data: { name: string }) {
+  async createBrigade(data: { name: string }) {
     if (!data.name?.trim()) throw new BadRequestException('Укажите название');
-    return this.prisma.brigade.create({
+    const brigade = await this.prisma.brigade.create({
       data: { name: data.name.trim() },
       include: brigadeInclude,
     });
+    return withLeaderInList(brigade);
   }
 
   async updateBrigade(
@@ -208,11 +243,13 @@ export class CleanersService {
       if (!leader) throw new NotFoundException('Клинер не найден');
     }
     if (data.leaderId === undefined) {
-      return this.prisma.brigade.update({
-        where: { id },
-        data: patch,
-        include: brigadeInclude,
-      });
+      return withLeaderInList(
+        await this.prisma.brigade.update({
+          where: { id },
+          data: patch,
+          include: brigadeInclude,
+        }),
+      );
     }
     // атомарно: снимаем лидерство в другой бригаде (leaderId уникален),
     // переводим клинера в эту бригаду и назначаем бригадиром
@@ -238,7 +275,7 @@ export class CleanersService {
       }),
     );
     const results = await this.prisma.$transaction(ops);
-    return results[results.length - 1];
+    return withLeaderInList(results[results.length - 1]);
   }
 
   async removeBrigade(id: string) {
