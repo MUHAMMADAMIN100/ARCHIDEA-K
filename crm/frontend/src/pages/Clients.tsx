@@ -553,8 +553,13 @@ export function AddClientModal({
   const defaultExtraAdded = useRef(false);
   useEffect(() => {
     if (defaultExtraAdded.current || initial?.order) return;
-    const preset = (tariffs?.extras ?? []).find(
-      (e) => e.key === 'upholsteryDry',
+    /*
+     * Ищем по НАЗВАНИЮ, а не по ключу: услугу владелец мог завести руками
+     * через «Услуги и цены», и ключ у неё тогда свой. Название — то, что
+     * человек видит и на что ориентируется.
+     */
+    const preset = (tariffs?.extras ?? []).find((e) =>
+      /химчистк.*мебел/i.test(e.title ?? ''),
     );
     if (!preset) return;
     defaultExtraAdded.current = true;
