@@ -1103,17 +1103,25 @@ export function AddClientModal({
               )}
 
               <div className="space-y-1.5">
+                {/*
+                  Название — отдельной строкой во всю ширину.
+
+                  Раньше всё стояло в один ряд, и цена, количество, сумма и
+                  кнопки съедали место: на название оставался квадратик в
+                  палец шириной, прочитать написанное было нельзя. Название
+                  здесь главное — ему вся строка, остальному вторая.
+                */}
                 {extraRows.map((r, i) => (
                   <div
                     key={r.key}
-                    className={`flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-2 ${
+                    className={`space-y-1.5 rounded-lg border px-2.5 py-2 ${
                       r.checked
                         ? 'border-brand-400 bg-brand-50/60'
                         : 'border-navy-100'
                     }`}
                   >
                     <input
-                      className="input input-sm min-w-0 flex-1"
+                      className="input input-sm w-full"
                       value={r.title}
                       placeholder="Название услуги"
                       maxLength={120}
@@ -1126,6 +1134,7 @@ export function AddClientModal({
                       }
                       aria-label="Название доп. услуги"
                     />
+                    <div className="flex items-center gap-2">
                     <input
                       type="number"
                       min={0}
@@ -1169,7 +1178,7 @@ export function AddClientModal({
                       услуги» прыгает прямо под пальцем.
                     */}
                     <span
-                      className="w-24 shrink-0 truncate text-right text-xs font-semibold tabular-nums text-navy-700"
+                      className="ml-auto w-24 shrink-0 truncate text-right text-xs font-semibold tabular-nums text-navy-700"
                       title={extraTotal(r) > 0 ? formatPrice(extraTotal(r)) : ''}
                     >
                       {extraTotal(r) > 0 ? `= ${formatPrice(extraTotal(r))}` : '—'}
@@ -1199,6 +1208,7 @@ export function AddClientModal({
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                    </div>
                   </div>
                 ))}
               </div>
