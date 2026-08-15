@@ -463,6 +463,32 @@ export class OrdersService {
     const orders = await this.list(user, period ?? {});
 
     /*
+     * Сколько заказов лежит в папке «Архив» каждого закрытого этапа.
+     *
+     * Считаем по ВСЕМ заказам этапа, без фильтра периода, — ровно так же,
+     * как их отдаёт сама папка (см. archive). Раньше счётчик брался из
+     * отфильтрованного списка, а период по умолчанию — текущий месяц,
+     * поэтому на значке всегда стоял ноль, хотя внутри лежал тридцать один
+     * заказ. Число на значке обязано совпадать с тем, что человек увидит,
+     * открыв папку.
+     *
+     * Тянем только даты и номера: содержимое папки подгружается отдельно,
+     * когда её открыли.
+     */
+    const дляАрхива = await this.prisma.order.findMany({
+      where: {
+        ...this.scopeWhere(user),
+        stage: { in: OrdersService.CLOSED_STAGES },
+      },
+      select: { id: true, createdAt: true, closedAt: true, stage: true },
+    });
+    const вПапке = new Map<FunnelStage, number>();
+    for (const stage of OrdersService.CLOSED_STAGES) {
+      const этапа = дляАрхива.filter((o) => o.stage === stage);
+      вПапке.set(stage, this.splitClosed(этапа).archived.length);
+    }
+
+    /*
      * Сколько всего раз клиент к нам обращался — считаем по всем его
      * заказам, включая архивные и чужие. Из этого числа воронка рисует
      * мигающую точку: человек пришёл во второй раз.
@@ -539,8 +565,11 @@ export class OrdersService {
           0,
         ),
         orders: shown,
-        /** сколько закрытых заказов этапа лежит в папке «Архив» */
-        archived: inStage.length - shown.length,
+        /**
+         * Сколько закрытых заказов этапа лежит в папке «Архив».
+         * Берём то же число, что покажет сама папка, — иначе значок врёт.
+         */
+        archived: closed ? (вПапке.get(stage) ?? 0) : 0,
       };
     });
   }
