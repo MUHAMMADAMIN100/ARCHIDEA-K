@@ -380,6 +380,8 @@ export interface Order {
   rejectionReason?: string | null;
   inspectionDate?: string | null;
   scheduledDate?: string | null;
+  /** последний день, если уборка идёт не один день */
+  scheduledEndDate?: string | null;
   /** ТЗ 5 — сумма задана вручную, автоматический пересчёт её не трогает */
   isManualPrice?: boolean;
   /** Выбранные доп. услуги: ключ услуги → количество */

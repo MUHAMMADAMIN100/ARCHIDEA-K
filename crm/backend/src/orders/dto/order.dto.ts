@@ -164,6 +164,8 @@ export class UpdateOrderDto {
   @IsOptional() @IsString() @MaxLength(2000) preferences?: string;
   @IsOptional() @IsString() inspectionDate?: string;
   @IsOptional() @IsString() scheduledDate?: string;
+  /** Последний день, если уборка идёт не один день */
+  @IsOptional() @IsString() scheduledEndDate?: string;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
   @IsOptional() @IsEnum(AccessMethod) accessMethod?: AccessMethod;
   @IsOptional() @IsBoolean() hasUtilities?: boolean;
@@ -210,6 +212,7 @@ export class ChangeStageDto {
   @IsEnum(FunnelStage) stage: FunnelStage;
   @IsOptional() @IsString() @MaxLength(1000) rejectionReason?: string;
   @IsOptional() @IsString() scheduledDate?: string;
+  @IsOptional() @IsString() scheduledEndDate?: string;
 }
 
 export class AssignCleanersDto {

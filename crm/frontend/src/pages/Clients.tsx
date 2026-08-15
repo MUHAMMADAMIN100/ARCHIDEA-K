@@ -1162,11 +1162,18 @@ export function AddClientModal({
                       aria-label="Количество"
                       title="Сколько мест или штук"
                     />
-                    {extraTotal(r) > 0 && (
-                      <span className="shrink-0 text-xs font-semibold tabular-nums text-navy-700">
-                        = {formatPrice(extraTotal(r))}
-                      </span>
-                    )}
+                    {/*
+                      Сумма строки стоит на месте всегда, даже когда её ещё
+                      нет. Раньше она появлялась вместе с количеством и
+                      раздвигала строку: вписываешь число — и блок «Доп.
+                      услуги» прыгает прямо под пальцем.
+                    */}
+                    <span
+                      className="w-24 shrink-0 truncate text-right text-xs font-semibold tabular-nums text-navy-700"
+                      title={extraTotal(r) > 0 ? formatPrice(extraTotal(r)) : ''}
+                    >
+                      {extraTotal(r) > 0 ? `= ${formatPrice(extraTotal(r))}` : '—'}
+                    </span>
                     {/* галочка: включить строку в сумму заявки */}
                     <input
                       type="checkbox"

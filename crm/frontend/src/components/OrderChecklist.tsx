@@ -120,8 +120,20 @@ export function OrderChecklistCard({
   const [newItemTitle, setNewItemTitle] = useState('');
   const [newItemSection, setNewItemSection] = useState('');
   const [newItemRequired, setNewItemRequired] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  /*
+   * Пока чек-лист не сохранён на сервере, у его пунктов нет настоящих
+   * номеров: показанные — временные, придуманные для мгновенной отрисовки.
+   * Нажать «удалить» на таком пункте значило отправить серверу номер,
+   * которого он не знает, — отсюда «Пункт чек-листа не найден» сразу после
+   * применения шаблона. На эти доли секунды кнопки выключаем.
+   */
+  const notSavedYet = !!checklist && isTempId(checklist.id);
 
   const applyTemplate = async () => {
+    if (applying) return;
+    setApplying(true);
     const chosen = (templates.data ?? []).find((t) => t.id === templateId);
     const id = tempId();
     const optimistic: OrderChecklist = {
@@ -146,8 +158,20 @@ export function OrderChecklistCard({
       });
       setData(res.data);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось применить шаблон');
-      setData(null);
+      const message = e?.response?.data?.message as string | undefined;
+      if (message && /уже есть чек-лист/i.test(message)) {
+        /*
+         * Чек-лист успели создать в другой вкладке или предыдущим нажатием.
+         * Не ругаемся — показываем то, что есть на самом деле.
+         */
+        setData(null);
+        reload();
+      } else {
+        toast.error(message || 'Не удалось применить шаблон');
+        setData(null);
+      }
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -259,6 +283,47 @@ export function OrderChecklistCard({
     }
   };
 
+  /**
+   * Сменить шаблон чек-листа.
+   *
+   * Нажали «Применить», не выбрав шаблон, — и список остался пустым, а
+   * вернуться было некуда: сервер второй раз применять шаблон не даёт («у
+   * заказа уже есть чек-лист»), и человек упирался в «Не удалось применить
+   * шаблон». Теперь старый чек-лист можно снять и выбрать заново.
+   */
+  const changeTemplate = async () => {
+    if (!checklist) return;
+    const filled = checklist.items.filter((i) => i.isDone || i.level).length;
+    const ok = await dialog.confirm({
+      title: 'Сменить шаблон чек-листа?',
+      message: filled
+        ? `Нынешний чек-лист «${checklist.templateName}» будет удалён вместе с отметками (их ${filled}). Вернуть их будет нельзя.`
+        : `Нынешний чек-лист «${checklist.templateName}» будет удалён, и можно будет выбрать другой шаблон. Отметок в нём нет — терять нечего.`,
+      confirmText: 'Сменить шаблон',
+      danger: filled > 0,
+    });
+    if (!ok) return;
+    const before = checklist;
+    /*
+     * Выбор шаблона показываем сразу, но кнопку «Применить» держим
+     * выключенной, пока старый чек-лист не удалён на сервере. Иначе новый
+     * шаблон уходит раньше удаления, сервер отвечает «у заказа уже есть
+     * чек-лист», и человек снова упирается в пустой список.
+     */
+    setApplying(true);
+    setData(null);
+    setTemplateId('');
+    try {
+      // список шаблонов подтянется сам: без чек-листа снова показывается выбор
+      await api.delete(`/orders/${orderId}/checklist`);
+    } catch (e: any) {
+      setData(before);
+      toast.error(e?.response?.data?.message || 'Не удалось сменить шаблон');
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const removeItem = async (item: OrderChecklistItem) => {
     if (!checklist) return;
     const ok = await dialog.confirm({
@@ -277,7 +342,15 @@ export function OrderChecklistCard({
           return { ...prev, items, status: recalcStatus(baseStatus, items) };
         }),
       request: () => api.delete(`/orders/${orderId}/checklist/items/${item.id}`),
-      onFail: (m) => toast.error(m),
+      onFail: (m) => {
+        /*
+         * Пункта на сервере уже нет — нажали дважды или его убрал коллега
+         * рядом. Пугать нечем: цель достигнута, а список сейчас перечитается
+         * и сойдётся сам.
+         */
+        if (/не найден/i.test(m)) return;
+        toast.error(m);
+      },
     });
     reload();
   };
@@ -309,6 +382,16 @@ export function OrderChecklistCard({
         <ClipboardList className="h-4 w-4 shrink-0 text-navy-600" />
         <h3 className="font-semibold text-navy-900">Чек-лист качества</h3>
         {checklist && <Badge className={STATUS_COLOR[checklist.status]}>{STATUS_LABEL[checklist.status]}</Badge>}
+        {checklist && canEdit && (
+          <button
+            onClick={changeTemplate}
+            disabled={notSavedYet}
+            className="press ml-auto shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-navy-600 hover:bg-navy-50 hover:text-navy-800 disabled:opacity-40"
+            title="Снять этот чек-лист и выбрать другой шаблон"
+          >
+            Сменить шаблон
+          </button>
+        )}
       </div>
 
       {error && (
@@ -356,9 +439,18 @@ export function OrderChecklistCard({
                       </option>
                     ))}
                 </select>
-                <button onClick={applyTemplate} className="btn-primary shrink-0">
+                {/*
+                  Пока запрос в пути, кнопка выключена: два нажатия подряд
+                  создавали чек-лист дважды, и второй ответ прилетал ошибкой
+                  «у заказа уже есть чек-лист».
+                */}
+                <button
+                  onClick={applyTemplate}
+                  disabled={applying}
+                  className="btn-primary shrink-0 disabled:opacity-60"
+                >
                   <Plus className="h-4 w-4" />
-                  Применить
+                  {applying ? 'Применяем…' : 'Применить'}
                 </button>
               </div>
             )
@@ -409,7 +501,9 @@ export function OrderChecklistCard({
                       <ChecklistItemRow
                         key={item.id}
                         item={item}
-                        canEdit={canEdit}
+                        // пока чек-лист не сохранён, у пунктов нет настоящих
+                        // номеров — трогать их нельзя
+                        canEdit={canEdit && !notSavedYet}
                         usesLevels={!!checklist.usesLevels}
                         onToggle={() => toggleItem(item)}
                         onLevel={(lvl) => setLevel(item, lvl)}

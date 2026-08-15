@@ -131,6 +131,29 @@ const orderDetailInclude = {
   },
 };
 
+/**
+ * Уборка на несколько дней: последний день не может быть раньше первого.
+ *
+ * Без этой проверки в карточке получалось «14–13 августа», а в календаре
+ * заказ не показывался ни одного дня — промежуток пустой.
+ */
+function assertOrderDays(
+  start: Date | null | undefined,
+  end: Date | null | undefined,
+): void {
+  if (!end) return;
+  if (!start) {
+    throw new BadRequestException(
+      'Сначала укажите дату уборки, потом последний день',
+    );
+  }
+  if (dayKey(end) < dayKey(start)) {
+    throw new BadRequestException(
+      'Последний день уборки не может быть раньше первого',
+    );
+  }
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -756,6 +779,13 @@ export class OrdersService {
     if (dto.scheduledDate !== undefined) {
       data.scheduledDate = parseDate(dto.scheduledDate);
     }
+    if (dto.scheduledEndDate !== undefined) {
+      data.scheduledEndDate = parseDate(dto.scheduledEndDate);
+    }
+    assertOrderDays(
+      (data.scheduledDate as Date | null | undefined) ?? before.scheduledDate,
+      (data.scheduledEndDate as Date | null | undefined) ?? before.scheduledEndDate,
+    );
     if (dto.preferredDate !== undefined) {
       data.preferredDate = parseDate(dto.preferredDate);
     }
@@ -1007,6 +1037,7 @@ export class OrdersService {
           'comment',
           'managerId',
           'scheduledDate',
+          'scheduledEndDate',
           'inspectionDate',
         ]),
       });
@@ -1165,6 +1196,13 @@ export class OrdersService {
     if (dto.scheduledDate !== undefined) {
       data.scheduledDate = parseDate(dto.scheduledDate);
     }
+    if (dto.scheduledEndDate !== undefined) {
+      data.scheduledEndDate = parseDate(dto.scheduledEndDate);
+    }
+    assertOrderDays(
+      (data.scheduledDate as Date | null | undefined) ?? order.scheduledDate,
+      (data.scheduledEndDate as Date | null | undefined) ?? order.scheduledEndDate,
+    );
 
     let draftReport: { id: string } | null = null;
     let autoVisit: { id: string } | null = null;
@@ -1236,7 +1274,15 @@ export class OrdersService {
       });
 
       return res;
-    });
+    },
+    /*
+     * Смена этапа делает много работы одной транзакцией: сам заказ, черновик
+     * ведомости, выезды бригады, запись в журнал. У уборки на несколько дней
+     * выездов создаётся столько же, сколько дней, и пяти секунд по умолчанию
+     * стало не хватать — этап падал с ошибкой, а выезды не появлялись.
+     * Замерено на боевых данных: с запасом до 20 секунд проходит.
+     */
+    { timeout: 20000, maxWait: 10000 });
 
     // авто-теги клиента и метка «повторный» (ТЗ 9.4)
     if (dto.stage === FunnelStage.REJECTED) {

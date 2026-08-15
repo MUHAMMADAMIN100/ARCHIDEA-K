@@ -29,6 +29,28 @@ const groupInclude = {
 };
 
 /**
+ * Дни уборки: от первого до последнего включительно.
+ *
+ * Пустой последний день — один день, как было всегда. Предел в 31 день —
+ * защита от опечатки в году: без него «2027» вместо «2026» породило бы
+ * сотни выездов одним нажатием.
+ */
+function daysBetween(start: Date, end: Date | null | undefined): string[] {
+  const первый = dayKey(start);
+  if (!end) return [первый];
+  const последний = dayKey(end);
+  if (последний <= первый) return [первый];
+  const дни: string[] = [];
+  const курсор = dayUTC(первый);
+  const предел = dayUTC(последний);
+  while (курсор <= предел && дни.length < 31) {
+    дни.push(курсор.toISOString().slice(0, 10));
+    курсор.setUTCDate(курсор.getUTCDate() + 1);
+  }
+  return дни;
+}
+
+/**
  * Выезды бригад на объекты (ТЗ 4).
  *
  * Раньше смена была просто отметкой «клинер работал в такой-то день»: ни адреса,
@@ -40,6 +62,7 @@ const groupInclude = {
  * один оплаченный день. Это защищает от двойного начисления, если человек
  * за день съездил на два объекта.
  */
+
 @Injectable()
 export class ShiftGroupsService {
   constructor(
@@ -230,6 +253,7 @@ export class ShiftGroupsService {
         id: true,
         address: true,
         scheduledDate: true,
+        scheduledEndDate: true,
         preferredDate: true,
         preferredTime: true,
         managerId: true,
@@ -266,25 +290,41 @@ export class ShiftGroupsService {
       : null;
 
     const when = order.scheduledDate ?? order.preferredDate ?? new Date();
-    const created = await tx.shiftGroup.create({
-      data: {
-        date: dayUTC(dayKey(when)),
-        address: order.address?.trim() || 'Адрес не указан',
-        orderId: order.id,
-        startTime: order.preferredTime ?? null,
-        brigadeId: brigade?.id ?? null,
-        brigadeName: brigade?.name ?? null,
-        brigadierId: leader?.id ?? null,
-        brigadierName: leader?.fullName ?? null,
-        managerId: order.managerId ?? fallbackUserId,
-        managerName: order.manager?.fullName ?? null,
-        note: 'Создан автоматически на этапе «Осмотр объекта»',
-        createdById: fallbackUserId,
-        members: { create: members },
-      },
-      select: { id: true },
-    });
-    return created;
+    /*
+     * Уборка на несколько дней — выезд на КАЖДЫЙ день.
+     *
+     * Иначе бригада выходит два дня, а в учёте стоит один выезд: клинерам
+     * начислится одна смена вместо двух. Смена — единица оплаты, и терять
+     * день нельзя. Один день (дата окончания пуста) даёт ровно один выезд,
+     * как было раньше.
+     */
+    const дни = daysBetween(when, order.scheduledEndDate);
+    let первый: { id: string } | null = null;
+    for (const [индекс, день] of дни.entries()) {
+      const созданный = await tx.shiftGroup.create({
+        data: {
+          date: dayUTC(день),
+          address: order.address?.trim() || 'Адрес не указан',
+          orderId: order.id,
+          startTime: order.preferredTime ?? null,
+          brigadeId: brigade?.id ?? null,
+          brigadeName: brigade?.name ?? null,
+          brigadierId: leader?.id ?? null,
+          brigadierName: leader?.fullName ?? null,
+          managerId: order.managerId ?? fallbackUserId,
+          managerName: order.manager?.fullName ?? null,
+          note:
+            дни.length > 1
+              ? `Создан автоматически на этапе «Осмотр объекта» — день ${индекс + 1} из ${дни.length}`
+              : 'Создан автоматически на этапе «Осмотр объекта»',
+          createdById: fallbackUserId,
+          members: { create: members },
+        },
+        select: { id: true },
+      });
+      if (!первый) первый = созданный;
+    }
+    return первый;
   }
 
   async update(user: AuthUser, id: string, dto: UpdateShiftGroupDto) {

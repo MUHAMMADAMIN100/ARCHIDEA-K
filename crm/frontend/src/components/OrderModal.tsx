@@ -106,6 +106,24 @@ function suggestUnitPrice(
   return tariff.priceMedium || tariff.pricePerSqm || null;
 }
 
+/**
+ * «Уборка 13–14 августа, 2 дня» — понятная подпись под датами.
+ *
+ * Две даты сами по себе ничего не говорят: человек считает дни в уме и
+ * ошибается. Пишем словами, включая оба конца — работают и первый день, и
+ * последний.
+ */
+function spanLabel(startISO: string, endISO: string): string {
+  const день = 24 * 60 * 60 * 1000;
+  const начало = new Date(`${startISO}T00:00:00Z`);
+  const конец = new Date(`${endISO}T00:00:00Z`);
+  const дней = Math.round((конец.getTime() - начало.getTime()) / день) + 1;
+  const слово = дней % 10 === 1 && дней % 100 !== 11 ? 'день' : дней % 10 >= 2 && дней % 10 <= 4 && (дней % 100 < 10 || дней % 100 >= 20) ? 'дня' : 'дней';
+  const формат = (d: Date) =>
+    d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  return `Уборка ${формат(начало)} — ${формат(конец)}, ${дней} ${слово}`;
+}
+
 export function OrderModal({
   orderId,
   initial,
@@ -150,6 +168,8 @@ export function OrderModal({
   const [stage, setStage] = useState<FunnelStage>('NEW');
   const [rejectionReason, setRejectionReason] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  // последний день: пусто — уборка на один день, как было всегда
+  const [scheduledEndDate, setScheduledEndDate] = useState('');
   // время уборки хранится в той же дате; отдельным полем, чтобы его
   // не терять при сохранении — раньше от даты оставался только день
   const [scheduledTime, setScheduledTime] = useState('');
@@ -350,6 +370,7 @@ export function OrderModal({
     if (!skip('address')) setEditAddress(o.address ?? '');
     if (!skip('scheduledDate')) {
       setScheduledDate(o.scheduledDate?.slice(0, 10) ?? '');
+      setScheduledEndDate(o.scheduledEndDate?.slice(0, 10) ?? '');
       setScheduledTime(o.scheduledDate ? toDateTimeInput(o.scheduledDate).slice(11, 16) : '');
     }
     if (!skip('pricing')) {
@@ -611,6 +632,7 @@ export function OrderModal({
       preferences: trimmedPrefs || null,
       address: editAddress || order.address,
       scheduledDate: scheduledWithTime || order.scheduledDate,
+      scheduledEndDate: scheduledEndDate || null,
       rejectionReason: stage === 'REJECTED' ? rejectionReason : order.rejectionReason,
     };
     // cleaners подмешиваем в патч, только если реально трогали — иначе в кэш
@@ -1293,6 +1315,34 @@ export function OrderModal({
                       }}
                       ariaLabel="Время уборки"
                     />
+                  </div>
+                  {/*
+                    Уборка не всегда укладывается в один день. Пусто —
+                    работа однодневная, как было раньше; заполнили — заказ
+                    виден в календаре все эти дни, и на каждый день бригаде
+                    создаётся свой выезд, то есть смена оплачивается за
+                    каждый день.
+                  */}
+                  <div className="mt-2">
+                    <label className="label">Последний день (если уборка не на один день)</label>
+                    <DatePicker
+                      placeholder="дд.мм.гггг"
+                      value={scheduledEndDate}
+                      onChange={(v) => {
+                        markTouched('scheduledDate');
+                        setScheduledEndDate(v);
+                      }}
+                    />
+                    {scheduledDate && scheduledEndDate && scheduledEndDate < scheduledDate && (
+                      <div className="mt-1 text-xs font-medium text-red-600">
+                        Последний день раньше первого — так не бывает
+                      </div>
+                    )}
+                    {scheduledDate && scheduledEndDate && scheduledEndDate > scheduledDate && (
+                      <div className="mt-1 text-xs font-medium text-navy-700">
+                        {spanLabel(scheduledDate, scheduledEndDate)}
+                      </div>
+                    )}
                   </div>
                   {order.preferredDate && (
                     <div className="mt-1 text-xs text-navy-600">

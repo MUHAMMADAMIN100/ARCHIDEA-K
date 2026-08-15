@@ -96,6 +96,29 @@ function orderDate(o: Order): string | null {
 }
 
 /**
+ * Все дни, которые занимает заказ.
+ *
+ * Обычный заказ — один день. Если у него указан последний день, заказ
+ * занимает весь промежуток: бригада эти дни несвободна, и календарь обязан
+ * это показывать. Предел в 31 день — та же защита от опечатки в годе, что
+ * и на сервере.
+ */
+function orderDays(o: Order, iso: string): string[] {
+  const первый = dayKey(new Date(iso));
+  if (!o.scheduledEndDate || !o.scheduledDate) return [первый];
+  const последний = dayKey(new Date(o.scheduledEndDate));
+  if (последний <= первый) return [первый];
+  const дни: string[] = [];
+  const курсор = new Date(`${первый}T00:00:00Z`);
+  const предел = new Date(`${последний}T00:00:00Z`);
+  while (курсор <= предел && дни.length < 31) {
+    дни.push(курсор.toISOString().slice(0, 10));
+    курсор.setUTCDate(курсор.getUTCDate() + 1);
+  }
+  return дни;
+}
+
+/**
  * Заказ стоит в клетке по дате оформления, а не уборки.
  *
  * Разница существенная: «убираем 14-го» и «оформили 14-го» — разные вещи,
@@ -515,10 +538,16 @@ export function Calendar() {
           none.push(o);
           continue;
         }
-        const key = dayKey(new Date(iso));
-        const list = map.get(key);
-        if (list) list.push(o);
-        else map.set(key, [o]);
+        /*
+          Уборка на несколько дней стоит в календаре КАЖДЫЙ свой день.
+          Иначе двухдневный заказ виден только в первый день, и на второй
+          календарь показывает свободный день, хотя бригада занята.
+        */
+        for (const key of orderDays(o, iso)) {
+          const list = map.get(key);
+          if (list) list.push(o);
+          else map.set(key, [o]);
+        }
       }
     }
     return { ordersByDay: map, ordersUndated: none };

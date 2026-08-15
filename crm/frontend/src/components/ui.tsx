@@ -275,6 +275,40 @@ export function Modal({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  /*
+   * Защита заполненного.
+   *
+   * Форму закрывали случайным щелчком мимо — и всё набранное пропадало:
+   * адрес, телефон, доп. услуги. Теперь окно помнит, трогал ли человек хоть
+   * одно поле, и перед закрытием мимо кассы спрашивает. Пустую форму
+   * закрываем молча: лишний вопрос там только раздражает.
+   *
+   * Признак ставим по настоящим событиям ввода. Программная подстановка
+   * значений (форма открылась с данными для правки) их не порождает, поэтому
+   * «грязным» окно становится только от руки человека.
+   */
+  const dirtyRef = useRef(false);
+  const [askClose, setAskClose] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      dirtyRef.current = false;
+      setAskClose(false);
+    }
+  }, [open]);
+
+  const markDirty = () => {
+    dirtyRef.current = true;
+  };
+
+  /** Закрытие «не кнопкой формы»: щелчок мимо окна или Esc */
+  const closeFromOutside = () => {
+    if (dirtyRef.current) setAskClose(true);
+    else onCloseRef.current();
+  };
+  const closeFromOutsideRef = useRef(closeFromOutside);
+  closeFromOutsideRef.current = closeFromOutside;
+
   useEffect(() => {
     if (!open) return;
     /*
@@ -286,7 +320,8 @@ export function Modal({
     document.body.style.overflow = 'hidden';
 
     const id = ++modalSeq;
-    const entry = { id, close: () => onCloseRef.current() };
+    // Esc — тоже «не кнопка формы»: спрашиваем, если что-то заполнено
+    const entry = { id, close: () => closeFromOutsideRef.current() };
     modalStack.push(entry);
 
     /*
@@ -349,7 +384,7 @@ export function Modal({
     <div
       // items-center: окно всегда в центре экрана, как бы страница ни была прокручена
       className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-navy-950/35 p-3 sm:p-8"
-      onClick={onClose}
+      onClick={closeFromOutside}
     >
       {/*
        * Длинная форма прокручивается ВНУТРИ окна, а не уводит вниз весь оверлей
@@ -367,8 +402,11 @@ export function Modal({
          * за 200 мс. Без этого окно возникало рывком, и глаз не успевал
          * понять, что изменилось на экране.
          */
-        className={`card flex max-h-[92vh] w-full animate-pop-in flex-col shadow-modal ${wide ? 'max-w-2xl' : 'max-w-md'} p-4 sm:max-h-[90vh] sm:p-6`}
+        className={`card relative flex max-h-[92vh] w-full animate-pop-in flex-col shadow-modal ${wide ? 'max-w-2xl' : 'max-w-md'} p-4 sm:max-h-[90vh] sm:p-6`}
         onClick={(e) => e.stopPropagation()}
+        // событий ввода достаточно: и текст, и списки, и галочки
+        onInput={markDirty}
+        onChange={markDirty}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
           <h2 className="min-w-0 truncate text-lg font-bold text-navy-900">{title}</h2>
@@ -377,7 +415,9 @@ export function Modal({
             <button
               onClick={onClose}
               className="press rounded-lg p-1 text-navy-600 transition-colors hover:bg-navy-50 hover:text-navy-700"
-              aria-label="Закрыть"
+              // «Закрыть окно», а не просто «Закрыть»: в вопросе о
+              // несохранённом рядом стоит своя кнопка «Закрыть»
+              aria-label="Закрыть окно"
             >
               <X className="h-5 w-5" />
             </button>
@@ -397,6 +437,38 @@ export function Modal({
         <div className="modal-scroll -mr-2 min-h-0 flex-1 overflow-y-auto pb-1 pr-2 pt-1 sm:-mr-3 sm:pr-3">
           {children}
         </div>
+
+        {/*
+          Вопрос рисуем прямо в окне, а не отдельным диалогом: так он не
+          спорит со стопкой окон и не может закрыть форму под собой.
+        */}
+        {askClose && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-navy-950/40 p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-modal">
+              <div className="mb-1 font-bold text-navy-900">Закрыть без сохранения?</div>
+              <p className="mb-4 text-sm text-navy-600">
+                Заполненное в этой форме не сохранится.
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button className="btn-ghost" onClick={() => setAskClose(false)} autoFocus>
+                  Продолжить заполнение
+                </button>
+                <button
+                  className="btn-danger"
+                  onClick={() => {
+                    setAskClose(false);
+                    onCloseRef.current();
+                  }}
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
