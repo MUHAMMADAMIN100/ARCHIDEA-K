@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
   PHONE_COUNTRIES,
   formatNational,
@@ -74,6 +74,35 @@ export function PhoneInput({
   const country = byCode(code);
 
   /*
+   * Курсор не убегает в конец при правке середины номера.
+   *
+   * Поле показывает номер с пробелами, и после каждого изменения React
+   * перерисовывает его заново — браузер при этом ставит курсор в конец.
+   * Стереть цифру из начала или середины было невозможно: одна правка —
+   * и целься мышкой заново. Запоминаем, сколько ЦИФР стояло левее курсора
+   * (пробелы расставляются заново, считать по символам нельзя), и после
+   * перерисовки возвращаем курсор на то же место.
+   */
+  const inputRef = useRef<HTMLInputElement>(null);
+  const caretDigitsRef = useRef<number | null>(null);
+  const lastKeyRef = useRef('');
+
+  useLayoutEffect(() => {
+    const wanted = caretDigitsRef.current;
+    if (wanted == null) return;
+    caretDigitsRef.current = null;
+    const el = inputRef.current;
+    if (!el || document.activeElement !== el) return;
+    let pos = 0;
+    let seen = 0;
+    while (pos < el.value.length && seen < wanted) {
+      if (/\d/.test(el.value[pos])) seen += 1;
+      pos += 1;
+    }
+    el.setSelectionRange(pos, pos);
+  });
+
+  /*
    * Наружу номер уходит С ПЛЮСОМ. Плюс здесь не украшение: он говорит
    * серверу «код страны выбран человеком, догадываться не надо». Без него
    * иностранный номер ровно из девяти цифр молча стал бы таджикским.
@@ -140,13 +169,37 @@ export function PhoneInput({
         )}
 
         <input
+          ref={inputRef}
           className={`input flex-1 ${error ? 'border-rose-400 focus:border-rose-400' : ''}`}
           value={formatNational(national, code)}
+          onKeyDown={(e) => {
+            lastKeyRef.current = e.key;
+          }}
           onChange={(e) => {
-            const next = phoneDigits(e.target.value).slice(
+            const el = e.target;
+            const caret = el.selectionStart ?? el.value.length;
+            let before = phoneDigits(el.value.slice(0, caret)).length;
+            let next = phoneDigits(el.value).slice(
               0,
               MAX_TOTAL_DIGITS - code.length,
             );
+            /*
+             * Backspace или Delete попали на пробел: цифры не изменились,
+             * хотя человек явно стирал. Пробел не должен быть «непроходимым»
+             * — стираем цифру рядом с ним сами.
+             */
+            if (next === national) {
+              if (lastKeyRef.current === 'Backspace' && before > 0) {
+                next = national.slice(0, before - 1) + national.slice(before);
+                before -= 1;
+              } else if (
+                lastKeyRef.current === 'Delete' &&
+                before < national.length
+              ) {
+                next = national.slice(0, before) + national.slice(before + 1);
+              }
+            }
+            caretDigitsRef.current = before;
             setNational(next);
             push(code, next);
           }}
