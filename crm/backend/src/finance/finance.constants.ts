@@ -9,6 +9,7 @@ export const CATEGORY_META: Record<FinanceCategory, { label: string; kind: Finan
   SUPPLIES: { label: 'Расходные материалы', kind: FinanceKind.EXPENSE },
   TRANSPORT: { label: 'Транспорт', kind: FinanceKind.EXPENSE },
   RENT: { label: 'Аренда', kind: FinanceKind.EXPENSE },
+  UTILITIES: { label: 'Коммунальные услуги', kind: FinanceKind.EXPENSE },
   MARKETING: { label: 'Реклама и продвижение', kind: FinanceKind.EXPENSE },
   // расчёт услугами вместо денег — статья расхода наравне с остальными
   BARTER: { label: 'Бартер', kind: FinanceKind.EXPENSE },

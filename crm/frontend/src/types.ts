@@ -685,6 +685,7 @@ export type FinanceCategory =
   | 'SUPPLIES'
   | 'TRANSPORT'
   | 'RENT'
+  | 'UTILITIES'
   | 'MARKETING'
   | 'BARTER'
   | 'TAX'

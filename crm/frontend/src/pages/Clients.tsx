@@ -557,24 +557,32 @@ export function AddClientModal({
      * Ищем по НАЗВАНИЮ, а не по ключу: услугу владелец мог завести руками
      * через «Услуги и цены», и ключ у неё тогда свой. Название — то, что
      * человек видит и на что ориентируется.
+     *
+     * Готовых строк две (решение владельца): «Химчистка мягкой мебели» и
+     * «Мойка матраса». Обе стоят с пустым количеством — пока менеджер не
+     * впишет число, строка в сумму заявки не идёт.
      */
-    const preset = (tariffs?.extras ?? []).find((e) =>
-      /химчистк.*мебел/i.test(e.title ?? ''),
-    );
-    if (!preset) return;
+    const presets = [
+      { key: 'preset-upholstery', re: /химчистк.*мебел/i },
+      { key: 'preset-mattress', re: /мойк.*матрас/i },
+    ]
+      .map((p) => ({
+        p,
+        found: (tariffs?.extras ?? []).find((e) => p.re.test(e.title ?? '')),
+      }))
+      .filter((x) => x.found);
+    if (!presets.length) return;
     defaultExtraAdded.current = true;
     setExtraRows((prev) =>
       prev.length
         ? prev
-        : [
-            {
-              key: 'preset-upholstery',
-              title: preset.title,
-              price: String(preset.price),
-              qty: '',
-              checked: true,
-            },
-          ],
+        : presets.map(({ p, found }) => ({
+            key: p.key,
+            title: found!.title,
+            price: String(found!.price),
+            qty: '',
+            checked: true,
+          })),
     );
   }, [tariffs, initial]);
   /*
