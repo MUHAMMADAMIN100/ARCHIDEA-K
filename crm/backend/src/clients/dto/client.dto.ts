@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   ArrayMaxSize,
   IsArray,
   IsDateString,
@@ -78,6 +79,13 @@ export class CreateClientDto {
   @IsArray()
   @IsEnum(ClientTag, { each: true })
   tags?: ClientTag[];
+
+  /**
+   * Следом этим же действием будет создана заявка (форма воронки).
+   * Уведомление в Telegram тогда шлёт создание ЗАКАЗА — одним сообщением
+   * со всеми данными, а не двумя порознь.
+   */
+  @IsOptional() @IsBoolean() withOrder?: boolean;
 
   /** Каким вышел разговор: холодный, нейтральный, горячий */
   @IsOptional()

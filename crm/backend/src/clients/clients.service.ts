@@ -7,6 +7,8 @@ import {
 import { AuditAction, ClientTag, LeadSource, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { buildCrmClientMessage } from '../telegram/crm-client-message';
 import {
   AuthUser,
   seesAll,
@@ -40,6 +42,7 @@ export class ClientsService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private telegram: TelegramService,
   ) {}
 
   /** Список с поиском/фильтром/сортировкой. Менеджер видит только своих. */
@@ -314,6 +317,37 @@ export class ClientsService {
       managerId: managerId ?? undefined,
       source: dto.source ?? LeadSource.CALL,
     });
+
+    /*
+     * Сотрудник добавил клиента — личное сообщение в Telegram каждому,
+     * кто привязал бот (решение владельца). Если следом создаётся заявка
+     * (withOrder), молчим: уведомление одним сообщением со всеми данными
+     * отправит создание заказа, иначе о том же событии пришло бы два.
+     */
+    if (!dto.withOrder) {
+      const manager = managerId
+        ? await this.prisma.user.findUnique({
+            where: { id: managerId },
+            select: { fullName: true },
+          })
+        : null;
+      await this.telegram.enqueueToAllLinked(
+        buildCrmClientMessage({
+          addedBy: user.fullName,
+          client: {
+            fullName: res.client.fullName,
+            phone: res.client.phone,
+            extraPhones: dto.extraPhones,
+            address: dto.address,
+            source: dto.source ?? LeadSource.CALL,
+            sourceDetail: dto.sourceDetail,
+            tags: dto.tags,
+          },
+          managerName: manager?.fullName ?? null,
+        }),
+        { kind: 'crm-client', refId: res.client.id },
+      );
+    }
     return res.client;
   }
 

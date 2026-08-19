@@ -104,4 +104,34 @@ export class TelegramService implements OnModuleInit {
       this.logger.error(`Не удалось поставить личное сообщение Telegram (user=${userId})`, e as Error);
     }
   }
+
+  /**
+   * Личное сообщение КАЖДОМУ сотруднику с привязанным Telegram — и
+   * менеджерам, и руководителям (решение владельца для заявок из CRM).
+   *
+   * Не через общий чат: владелец выбрал личные сообщения. Уволенные и
+   * отключившие уведомления не получают ничего.
+   */
+  async enqueueToAllLinked(
+    text: string,
+    opts: EnqueueOptions = {},
+    db: Db = this.prisma,
+  ): Promise<void> {
+    try {
+      const users = await this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          isActive: true,
+          telegramEnabled: true,
+          telegramChatId: { not: null },
+        },
+        select: { telegramChatId: true },
+      });
+      for (const u of users) {
+        await this.enqueue(u.telegramChatId, text, opts, db);
+      }
+    } catch (e) {
+      this.logger.error('Не удалось разослать сообщение всем привязавшим Telegram', e as Error);
+    }
+  }
 }

@@ -133,6 +133,21 @@ export class CreateOrderDto {
 
   @IsOptional() @IsEnum(LeadSource) source?: LeadSource;
   @IsOptional() @IsString() @MaxLength(2000) comment?: string;
+
+  /**
+   * Пожелания клиента из формы «Новый клиент» (воронка): когда прийти.
+   * Раньше эти поля были только у правки заказа, и заявка их теряла.
+   */
+  @IsOptional() @IsString() preferredDate?: string;
+  @IsOptional() @IsString() @MaxLength(20) preferredTime?: string;
+
+  /**
+   * Заявка создаётся вместе с НОВЫМ клиентом (форма «Новый клиент»).
+   * По этому флагу в Telegram уходит одно сообщение с данными и клиента,
+   * и заявки — всем сотрудникам, привязавшим бот.
+   */
+  @IsOptional() @IsBoolean() newClient?: boolean;
+
   @IsOptional() @IsString() @MaxLength(2000) preferences?: string;
   @IsOptional() @IsString() managerId?: string;
   /**

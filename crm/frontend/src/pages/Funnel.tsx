@@ -1178,6 +1178,7 @@ export function Funnel() {
       */}
       {showAddClient && (
         <AddClientModal
+          full
           isDirector={canFilter}
           /* при отказе сервера возвращаем форму со всем, что было введено */
           initial={draft ?? undefined}
@@ -1255,14 +1256,23 @@ export function Funnel() {
                  * перетиралась ответом без заказа и «мигала».
                  */
                 await withMutation(async () => {
-                  const client = (await api.post('/clients', payload))
-                    .data as { id: string };
+                  const client = (
+                    await api.post('/clients', {
+                      ...payload,
+                      // заявка идёт следом: уведомление в Telegram отправит
+                      // она, одним сообщением со всеми данными
+                      withOrder: !!order,
+                    })
+                  ).data as { id: string };
                   if (order) {
                     await api.post('/orders', {
                       clientId: client.id,
                       source: payload.source,
                       managerId: payload.managerId,
                       ...order,
+                      // клиент создан только что — в Telegram уходит
+                      // «Новая заявка в CRM» со всеми данными
+                      newClient: true,
                     });
                   }
                 });

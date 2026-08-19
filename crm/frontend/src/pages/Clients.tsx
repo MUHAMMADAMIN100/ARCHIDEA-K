@@ -31,6 +31,8 @@ import {
   formatPrice,
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
+import { DatePicker } from '../components/DatePicker';
+import { TimePicker } from '../components/TimePicker';
 import { tempId, nowISO, isTempId } from '../lib/util';
 import { isValidPhone } from '../lib/contact';
 import { NameInput, PhoneInput } from '../components/ContactFields';
@@ -71,6 +73,10 @@ export interface NewOrderInput {
   address?: string;
   /** Свои доп. услуги строками — как в карточке заказа; в счёт идут отмеченные */
   customExtras?: { title: string; price: number; checked: boolean }[];
+  /** Пожелания клиента при обращении — полная форма (воронка) */
+  preferredDate?: string;
+  preferredTime?: string;
+  comment?: string;
 }
 
 export function Clients() {
@@ -152,7 +158,14 @@ export function Clients() {
     };
     setData((list) => (list ? [optimistic, ...list] : [optimistic]));
     try {
-      const client = (await api.post<Client>('/clients', payload)).data;
+      const client = (
+        await api.post<Client>('/clients', {
+          ...payload,
+          // заявка идёт следом: уведомление в Telegram отправит она, одним
+          // сообщением со всеми данными
+          withOrder: !!order,
+        })
+      ).data;
       if (order) {
         const created = (
           await api.post<Order>('/orders', {
@@ -160,6 +173,8 @@ export function Clients() {
             source: payload.source,
             managerId: payload.managerId,
             ...order,
+            // клиент создан только что — в Telegram уходит «Новая заявка в CRM»
+            newClient: true,
           })
         ).data;
         /*
@@ -444,6 +459,7 @@ export function AddClientModal({
   onCreate,
   isDirector,
   initial,
+  full,
 }: {
   /** уже использованные теги — для подсказки при вводе */
   onClose: () => void;
@@ -465,8 +481,18 @@ export function AddClientModal({
     managerName: string | null;
     order: NewOrderInput | null;
   };
+  /**
+   * Полная форма — как карточка заказа (решение владельца): с пожеланиями
+   * клиента по дате и времени и его комментарием. Включена в воронке;
+   * в разделе «Клиенты» форма остаётся короткой.
+   */
+  full?: boolean;
 }) {
   const [fullName, setFullName] = useState(initial?.payload.fullName ?? '');
+  // пожелания клиента (полная форма): «клиент просил» и его комментарий
+  const [preferredDate, setPreferredDate] = useState(initial?.order?.preferredDate ?? '');
+  const [preferredTime, setPreferredTime] = useState(initial?.order?.preferredTime ?? '');
+  const [orderComment, setOrderComment] = useState(initial?.order?.comment ?? '');
   const [phone, setPhone] = useState(initial?.payload.phone ?? '');
   // запасные номера «на всякий случай» (ТЗ 1.1)
   /*
@@ -749,6 +775,9 @@ export function AddClientModal({
           estimatedPrice: toInt(price),
           pricePerSqm: unitPrice || undefined,
           address: address.trim(),
+          preferredDate: preferredDate || undefined,
+          preferredTime: preferredTime || undefined,
+          comment: orderComment.trim() || undefined,
           /*
            * Итог НЕ отправляем: его считает сервер, и только он знает про
            * постоянную скидку клиента. Пока форма слала свою цифру, скидка
@@ -921,6 +950,41 @@ export function AddClientModal({
 
         {makeOrder && (
           <div className="space-y-3 rounded-xl border border-navy-100 p-3">
+            {/*
+              Пожелания клиента — как в карточке заказа. Только в полной
+              форме (воронка): в справочнике клиентов эти поля не нужны.
+            */}
+            {full && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Клиент просил — дата</label>
+                    <DatePicker
+                      placeholder="дд.мм.гггг"
+                      value={preferredDate}
+                      onChange={setPreferredDate}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Клиент просил — время</label>
+                    <TimePicker
+                      value={preferredTime}
+                      onChange={setPreferredTime}
+                      ariaLabel="Клиент просил — время"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Комментарий клиента</label>
+                  <textarea
+                    className="input min-h-[56px]"
+                    value={orderComment}
+                    onChange={(e) => setOrderComment(e.target.value)}
+                    placeholder="что написал или сказал клиент при обращении"
+                  />
+                </div>
+              </>
+            )}
             <div>
               <label className="label">Услуга</label>
               <select

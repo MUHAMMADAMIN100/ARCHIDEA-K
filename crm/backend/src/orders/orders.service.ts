@@ -20,6 +20,7 @@ import { ReportsService } from '../reports/reports.service';
 import { ShiftGroupsService } from '../payroll/shift-groups.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { escapeHtml } from '../telegram/telegram.util';
+import { buildCrmClientMessage } from '../telegram/crm-client-message';
 import {
   AuthUser,
   seesAll,
@@ -708,6 +709,9 @@ export class OrdersService {
           source: dto.source ?? 'CALL',
           comment: dto.comment,
           sourceDetail: dto.sourceDetail?.trim() || null,
+          // пожелания клиента из полной формы «Новый клиент» (воронка)
+          preferredDate: parseDate(dto.preferredDate),
+          preferredTime: dto.preferredTime?.trim() || null,
           discount,
           // оплата вносится взносами (ТЗ 3.1) — новый заказ всегда неоплачен
           paidAmount: 0,
@@ -759,12 +763,52 @@ export class OrdersService {
       });
 
       return created;
-    });
+    },
+    /*
+     * Создание заявки — несколько запросов одной транзакцией (заказ, журнал,
+     * пересчёт), и на медленной сети пяти секунд по умолчанию не хватает:
+     * заявка падала 500-й, хотя каждая её часть здорова. Тот же запас, что
+     * у смены этапа.
+     */
+    { timeout: 20000, maxWait: 10000 });
 
     await this.notifyPreferences(order, 'создан');
     // пожелания и комментарий из новой заявки запоминаем в карточке клиента
     await this.rememberPreferences(order.clientId, order.preferences);
     await this.rememberComment(order.clientId, order.comment);
+
+    /*
+     * Заявка создана вместе с новым клиентом (форма «Новый клиент», ТЗ
+     * владельца): личное сообщение в Telegram каждому, кто привязал бот.
+     * Одно сообщение с данными и клиента, и заявки — создание клиента при
+     * этом молчало (withOrder), чтобы о событии не пришло два письма.
+     */
+    if (dto.newClient) {
+      const client = await this.prisma.client.findUnique({
+        where: { id: order.clientId },
+        select: {
+          fullName: true,
+          phone: true,
+          extraPhones: true,
+          address: true,
+          source: true,
+          sourceDetail: true,
+          tags: true,
+          manager: { select: { fullName: true } },
+        },
+      });
+      if (client) {
+        await this.telegram.enqueueToAllLinked(
+          buildCrmClientMessage({
+            addedBy: user.fullName,
+            client,
+            order,
+            managerName: client.manager?.fullName ?? null,
+          }),
+          { kind: 'crm-client', refId: order.id },
+        );
+      }
+    }
     return order;
   }
 
