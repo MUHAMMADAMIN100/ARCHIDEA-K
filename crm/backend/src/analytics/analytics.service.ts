@@ -833,6 +833,34 @@ export class AnalyticsService {
         where = { id: { in: ids } };
         break;
       }
+      case 'extrasAllOrders': {
+        /*
+         * Раскрытие ПЛИТКИ «Доп. услуги»: заказы, где доп. услуги вообще
+         * есть. Раньше плитка открывала все оплаченные заказы периода —
+         * человек видел всю выручку под заголовком «Доп. услуги» и решал,
+         * что цифра на плитке врёт.
+         */
+        const paid = await this.prisma.order.findMany({
+          where: {
+            ...scope,
+            stage: FunnelStage.PAID,
+            ...(hasRange ? { closedAt: range } : {}),
+          },
+          select: { id: true, extras: true, customExtras: true },
+        });
+        const ids = paid
+          .filter((o) => {
+            const rows = Array.isArray(o.customExtras)
+              ? (o.customExtras as { checked?: boolean }[])
+              : [];
+            if (rows.some((r) => r?.checked)) return true;
+            const chosen = (o.extras as Record<string, number> | null) ?? null;
+            return !!chosen && Object.values(chosen).some((q) => Number(q) > 0);
+          })
+          .map((o) => o.id);
+        where = { id: { in: ids } };
+        break;
+      }
       case 'conversionPaid':
         where = { ...periodScope, stage: FunnelStage.PAID };
         break;

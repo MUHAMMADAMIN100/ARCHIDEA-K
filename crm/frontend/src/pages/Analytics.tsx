@@ -343,7 +343,8 @@ export function Analytics() {
                   setDrill({
                     title: 'Доп. услуги за период',
                     subtitle: rangeLabel,
-                    metric: 'revenuePeriod',
+                    // только заказы, где доп. услуги есть, — а не вся выручка
+                    metric: 'extrasAllOrders',
                   })
                 }
               />
