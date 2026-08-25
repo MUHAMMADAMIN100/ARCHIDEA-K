@@ -448,11 +448,27 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 <h3 className="mb-1 font-bold text-navy-900">Доход за 14 дней: выручка и чистый</h3>
                 <p className="mb-3 text-xs text-navy-600">{HINT}</p>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={data.revenueSeries}>
+                  {/*
+                    Столбик «Чистый доход» не уходит ниже нуля (решение
+                    владельца): в день без выручки, но с расходами (зарплата,
+                    аренда) он равен 0, а не тянет ось в минус. Сам расчёт
+                    не трогаем — плитка и итог за период считаются как прежде;
+                    расходы дня видны в подсказке при наведении.
+                  */}
+                  <BarChart
+                    data={data.revenueSeries.map((d) => ({
+                      ...d,
+                      netShown: Math.max(0, d.net),
+                    }))}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
                     <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#5fb1e8' }} />
-                    <YAxis tick={{ fontSize: 12, fill: '#5fb1e8' }} />
-                    <Tooltip formatter={(v: number) => formatPrice(v)} />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: '#5fb1e8' }}
+                      domain={[0, 'auto']}
+                      allowDataOverflow
+                    />
+                    <Tooltip content={<RevenueDayTooltip />} />
                     <Legend />
                     <Bar
                       dataKey="revenue"
@@ -472,7 +488,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                     />
                     {/* чистый доход дня: выручка минус расходы книги за этот день */}
                     <Bar
-                      dataKey="net"
+                      dataKey="netShown"
                       name="Чистый доход"
                       fill="#10b981"
                       radius={[6, 6, 0, 0]}
@@ -1111,6 +1127,41 @@ function KpiTotalCard({ rows, seesAll }: { rows: KpiRow[]; seesAll: boolean }) {
         <KpiCell label="Отказов" value={t.rejected} />
         {seesAll && <KpiCell label="Продано" value={formatPrice(t.amount)} />}
       </dl>
+    </div>
+  );
+}
+
+/**
+ * Подсказка к столбику дня: выручка, расходы из книги и чистый доход.
+ * Расходы показываем отдельной строкой, потому что столбик их не рисует —
+ * иначе день с одной зарплатой выглядел бы как «ничего не было».
+ */
+function RevenueDayTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { payload?: { revenue: number; expense: number; net: number } }[];
+  label?: string;
+}) {
+  const d = payload?.[0]?.payload;
+  if (!active || !d) return null;
+  return (
+    <div className="rounded-lg border border-navy-100 bg-white px-3 py-2 text-xs shadow-card">
+      <div className="mb-1 font-semibold text-navy-900">{label}</div>
+      <div className="flex justify-between gap-4">
+        <span className="text-navy-600">Выручка</span>
+        <span className="tabular-nums text-brand-600">{formatPrice(d.revenue)}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-navy-600">Расходы</span>
+        <span className="tabular-nums text-red-700">{formatPrice(d.expense)}</span>
+      </div>
+      <div className="flex justify-between gap-4 font-semibold">
+        <span className="text-navy-600">Чистый доход</span>
+        <span className="tabular-nums text-emerald-700">{formatPrice(Math.max(0, d.net))}</span>
+      </div>
     </div>
   );
 }
