@@ -5,7 +5,7 @@ import {
   FunnelStage,
   LeadSource,
   Prisma,
-  Role,,
+  Role,
   FinanceKind,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
