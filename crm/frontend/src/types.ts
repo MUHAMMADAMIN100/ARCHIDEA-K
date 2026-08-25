@@ -998,6 +998,10 @@ export interface AnalyticsBreakdowns {
   }[];
   cleaners: { id: string; name: string; shifts: number; accrued: number }[];
   clients: { id: string; name: string; count: number; amount: number }[];
+  /** итог по всем клиентам периода — в таблице показан только топ */
+  clientsTotal?: { clients: number; count: number; amount: number };
+  /** итог по всем клинерам периода — в таблице показаны первые 30 */
+  cleanersTotal?: { cleaners: number; shifts: number; accrued: number };
   sourceRows: {
     source: string;
     label: string;

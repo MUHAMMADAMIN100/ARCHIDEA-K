@@ -318,6 +318,7 @@ export class AnalyticsService {
             // начисления клинерам — зарплата, её видит только руководитель
             brigades: rows.brigades.map((r) => ({ ...r, accrued: 0 })),
             cleaners: rows.cleaners.map((r) => ({ ...r, accrued: 0 })),
+            cleanersTotal: { ...rows.cleanersTotal, accrued: 0 },
             ...(seesSales
               ? {}
               : {
@@ -329,6 +330,7 @@ export class AnalyticsService {
                   services: rows.services.map((r) => ({ ...r, amount: 0 })),
                   extras: rows.extras.map((r) => ({ ...r, amount: 0 })),
                   clients: rows.clients.map((r) => ({ ...r, amount: 0 })),
+                  clientsTotal: { ...rows.clientsTotal, amount: 0 },
                   sourceRows: rows.sourceRows.map((r) => ({ ...r, amount: 0 })),
                 }),
             totals: {
@@ -544,6 +546,12 @@ export class AnalyticsService {
     const cleanerRows = [...byCleaner.values()]
       .sort((a, b) => b.shifts - a.shifts)
       .slice(0, 30);
+    // итог по ВСЕМ клинерам периода — в таблице показаны первые 30
+    const cleanersTotal = {
+      cleaners: byCleaner.size,
+      shifts: [...byCleaner.values()].reduce((s, c) => s + c.shifts, 0),
+      accrued: [...byCleaner.values()].reduce((s, c) => s + c.accrued, 0),
+    };
 
     // ── клиенты: топ по деньгам
     const byClient = new Map<string, { id: string; name: string; count: number; amount: number }>();
@@ -559,6 +567,16 @@ export class AnalyticsService {
     const clients = [...byClient.values()]
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 20);
+    /*
+     * Итог по ВСЕМ клиентам периода, а не по топу (решение владельца):
+     * так строка «Итого» сходится с выручкой наверху страницы, а не
+     * с произвольной десяткой.
+     */
+    const clientsTotal = {
+      clients: byClient.size,
+      count: [...byClient.values()].reduce((s, r) => s + r.count, 0),
+      amount: [...byClient.values()].reduce((s, r) => s + r.amount, 0),
+    };
 
     // ── источники: не только обращения, но и деньги
     const bySource = new Map<
@@ -596,7 +614,9 @@ export class AnalyticsService {
       extras,
       brigades: brigadeRows,
       cleaners: cleanerRows,
+      cleanersTotal,
       clients,
+      clientsTotal,
       sourceRows,
       totals: {
         paidOrders: paid.length,

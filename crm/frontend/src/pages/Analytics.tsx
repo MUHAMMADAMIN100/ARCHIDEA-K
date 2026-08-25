@@ -59,6 +59,7 @@ function BreakdownCard<T>({
   columns,
   rowKey,
   emptyText,
+  footer,
 }: {
   title: string;
   hint?: string;
@@ -71,6 +72,12 @@ function BreakdownCard<T>({
   }[];
   rowKey: (row: T) => string;
   emptyText: string;
+  /**
+   * Строка «Итого» внизу таблицы: значение на каждую колонку по её key.
+   * Первая колонка — подпись (по умолчанию «Итого»). Колонки, которых
+   * нет в footer, остаются пустыми.
+   */
+  footer?: Record<string, ReactNode>;
 }) {
   return (
     <div className="card min-w-0 p-4 sm:p-5">
@@ -117,6 +124,25 @@ function BreakdownCard<T>({
                 </tr>
               ))}
             </tbody>
+            {footer && (
+              <tfoot>
+                <tr
+                  data-testid="итого"
+                  className="border-t-2 border-navy-200 bg-navy-50/70 font-bold text-navy-900"
+                >
+                  {columns.map((c, i) => (
+                    <td
+                      key={c.key}
+                      className={`py-2 pr-3 ${
+                        c.align === 'right' ? 'text-right tabular-nums' : ''
+                      }`}
+                    >
+                      {footer[c.key] ?? (i === 0 ? 'Итого' : '')}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </ScrollArea>
       )}
@@ -508,6 +534,19 @@ export function Analytics() {
                   rows={bd.managers}
                   rowKey={(r) => r.id ?? 'none'}
                   emptyText="За период обращений не было"
+                  footer={{
+                    name: 'Итого',
+                    total: sumBy(bd.managers, (r) => r.total),
+                    paid: sumBy(bd.managers, (r) => r.paid),
+                    amount: formatPrice(sumBy(bd.managers, (r) => r.amount)),
+                    // общий средний чек: вся сумма ÷ все оплаченные, а не среднее из средних
+                    average: formatPrice(
+                      avgOf(
+                        sumBy(bd.managers, (r) => r.amount),
+                        sumBy(bd.managers, (r) => r.paid),
+                      ),
+                    ),
+                  }}
                   columns={[
                     {
                       key: 'name',
@@ -578,6 +617,11 @@ export function Analytics() {
                     rows={bd.services}
                     rowKey={(r) => r.key}
                     emptyText="Оплаченных заказов за период нет"
+                    footer={{
+                      label: 'Итого',
+                      count: sumBy(bd.services, (r) => r.count),
+                      amount: formatPrice(sumBy(bd.services, (r) => r.amount)),
+                    }}
                     columns={[
                       { key: 'label', header: 'Услуга', cell: (r) => r.label },
                       {
@@ -620,6 +664,11 @@ export function Analytics() {
                     rows={bd.extras}
                     rowKey={(r) => r.key}
                     emptyText="Доп. услуги за период не брали"
+                    footer={{
+                      label: 'Итого',
+                      count: sumBy(bd.extras, (r) => r.count),
+                      amount: formatPrice(sumBy(bd.extras, (r) => r.amount)),
+                    }}
                     columns={[
                       { key: 'label', header: 'Услуга', cell: (r) => r.label },
                       {
@@ -658,10 +707,21 @@ export function Analytics() {
 
                   <BreakdownCard
                     title="Клинеры за период"
-                    hint="Кто сколько отработал смен"
+                    hint={
+                      bd.cleanersTotal && bd.cleanersTotal.cleaners > bd.cleaners.length
+                        ? `Кто сколько отработал смен · показаны ${bd.cleaners.length} из ${bd.cleanersTotal.cleaners}`
+                        : 'Кто сколько отработал смен'
+                    }
                     rows={bd.cleaners}
                     rowKey={(r) => r.id}
                     emptyText="Смен за период не было"
+                    footer={{
+                      name: `Итого · клинеров: ${bd.cleanersTotal?.cleaners ?? bd.cleaners.length}`,
+                      shifts: bd.cleanersTotal?.shifts ?? sumBy(bd.cleaners, (r) => r.shifts),
+                      accrued: formatPrice(
+                        bd.cleanersTotal?.accrued ?? sumBy(bd.cleaners, (r) => r.accrued),
+                      ),
+                    }}
                     columns={[
                       { key: 'name', header: 'Клинер', cell: (r) => r.name },
                       {
@@ -701,10 +761,21 @@ export function Analytics() {
 
                   <BreakdownCard
                     title="Клиенты за период"
-                    hint="Топ по оплаченным заказам"
+                    hint={
+                      bd.clientsTotal && bd.clientsTotal.clients > bd.clients.length
+                        ? `Топ по оплаченным заказам · показаны ${bd.clients.length} из ${bd.clientsTotal.clients}`
+                        : 'Топ по оплаченным заказам'
+                    }
                     rows={bd.clients}
                     rowKey={(r) => r.id}
                     emptyText="Оплаченных заказов за период нет"
+                    footer={{
+                      name: `Итого · клиентов: ${bd.clientsTotal?.clients ?? bd.clients.length}`,
+                      count: bd.clientsTotal?.count ?? sumBy(bd.clients, (r) => r.count),
+                      amount: formatPrice(
+                        bd.clientsTotal?.amount ?? sumBy(bd.clients, (r) => r.amount),
+                      ),
+                    }}
                     columns={[
                       { key: 'name', header: 'Клиент', cell: (r) => r.name },
                       {
@@ -800,6 +871,7 @@ export function Analytics() {
                           </dl>
                         </div>
                       ))}
+                      <KpiTotalCard rows={data.managerKpi} seesAll={seesAll} />
                     </div>
 
                     {/* Компьютер: обычная таблица */}
@@ -854,6 +926,9 @@ export function Analytics() {
                             </tr>
                           ))}
                         </tbody>
+                        <tfoot>
+                          <KpiTotalRow rows={data.managerKpi} seesAll={seesAll} />
+                        </tfoot>
                       </table>
                     </ScrollArea>
                   </>
@@ -948,6 +1023,84 @@ export function Analytics() {
 
 
 /** Показатель в карточке KPI на телефоне: подпись слева, число справа */
+/** Сумма колонки — для строки «Итого» под таблицей */
+function sumBy<T>(rows: T[], pick: (r: T) => number): number {
+  return rows.reduce((s, r) => s + pick(r), 0);
+}
+
+/** Общий средний чек: вся сумма ÷ все заказы, а не среднее из средних */
+function avgOf(amount: number, count: number): number {
+  return count ? Math.round(amount / count) : 0;
+}
+
+type KpiRow = NonNullable<AnalyticsFull['managerKpi']>[number];
+
+/**
+ * Итог KPI по всем сотрудникам. Конверсия — общая (все оплаты ÷ все
+ * заявки), той же формулой, что у строки сотрудника на сервере.
+ */
+function kpiTotals(rows: KpiRow[]) {
+  const t = {
+    calls: sumBy(rows, (r) => r.calls),
+    cold: sumBy(rows, (r) => r.cold),
+    neutral: sumBy(rows, (r) => r.neutral),
+    hot: sumBy(rows, (r) => r.hot),
+    newClients: sumBy(rows, (r) => r.newClients),
+    orders: sumBy(rows, (r) => r.orders),
+    paid: sumBy(rows, (r) => r.paid),
+    rejected: sumBy(rows, (r) => r.rejected),
+    amount: sumBy(rows, (r) => r.amount),
+  };
+  return { ...t, conversion: t.orders ? Math.round((t.paid / t.orders) * 100) : 0 };
+}
+
+function KpiTotalRow({ rows, seesAll }: { rows: KpiRow[]; seesAll: boolean }) {
+  const t = kpiTotals(rows);
+  const cell = 'py-2 pr-3 text-right tabular-nums';
+  return (
+    <tr
+      data-testid="итого"
+      className="border-t-2 border-navy-200 bg-navy-50/70 font-bold text-navy-900"
+    >
+      <td className="py-2 pr-3">Итого</td>
+      <td className={cell}>{t.calls}</td>
+      <td className={`${cell} text-sky-700`}>{t.cold}</td>
+      <td className={`${cell} text-amber-700`}>{t.neutral}</td>
+      <td className={`${cell} text-red-700`}>{t.hot}</td>
+      <td className={cell}>{t.newClients}</td>
+      <td className={cell}>{t.orders}</td>
+      <td className={cell}>{t.paid}</td>
+      <td className={cell}>{t.rejected}</td>
+      <td className={`${cell} text-brand-600`}>{t.conversion}%</td>
+      {seesAll && <td className="py-2 text-right tabular-nums">{formatPrice(t.amount)}</td>}
+    </tr>
+  );
+}
+
+function KpiTotalCard({ rows, seesAll }: { rows: KpiRow[]; seesAll: boolean }) {
+  const t = kpiTotals(rows);
+  return (
+    <div
+      data-testid="итого"
+      className="rounded-xl border-2 border-navy-200 bg-navy-50/70 p-3 font-semibold text-navy-900"
+    >
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span>Итого</span>
+        <span className="text-sm font-bold tabular-nums text-brand-600">{t.conversion}%</span>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        <KpiCell label="Звонки" value={t.calls} />
+        <KpiCell label="Хол · Нейтр · Гор" value={`${t.cold} · ${t.neutral} · ${t.hot}`} />
+        <KpiCell label="Новых клиентов" value={t.newClients} />
+        <KpiCell label="Заявок" value={t.orders} />
+        <KpiCell label="Оплачено" value={t.paid} />
+        <KpiCell label="Отказов" value={t.rejected} />
+        {seesAll && <KpiCell label="Продано" value={formatPrice(t.amount)} />}
+      </dl>
+    </div>
+  );
+}
+
 function KpiCell({ label, value }: { label: string; value: string | number }) {
   return (
     <>
