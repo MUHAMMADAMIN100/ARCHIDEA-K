@@ -63,7 +63,7 @@ export class FinanceService {
 
   private requireManage(user: AuthUser): void {
     if (!can(user, 'finance:manage')) {
-      throw new ForbiddenException('Изменять финансовые записи может только руководитель');
+      throw new ForbiddenException('Изменять финансовые записи может руководитель или управляющий');
     }
   }
 

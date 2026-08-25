@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
+import { userSeesFinance } from '../types';
 import { Skeleton, PageHeader, ErrorState } from '../components/ui';
 import { ScrollArea } from '../components/ScrollArea';
 import { Period, PeriodFilter, StatCard } from '../components/common';
@@ -126,7 +127,9 @@ function BreakdownCard<T>({
 export function Analytics() {
   const { user } = useAuth();
   const seesAll = userSeesAll(user);
-  const isDirector = user?.role === 'DIRECTOR';
+  // деньги в аналитике — по праву на финансы (руководитель и управляющий
+  // без личного запрета), а не по роли: то же правило, что у книги
+  const isDirector = userSeesFinance(user);
   // ни одна цифра на этом экране не должна быть тупиком: клик по карточке,
   // столбику или сектору открывает список заказов, из которых она сложилась
   const [drill, setDrill] = useState<Drill | null>(null);

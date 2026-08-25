@@ -73,7 +73,7 @@ export function Finance() {
     return (
       <div>
         <PageHeader title="Финансы" />
-        <ErrorState text="Раздел финансов доступен только руководителю компании." />
+        <ErrorState text="Раздел финансов доступен руководителю и управляющему компании." />
       </div>
     );
   }

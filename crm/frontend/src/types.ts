@@ -149,7 +149,9 @@ export function userSeesFinance(u?: AuthUser | null): boolean {
    * чтобы никакая роль её не перебила.
    */
   if (u?.noFinance) return false;
-  return u?.role === 'DIRECTOR';
+  // управляющий ведёт книгу доходов и расходов наравне с руководителем
+  // (решение владельца)
+  return u?.role === 'DIRECTOR' || u?.role === 'SUPERVISOR';
 }
 
 /**

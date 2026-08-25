@@ -44,10 +44,10 @@ const supervisor = (o: Partial<AuthUser> = {}) =>
   user({ role: Role.SUPERVISOR, ...o });
 
 /**
- * Роль «Управляющий» — решение владельца: вся работа компании, кроме денег
- * и раздачи доступов. Границу проверяем с обеих сторон: и что открыто, и что
- * закрыто. Если кто-то добавит управляющему финансы или управление
- * сотрудниками, эти тесты обязаны упасть.
+ * Роль «Управляющий» — решение владельца: вся работа компании, включая
+ * деньги, кроме раздачи доступов. Границу проверяем с обеих сторон: и что
+ * открыто, и что закрыто. Если кто-то добавит управляющему управление
+ * сотрудниками или корзину, эти тесты обязаны упасть.
  */
 describe('Права: роль «Управляющий»', () => {
   const OPEN: Permission[] = [
@@ -55,12 +55,12 @@ describe('Права: роль «Управляющий»', () => {
     'ops:manage',
     'services:manage',
     'audit:view',
+    'finance:view',
+    'finance:manage',
     'checklists:manage',
     'proposals:templates',
   ];
   const CLOSED: Permission[] = [
-    'finance:view',
-    'finance:manage',
     'users:manage',
     'trash:view',
     'trash:purge',
@@ -82,8 +82,13 @@ describe('Права: роль «Управляющий»', () => {
     expect(seesAllTasks(supervisor())).toBe(true);
   });
 
-  it('деньги компании закрыты', () => {
-    expect(seesFinance(supervisor())).toBe(false);
+  it('деньги компании открыты — управляющий ведёт книгу наравне с руководителем', () => {
+    expect(seesFinance(supervisor())).toBe(true);
+  });
+
+  it('личная галочка «без доступа к финансам» закрывает деньги и управляющему', () => {
+    expect(seesFinance(supervisor({ noFinance: true }))).toBe(false);
+    expect(can(supervisor({ noFinance: true }), 'finance:manage')).toBe(false);
   });
 
   it('платёжные ведомости открыты — это его работа', () => {

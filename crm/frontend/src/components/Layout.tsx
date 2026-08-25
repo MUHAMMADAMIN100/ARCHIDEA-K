@@ -141,7 +141,8 @@ const DIRECTOR_NAV: NavItem[] = [
  * «Ведомости» остаются отдельным пунктом — их смотрят каждый день.
  */
 const FINANCE_SUB: NavItem[] = [
-  { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
+  // кому открыто — решает userSeesFinance: руководитель и управляющий без личного запрета
+  { to: '/finance', label: 'Доходы и расходы', icon: Coins, finance: true },
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
 ];
 
