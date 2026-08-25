@@ -375,6 +375,7 @@ export class AnalyticsService {
             estimatedPrice: true,
             discount: true,
             extras: true,
+            customExtras: true,
             managerId: true,
             manager: { select: { fullName: true } },
             client: { select: { id: true, fullName: true } },
@@ -458,6 +459,31 @@ export class AnalyticsService {
         const row = byExtra.get(key) ?? { key, label: item.title, count: 0, amount: 0 };
         row.count += 1;
         row.amount += item.hasQty ? item.price * qty : item.price;
+        byExtra.set(key, row);
+      }
+    }
+    /*
+     * Доп. услуги, вписанные СТРОКАМИ в заказ (customExtras) — основной
+     * путь CRM. Раньше здесь считались только услуги с сайта (extras), и
+     * плитка показывала «0 сомони», хотя менеджеры оформляли химчистку и
+     * мойку матрасов каждый день. В счёт идут только отмеченные галочкой —
+     * ровно те, что вошли в сумму заказа.
+     *
+     * Группируем по названию без хвоста «× N»: «Мойка матраса × 2» и
+     * «Мойка матраса» — одна услуга. Ключ с префиксом custom: — чтобы
+     * раскрытие отличало такие строки от ключей справочника.
+     */
+    for (const o of paid) {
+      const rows = Array.isArray(o.customExtras)
+        ? (o.customExtras as { title?: string; price?: number; checked?: boolean }[])
+        : [];
+      for (const r of rows) {
+        if (!r?.checked || !r.title) continue;
+        const label = String(r.title).replace(/\s*×\s*\d+\s*$/, '').trim() || String(r.title);
+        const key = `custom:${label.toLowerCase()}`;
+        const row = byExtra.get(key) ?? { key, label, count: 0, amount: 0 };
+        row.count += 1;
+        row.amount += Math.max(0, Math.round(Number(r.price) || 0));
         byExtra.set(key, row);
       }
     }
@@ -775,10 +801,31 @@ export class AnalyticsService {
             stage: FunnelStage.PAID,
             ...(hasRange ? { closedAt: range } : {}),
           },
-          select: { id: true, extras: true },
+          select: { id: true, extras: true, customExtras: true },
         });
+        /*
+         * Ключ с префиксом custom: — доп. услуга, вписанная строкой в заказ;
+         * без префикса — услуга из справочника сайта. Отбор строк тем же
+         * правилом, что и сводка: отмеченные, название без хвоста «× N».
+         */
+        const customLabel = key?.startsWith('custom:')
+          ? key.slice('custom:'.length)
+          : null;
         const ids = paid
           .filter((o) => {
+            if (customLabel !== null) {
+              const rows = Array.isArray(o.customExtras)
+                ? (o.customExtras as { title?: string; checked?: boolean }[])
+                : [];
+              return rows.some(
+                (r) =>
+                  r?.checked &&
+                  String(r.title ?? '')
+                    .replace(/\s*×\s*\d+\s*$/, '')
+                    .trim()
+                    .toLowerCase() === customLabel,
+              );
+            }
             const chosen = (o.extras as Record<string, number> | null) ?? null;
             return !!chosen && Number(chosen[key ?? '']) > 0;
           })

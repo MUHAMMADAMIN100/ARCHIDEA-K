@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { prefetch } from '../api/hooks';
 import {
@@ -129,12 +129,20 @@ const DIRECTOR_NAV: NavItem[] = [
   // воронка первой и на корне — с неё открывается CRM у всех ролей
   { to: '/', label: 'Воронка', icon: Filter },
   { to: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
-  { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
-  { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
   { to: '/clients', label: 'Клиенты', icon: Users },
   // календарь поднят из «Ещё»: по нему планируют день, а не заглядывают раз в неделю
   { to: '/calendar', label: 'Календарь', icon: CalendarRange },
   { to: '/reports', label: 'Ведомости', icon: FileText, moneyBan: true },
+];
+
+/**
+ * Денежные разделы — под одним разворачиваемым пунктом «Финансы»
+ * (решение владельца): сайдбар короче, а деньги в одном месте.
+ * «Ведомости» остаются отдельным пунктом — их смотрят каждый день.
+ */
+const FINANCE_SUB: NavItem[] = [
+  { to: '/finance', label: 'Доходы и расходы', icon: Coins, roles: ['DIRECTOR'], finance: true },
+  { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
 ];
 
 /** Что лежит за пунктом «Ещё» — две группы с неклика­бельными заголовками */
@@ -266,6 +274,16 @@ export function Layout() {
     if (insideMore) setMoreOpen(true);
   }, [insideMore]);
 
+  // «Финансы»: подпункты по правам; открыт раздел изнутри — пункт раскрыт
+  const financeSub = FINANCE_SUB.filter(visible);
+  const insideFinance = financeSub.some(
+    (i) => location.pathname === i.to || location.pathname.startsWith(i.to + '/'),
+  );
+  const [financeOpen, setFinanceOpen] = useState(insideFinance);
+  useEffect(() => {
+    if (insideFinance) setFinanceOpen(true);
+  }, [insideFinance]);
+
   // Прогрев кэша разделов после входа — переходы будут мгновенными.
   // На мобильном критично: НЕ греем на медленной/эконом-сети и разносим
   // запросы во времени, чтобы не забить канал и не задержать загрузку
@@ -355,11 +373,45 @@ export function Layout() {
             <>
               <div className="space-y-1">
                 {topNav.map((item) => (
-                  <NavItemLink
-                    key={item.to}
-                    item={item}
-                    onClick={() => setMobileOpen(false)}
-                  />
+                  <Fragment key={item.to}>
+                    <NavItemLink
+                      item={item}
+                      onClick={() => setMobileOpen(false)}
+                    />
+                    {/* «Финансы» стоят там же, где стояли Доходы и Аналитика */}
+                    {item.to === '/dashboard' && financeSub.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setFinanceOpen((o) => !o)}
+                          className={`press flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[background-color,color,transform] duration-120 ease-out ${
+                            insideFinance
+                              ? 'bg-white text-navy-900'
+                              : 'text-white hover:bg-white/15'
+                          }`}
+                        >
+                          <Coins className="h-[18px] w-[18px] shrink-0" />
+                          <span className="truncate">Финансы</span>
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 shrink-0 transition-transform ${
+                              financeOpen ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                        {financeOpen && (
+                          <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
+                            {financeSub.map((sub) => (
+                              <NavItemLink
+                                key={sub.to}
+                                item={sub}
+                                onClick={() => setMobileOpen(false)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </Fragment>
                 ))}
 
                 {/* «Ещё» — вход в разделы, нужные точечно, а не каждый день */}

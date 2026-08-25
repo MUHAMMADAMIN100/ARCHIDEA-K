@@ -292,7 +292,7 @@ export class PaymentsService {
       });
 
       return { payments: created, paidAmount: paid, total };
-    });
+    }, { timeout: 20000, maxWait: 10000 });
   }
 
   /** Как назвать канал в журнале и в книге доходов */
@@ -374,7 +374,7 @@ export class PaymentsService {
       });
 
       return { payment: updated, paidAmount: paid, total };
-    });
+    }, { timeout: 20000, maxWait: 10000 });
   }
 
   /**
@@ -407,6 +407,6 @@ export class PaymentsService {
       });
 
       return { paidAmount: paid, total: this.orderTotal(order) };
-    });
+    }, { timeout: 20000, maxWait: 10000 });
   }
 }

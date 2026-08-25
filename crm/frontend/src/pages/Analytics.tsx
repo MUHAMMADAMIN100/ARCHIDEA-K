@@ -508,7 +508,7 @@ export function Analytics() {
               заказов она сложилась.
             */}
             {bd && (
-              <>
+              <div className="min-w-0 space-y-4 lg:col-span-2">
                 <BreakdownCard
                   title="Менеджеры за период"
                   hint={`Сколько обращений принял каждый и сколько довёл до оплаты · ${rangeLabel}`}
@@ -578,7 +578,7 @@ export function Analytics() {
                   ]}
                 />
 
-                <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                <div className="grid min-w-0 gap-4">
                   <BreakdownCard
                     title="Услуги за период"
                     hint="По оплаченным заказам"
@@ -867,7 +867,7 @@ export function Analytics() {
                     ]}
                   />
                 </div>
-              </>
+              </div>
             )}
 
             {/*
