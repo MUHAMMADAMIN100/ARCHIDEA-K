@@ -3,15 +3,27 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
+  LabelList,
   Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import {
+  AXIS_TICK,
+  BAR_ANIMATION,
+  barGap,
+  CHART,
+  chartGradients,
+  ChartTooltip,
+  CURSOR_FILL,
+  Donut,
+  GRID_STROKE,
+  gradient,
+  useWideScreen,
+  valueLabel,
+} from '../components/charts';
 import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
@@ -30,7 +42,6 @@ import { formatDateTz, monthRange } from '../lib/date';
 import { userSeesAll } from '../types';
 import type { AnalyticsFull, ShiftGroupStatus } from '../types';
 
-const COLORS = ['#0063a8', '#0078c9', '#2a93da', '#5fb1e8', '#95cdf0'];
 
 /** Подпись у каждой диаграммы: цифры кликабельны, это не очевидно само по себе */
 const HINT = 'Нажмите на столбик или сектор — покажем заказы, из которых он сложился.';
@@ -158,6 +169,8 @@ function BreakdownCard<T>({
 export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const seesAll = userSeesAll(user);
+  // подписи сумм над столбиками помещаются только на широком экране
+  const wide = useWideScreen();
   // деньги в аналитике — по праву на финансы (руководитель и управляющий
   // без личного запрета), а не по роли: то же правило, что у книги
   const isDirector = userSeesFinance(user);
@@ -460,22 +473,28 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                       ...d,
                       netShown: Math.max(0, d.net),
                     }))}
+                    margin={{ top: 18, right: 8, left: 0, bottom: 0 }}
+                    barCategoryGap={barGap(wide)}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#5fb1e8' }} />
+                    {chartGradients()}
+                    <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                    <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
                     <YAxis
-                      tick={{ fontSize: 12, fill: '#5fb1e8' }}
+                      tick={AXIS_TICK}
+                      axisLine={false}
+                      tickLine={false}
                       domain={[0, 'auto']}
                       allowDataOverflow
                     />
-                    <Tooltip content={<RevenueDayTooltip />} />
-                    <Legend />
+                    <Tooltip cursor={CURSOR_FILL} content={<RevenueDayTooltip />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                     <Bar
                       dataKey="revenue"
                       name="Выручка"
-                      fill="#0078c9"
+                      fill={gradient('blue')}
                       radius={[6, 6, 0, 0]}
                       cursor="pointer"
+                      {...BAR_ANIMATION}
                       onClick={(bar: any) =>
                         bar?.payload?.day &&
                         setDrill({
@@ -485,14 +504,17 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                           key: bar.payload.day,
                         })
                       }
-                    />
+                    >
+                      {wide && <LabelList dataKey="revenue" {...valueLabel()} />}
+                    </Bar>
                     {/* чистый доход дня: выручка минус расходы книги за этот день */}
                     <Bar
                       dataKey="netShown"
                       name="Чистый доход"
-                      fill="#10b981"
+                      fill={gradient('green')}
                       radius={[6, 6, 0, 0]}
                       cursor="pointer"
+                      {...BAR_ANIMATION}
                       onClick={(bar: any) =>
                         bar?.payload?.day &&
                         setDrill({
@@ -502,7 +524,10 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                           key: bar.payload.day,
                         })
                       }
-                    />
+                    >
+                      {/* подпись только у выручки: две цифры над парой узких
+                          столбиков наезжали друг на друга; чистый — в подсказке */}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -518,35 +543,22 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   За период заявок не было
                 </p>
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie
-                      data={data.sources}
-                      dataKey="count"
-                      nameKey="label"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={90}
-                      label={(e: any) => e.label}
-                      cursor="pointer"
-                      onClick={(slice: any) =>
-                        slice?.payload?.source &&
-                        setDrill({
-                          title: `Источник: ${slice.payload.label}`,
-                          subtitle: `Заявки с этого источника · ${rangeLabel}`,
-                          metric: 'source',
-                          key: slice.payload.source,
-                        })
-                      }
-                    >
-                      {data.sources.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                <Donut
+                  data={data.sources}
+                  dataKey="count"
+                  nameKey="label"
+                  caption="заявок"
+                  unit="заявок"
+                  onSelect={(s) =>
+                    s.source &&
+                    setDrill({
+                      title: `Источник: ${s.label}`,
+                      subtitle: `Заявки с этого источника · ${rangeLabel}`,
+                      metric: 'source',
+                      key: String(s.source),
+                    })
+                  }
+                />
               )}
             </div>
 
@@ -979,18 +991,27 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   </p>
                 ) : (
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={data.managerWorkload}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5fb1e8' }} />
-                      <YAxis tick={{ fontSize: 12, fill: '#5fb1e8' }} allowDecimals={false} />
-                      <Tooltip />
-                      <Legend />
+                    <BarChart
+                      data={data.managerWorkload}
+                      margin={{ top: 18, right: 8, left: 0, bottom: 0 }}
+                      barCategoryGap={barGap(wide)}
+                    >
+                      {chartGradients()}
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5fb1e8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip
+                        cursor={CURSOR_FILL}
+                        content={<ChartTooltip colors={{ active: CHART.blue, paid: CHART.sky }} />}
+                      />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                       <Bar
                         dataKey="active"
                         name="Активные заказы"
-                        fill="#0078c9"
+                        fill={gradient('blue')}
                         radius={[6, 6, 0, 0]}
                         cursor="pointer"
+                        {...BAR_ANIMATION}
                         onClick={(bar: any) =>
                           bar?.payload &&
                           setDrill({
@@ -1000,13 +1021,16 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                             key: bar.payload.id || 'none',
                           })
                         }
-                      />
+                      >
+                        {wide && <LabelList dataKey="active" {...valueLabel(String)} />}
+                      </Bar>
                       <Bar
                         dataKey="paid"
                         name="Завершено"
-                        fill="#5fb1e8"
+                        fill={gradient('sky')}
                         radius={[6, 6, 0, 0]}
                         cursor="pointer"
+                        {...BAR_ANIMATION}
                         onClick={(bar: any) =>
                           bar?.payload &&
                           setDrill({
@@ -1016,7 +1040,9 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                             key: bar.payload.id || 'none',
                           })
                         }
-                      />
+                      >
+                        {wide && <LabelList dataKey="paid" {...valueLabel(String)} />}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 )}

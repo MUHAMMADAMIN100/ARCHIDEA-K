@@ -8,12 +8,27 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import {
+  AXIS_TICK,
+  BAR_ANIMATION,
+  barGap,
+  CHART,
+  chartGradients,
+  ChartTooltip,
+  CURSOR_FILL,
+  GRID_STROKE,
+  gradient,
+  shortNumber,
+  useWideScreen,
+  valueLabel,
+} from '../components/charts';
 import { Gift, Link2, Pencil, Plus, Search, Trash2, Wallet, X } from 'lucide-react';
 import { api } from '../api/client';
 import { deleteRecord, invalidate, removeFrom, useFetch } from '../api/hooks';
@@ -161,6 +176,8 @@ interface FinanceDrill {
 }
 
 function EntriesTab() {
+  // подписи сумм над столбиками — только на широком экране
+  const wide = useWideScreen();
   const { user } = useAuth();
   const toast = useToast();
   const dialog = useDialog();
@@ -554,20 +571,38 @@ function EntriesTab() {
           <p className="mb-3 text-xs text-navy-600">{CHART_HINT}</p>
           {summary && summary.byCategory.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={summary.byCategory} layout="vertical" margin={{ left: 24 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#5fb1e8' }} />
+              <BarChart
+                data={summary.byCategory}
+                layout="vertical"
+                margin={{ left: 24, right: 72, top: 4, bottom: 0 }}
+                barCategoryGap="30%"
+              >
+                {chartGradients(true)}
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#5fb1e8' }} axisLine={false} tickLine={false} />
                 <YAxis
                   type="category"
                   dataKey="label"
                   width={140}
                   tick={{ fontSize: 11, fill: '#0a2a48' }}
+                  axisLine={false}
+                  tickLine={false}
                 />
-                <Tooltip formatter={(v: number) => formatPrice(v)} />
+                <Tooltip
+                  cursor={CURSOR_FILL}
+                  content={
+                    <ChartTooltip
+                      format={(v) => formatPrice(v)}
+                      colorOf={(row) => ((row.payload as { kind?: string })?.kind === 'INCOME' ? CHART.green : CHART.red)}
+                    />
+                  }
+                />
                 <Bar
                   dataKey="amount"
+                  name="Сумма"
                   radius={[0, 6, 6, 0]}
                   cursor="pointer"
+                  {...BAR_ANIMATION}
                   onClick={(bar: any) =>
                     bar?.payload?.category &&
                     setDrill({
@@ -578,8 +613,9 @@ function EntriesTab() {
                   }
                 >
                   {summary.byCategory.map((c, i) => (
-                    <Cell key={i} fill={c.kind === 'INCOME' ? '#10b981' : '#f43f5e'} />
+                    <Cell key={i} fill={gradient(c.kind === 'INCOME' ? 'green' : 'red', true)} />
                   ))}
+                  <LabelList dataKey="amount" {...valueLabel(shortNumber, 'right')} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -593,28 +629,47 @@ function EntriesTab() {
           <p className="mb-3 text-xs text-navy-600">{CHART_HINT}</p>
           {summary && summary.series && summary.series.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={summary.series}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#5fb1e8' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#5fb1e8' }} />
-                <Tooltip formatter={(v: number) => formatPrice(v)} />
-                <Legend />
+              <BarChart
+                data={summary.series}
+                margin={{ top: 18, right: 8, left: 0, bottom: 0 }}
+                barCategoryGap={barGap(wide)}
+              >
+                {chartGradients()}
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={CURSOR_FILL}
+                  content={
+                    <ChartTooltip
+                      format={(v) => formatPrice(v)}
+                      colors={{ income: CHART.green, expense: CHART.red }}
+                    />
+                  }
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                 <Bar
                   dataKey="income"
                   name="Доход"
-                  fill="#10b981"
+                  fill={gradient('green')}
                   radius={[6, 6, 0, 0]}
                   cursor="pointer"
+                  {...BAR_ANIMATION}
                   onClick={(bar: any) => bar?.payload?.date && openMonth(bar.payload.date, 'INCOME')}
-                />
+                >
+                  {wide && <LabelList dataKey="income" {...valueLabel()} />}
+                </Bar>
                 <Bar
                   dataKey="expense"
                   name="Расход"
-                  fill="#f43f5e"
+                  fill={gradient('red')}
                   radius={[6, 6, 0, 0]}
                   cursor="pointer"
+                  {...BAR_ANIMATION}
                   onClick={(bar: any) => bar?.payload?.date && openMonth(bar.payload.date, 'EXPENSE')}
-                />
+                >
+                  {wide && <LabelList dataKey="expense" {...valueLabel()} />}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
