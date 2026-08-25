@@ -30,7 +30,16 @@ import { userSeesFinance } from '../types';
 import { Skeleton, PageHeader, ErrorState } from '../components/ui';
 import { StatTile } from '../components/live';
 import {
+  EmptyRows,
+  EntriesDrillModal,
+  LevelBadge,
+  NameCell,
+  ShareCell,
+  leaderOf,
+} from '../components/breakdown';
+import {
   ArrowDownRight,
+  Brush,
   CheckCircle2,
   HardHat,
   Inbox,
@@ -66,8 +75,15 @@ interface Drill {
   subtitle?: string;
   metric: string;
   key?: string;
-  /** выезды бригады и смены клинера — не заказы, у них свой вид расшифровки */
-  mode?: 'orders' | 'visits' | 'shifts';
+  /**
+   * выезды бригады и смены клинера — не заказы, у них свой вид расшифровки;
+   * entries — операции книги (расходы, зарплаты) за плиткой с деньгами
+   */
+  mode?: 'orders' | 'visits' | 'shifts' | 'entries';
+  /** только эти статьи книги (например, Зарплата и Премии) */
+  categories?: string[];
+  /** показать сверху арифметику чистого дохода */
+  net?: boolean;
 }
 
 
@@ -109,7 +125,7 @@ function BreakdownCard<T>({
       <h3 className="font-bold text-navy-900">{title}</h3>
       {hint && <p className="mt-0.5 mb-3 text-xs text-navy-600">{hint}</p>}
       {rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-navy-600">{emptyText}</p>
+        <EmptyRows text={emptyText} />
       ) : (
         <ScrollArea axis="x" className="-mx-1" innerClassName="px-1" label={title}>
           {/*
@@ -135,11 +151,14 @@ function BreakdownCard<T>({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={rowKey(r)} className="border-b border-navy-50 last:border-0">
+                <tr
+                  key={rowKey(r)}
+                  className="border-b border-navy-50 transition-colors last:border-0 hover:bg-navy-50/70"
+                >
                   {columns.map((c) => (
                     <td
                       key={c.key}
-                      className={`py-2 pr-3 align-top ${
+                      className={`py-2.5 pr-3 align-middle ${
                         c.align === 'right' ? 'text-right tabular-nums' : ''
                       }`}
                     >
@@ -211,6 +230,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
   );
 
   const bd = data?.breakdowns;
+  // лидеры таблиц — отмечаются звёздочкой; без денег лидер по количеству
+  const leadManager = leaderOf(bd?.managers, (r) => r.amount || r.paid)?.id ?? null;
+  const leadService = leaderOf(bd?.services, (r) => r.amount || r.count)?.key;
+  const leadExtra = leaderOf(bd?.extras, (r) => r.amount || r.count)?.key;
+  const leadCleaner = leaderOf(bd?.cleaners, (r) => r.accrued || r.shifts)?.id;
+  const leadClient = leaderOf(bd?.clients, (r) => r.amount || r.count)?.id;
+  const leadKpi = leaderOf(data?.managerKpi, (r) => r.amount || r.paid)?.id ?? null;
 
   const rangeLabel =
     data?.from && data?.to
@@ -377,8 +403,17 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   icon={TrendingUp}
                   accent={data.revenue.net >= 0 ? 'green' : 'red'}
                   hint={`выручка − расходы ${formatPrice(data.revenue.expenses)}`}
-                  title="Выручка периода минус все расходы из книги доходов и расходов"
+                  title="Выручка минус расходы: из чего сложился чистый доход"
                   testId="плитка-чистый"
+                  onClick={() =>
+                    setDrill({
+                      title: 'Чистый доход — из чего сложился',
+                      subtitle: rangeLabel,
+                      metric: 'expenses',
+                      mode: 'entries',
+                      net: true,
+                    })
+                  }
                 />
               )}
               {data.payroll && (
@@ -409,7 +444,17 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   icon={Users}
                   accent="violet"
                   hint="статьи «Зарплата» и «Премии» в книге"
+                  title="Операции по статьям «Зарплата» и «Премии» за период"
                   testId="плитка-зп-сотрудников"
+                  onClick={() =>
+                    setDrill({
+                      title: 'ЗП и премии сотрудников',
+                      subtitle: rangeLabel,
+                      metric: 'expenses',
+                      mode: 'entries',
+                      categories: ['SALARY', 'BONUS'],
+                    })
+                  }
                 />
               )}
               <StatTile
@@ -421,6 +466,14 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 hint="из книги за период"
                 title="Все расходы книги за период — они вычитаются в чистом доходе"
                 testId="плитка-расходы"
+                onClick={() =>
+                  setDrill({
+                    title: 'Все расходы за период',
+                    subtitle: rangeLabel,
+                    metric: 'expenses',
+                    mode: 'entries',
+                  })
+                }
               />
               <StatTile
                 label="Средний чек"
@@ -686,7 +739,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                             })
                           }
                         >
-                          {r.name}
+                          <NameCell name={r.name} leader={(r.id ?? null) === leadManager} />
                         </DrillValue>
                       ),
                     },
@@ -710,7 +763,10 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                             })
                           }
                         >
-                          {r.paid}
+                          <span className="inline-flex items-center gap-1.5">
+                            {r.paid}
+                            <LevelBadge pct={r.total ? Math.round((r.paid / r.total) * 100) : 0} />
+                          </span>
                         </DrillValue>
                       ),
                     },
@@ -720,7 +776,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                             key: 'amount',
                             header: 'Сумма',
                             align: 'right' as const,
-                            cell: (r: typeof bd.managers[number]) => formatPrice(r.amount),
+                            cell: (r: typeof bd.managers[number]) => (
+                              <ShareCell
+                                value={r.amount}
+                                total={sumBy(bd.managers, (x) => x.amount)}
+                                color="brand"
+                              />
+                            ),
                           },
                           {
                             key: 'average',
@@ -746,7 +808,11 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                       amount: formatPrice(sumBy(bd.services, (r) => r.amount)),
                     }}
                     columns={[
-                      { key: 'label', header: 'Услуга', cell: (r) => r.label },
+                      {
+                        key: 'label',
+                        header: 'Услуга',
+                        cell: (r) => <NameCell name={r.label} icon={Brush} leader={r.key === leadService} />,
+                      },
                       {
                         key: 'count',
                         header: 'Заказов',
@@ -774,7 +840,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                               key: 'amount',
                               header: 'Сумма',
                               align: 'right' as const,
-                              cell: (r: typeof bd.services[number]) => formatPrice(r.amount),
+                              cell: (r: typeof bd.services[number]) => (
+                                <ShareCell
+                                  value={r.amount}
+                                  total={sumBy(bd.services, (x) => x.amount)}
+                                  color="green"
+                                />
+                              ),
                             },
                           ]
                         : []),
@@ -793,7 +865,11 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                       amount: formatPrice(sumBy(bd.extras, (r) => r.amount)),
                     }}
                     columns={[
-                      { key: 'label', header: 'Услуга', cell: (r) => r.label },
+                      {
+                        key: 'label',
+                        header: 'Услуга',
+                        cell: (r) => <NameCell name={r.label} icon={Sparkles} leader={r.key === leadExtra} />,
+                      },
                       {
                         key: 'count',
                         header: 'Раз взяли',
@@ -821,7 +897,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                               key: 'amount',
                               header: 'Сумма',
                               align: 'right' as const,
-                              cell: (r: typeof bd.extras[number]) => formatPrice(r.amount),
+                              cell: (r: typeof bd.extras[number]) => (
+                                <ShareCell
+                                  value={r.amount}
+                                  total={sumBy(bd.extras, (x) => x.amount)}
+                                  color="violet"
+                                />
+                              ),
                             },
                           ]
                         : []),
@@ -846,7 +928,11 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                       ),
                     }}
                     columns={[
-                      { key: 'name', header: 'Клинер', cell: (r) => r.name },
+                      {
+                        key: 'name',
+                        header: 'Клинер',
+                        cell: (r) => <NameCell name={r.name} leader={r.id === leadCleaner} />,
+                      },
                       {
                         key: 'shifts',
                         header: 'Смен',
@@ -875,7 +961,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                               key: 'accrued',
                               header: 'Начислено',
                               align: 'right' as const,
-                              cell: (r: typeof bd.cleaners[number]) => formatPrice(r.accrued),
+                              cell: (r: typeof bd.cleaners[number]) => (
+                                <ShareCell
+                                  value={r.accrued}
+                                  total={bd.cleanersTotal?.accrued ?? sumBy(bd.cleaners, (x) => x.accrued)}
+                                  color="amber"
+                                />
+                              ),
                             },
                           ]
                         : []),
@@ -900,7 +992,11 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                       ),
                     }}
                     columns={[
-                      { key: 'name', header: 'Клиент', cell: (r) => r.name },
+                      {
+                        key: 'name',
+                        header: 'Клиент',
+                        cell: (r) => <NameCell name={r.name} leader={r.id === leadClient} />,
+                      },
                       {
                         key: 'count',
                         header: 'Заказов',
@@ -928,7 +1024,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                               key: 'amount',
                               header: 'Сумма',
                               align: 'right' as const,
-                              cell: (r: typeof bd.clients[number]) => formatPrice(r.amount),
+                              cell: (r: typeof bd.clients[number]) => (
+                                <ShareCell
+                                  value={r.amount}
+                                  total={bd.clientsTotal?.amount ?? sumBy(bd.clients, (x) => x.amount)}
+                                  color="brand"
+                                />
+                              ),
                             },
                           ]
                         : []),
@@ -1025,10 +1127,10 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                           {data.managerKpi.map((m) => (
                             <tr
                               key={m.id ?? 'none'}
-                              className="border-b border-navy-50 last:border-0"
+                              className="border-b border-navy-50 transition-colors last:border-0 hover:bg-navy-50/70"
                             >
-                              <td className="py-2 pr-3 font-medium text-navy-900">
-                                {m.name}
+                              <td className="py-2 pr-3">
+                                <NameCell name={m.name} leader={(m.id ?? null) === leadKpi} />
                               </td>
                               <td className="py-2 pr-3 text-right tabular-nums">{m.calls}</td>
                               <td className="py-2 pr-3 text-right tabular-nums text-sky-700">{m.cold}</td>
@@ -1038,12 +1140,16 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                               <td className="py-2 pr-3 text-right tabular-nums">{m.orders}</td>
                               <td className="py-2 pr-3 text-right tabular-nums font-semibold">{m.paid}</td>
                               <td className="py-2 pr-3 text-right tabular-nums">{m.rejected}</td>
-                              <td className="py-2 pr-3 text-right font-bold tabular-nums text-brand-600">
-                                {m.conversion}%
+                              <td className="py-2 pr-3 text-right">
+                                <LevelBadge pct={m.conversion} />
                               </td>
                               {seesAll && (
-                                <td className="py-2 text-right font-semibold tabular-nums">
-                                  {formatPrice(m.amount)}
+                                <td className="py-2 text-right">
+                                  <ShareCell
+                                    value={m.amount}
+                                    total={sumBy(data.managerKpi ?? [], (x) => x.amount)}
+                                    color="brand"
+                                  />
                                 </td>
                               )}
                             </tr>
@@ -1134,7 +1240,25 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
       )}
 
       {drill &&
-        (drill.mode === 'visits' || drill.mode === 'shifts' ? (
+        (drill.mode === 'entries' ? (
+          <EntriesDrillModal
+            title={drill.title}
+            subtitle={drill.subtitle}
+            from={period.from}
+            to={period.to}
+            categories={drill.categories}
+            summary={
+              drill.net && data?.revenue
+                ? {
+                    revenue: data.revenue.period,
+                    expenses: data.revenue.expenses,
+                    net: data.revenue.net,
+                  }
+                : undefined
+            }
+            onClose={() => setDrill(null)}
+          />
+        ) : drill.mode === 'visits' || drill.mode === 'shifts' ? (
           <WorkDrillModal
             drill={drill}
             from={period.from}
