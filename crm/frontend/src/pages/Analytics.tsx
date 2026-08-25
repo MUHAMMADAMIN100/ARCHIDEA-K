@@ -28,8 +28,22 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
 import { Skeleton, PageHeader, ErrorState } from '../components/ui';
+import { StatTile } from '../components/live';
+import {
+  ArrowDownRight,
+  CheckCircle2,
+  HardHat,
+  Inbox,
+  Percent,
+  Receipt,
+  Sparkles,
+  TrendingUp,
+  Users,
+  Wallet,
+  XCircle,
+} from 'lucide-react';
 import { ScrollArea } from '../components/ScrollArea';
-import { Period, PeriodFilter, StatCard } from '../components/common';
+import { Period, PeriodFilter } from '../components/common';
 import {
   DetailModal,
   DetailStats,
@@ -211,7 +225,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
     (reconciliation.ordersWithoutPrice > 0 || reconciliation.paidWithoutCloseDate > 0);
 
   return (
-    <div className="animate-page-in">
+    <div className="animate-page-in zone-live">
       {embedded ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-navy-600">
@@ -326,15 +340,22 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           )}
 
-          {/* Доходы — приходят только руководителю (финансовые данные) */}
+          {/*
+            Первый ряд — деньги и зарплаты: то, на что руководитель смотрит
+            первым (решение владельца). Приходит только тем, кому открыты
+            финансы. Второй ряд — счётчики, компактно.
+          */}
           {data.revenue && (
-            <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-              <StatCard
-                label="За выбранный период"
-                value={formatPrice(data.revenue.period)}
-                tone="positive"
+            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+              <StatTile
+                label="Выручка"
+                number={data.revenue.period}
+                format={formatPrice}
+                icon={Wallet}
+                accent="green"
                 hint={rangeLabel}
                 title="Из каких заказов сложилась выручка периода"
+                testId="плитка-выручка"
                 onClick={() =>
                   setDrill({
                     title: 'Выручка за период',
@@ -344,48 +365,72 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 }
               />
               {/*
-                Чистый доход (решение владельца): выручка минус все расходы
-                из книги за период. Ушёл в минус — красным, это сигнал.
-              */}
-              {/*
-                Плитка рисуется только когда сервер уже отдаёт чистый доход:
-                сайт и сервер выкатываются порознь, и в промежутке страница
-                не должна показывать «NaN сомони».
+                Чистый доход: выручка минус все расходы из книги за период.
+                Рисуется только когда сервер уже отдаёт цифру — сайт и сервер
+                выкатываются порознь.
               */}
               {data.revenue.net != null && (
-              <StatCard
-                label="Чистый доход"
-                value={formatPrice(data.revenue.net)}
-                tone={data.revenue.net >= 0 ? 'positive' : 'negative'}
-                hint={`выручка − расходы ${formatPrice(data.revenue.expenses)}`}
-                title="Выручка периода минус все расходы из книги доходов и расходов"
-              />
+                <StatTile
+                  label="Чистый доход"
+                  number={data.revenue.net}
+                  format={formatPrice}
+                  icon={TrendingUp}
+                  accent={data.revenue.net >= 0 ? 'green' : 'red'}
+                  hint={`выручка − расходы ${formatPrice(data.revenue.expenses)}`}
+                  title="Выручка периода минус все расходы из книги доходов и расходов"
+                  testId="плитка-чистый"
+                />
               )}
-              {/*
-                Раньше здесь стояли четыре окна «за день / неделю / месяц /
-                квартал», которые считались НЕЗАВИСИМО от фильтра сверху:
-                выбираешь «Прошлый месяц», а они показывают текущие цифры —
-                на экране оказывались четыре одинаковых числа. Теперь всё за
-                один и тот же период, но разные показатели.
-              */}
-              <StatCard
-                label="Оплаченных заказов"
-                value={bd?.totals.paidOrders ?? 0}
-                hint={rangeLabel}
-                title="Заказы, оплаченные за выбранный период"
-                onClick={() =>
-                  setDrill({
-                    title: 'Оплаченные заказы',
-                    subtitle: rangeLabel,
-                    metric: 'revenuePeriod',
-                  })
-                }
+              {data.payroll && (
+                <StatTile
+                  label="ЗП клинеров"
+                  number={data.payroll.cleanersAccrued}
+                  format={formatPrice}
+                  icon={HardHat}
+                  accent="amber"
+                  hint="начислено по сменам"
+                  title="Выезды периода: кто работал и сколько начислено"
+                  testId="плитка-зп-клинеров"
+                  onClick={() =>
+                    setDrill({
+                      title: 'ЗП клинеров — выезды за период',
+                      subtitle: rangeLabel,
+                      metric: 'brigadeVisits',
+                      mode: 'visits',
+                    })
+                  }
+                />
+              )}
+              {data.payroll && (
+                <StatTile
+                  label="ЗП и премии сотрудников"
+                  number={data.payroll.staffPay}
+                  format={formatPrice}
+                  icon={Users}
+                  accent="violet"
+                  hint="статьи «Зарплата» и «Премии» в книге"
+                  testId="плитка-зп-сотрудников"
+                />
+              )}
+              <StatTile
+                label="Все расходы"
+                number={data.revenue.expenses}
+                format={formatPrice}
+                icon={ArrowDownRight}
+                accent="red"
+                hint="из книги за период"
+                title="Все расходы книги за период — они вычитаются в чистом доходе"
+                testId="плитка-расходы"
               />
-              <StatCard
+              <StatTile
                 label="Средний чек"
-                value={formatPrice(bd?.totals.average ?? 0)}
+                number={bd?.totals.average ?? 0}
+                format={formatPrice}
+                icon={Receipt}
+                accent="brand"
                 hint="выручка ÷ оплаченные заказы"
                 title="Из каких заказов сложился средний чек"
+                testId="плитка-средний-чек"
                 onClick={() =>
                   setDrill({
                     title: 'Средний чек — из чего сложился',
@@ -394,12 +439,71 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   })
                 }
               />
-              <StatCard
+            </div>
+          )}
+
+          {/* Второй ряд: счётчики — компактные плитки */}
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {bd && (
+              <StatTile
+                size="sm"
+                label="Оплаченных заказов"
+                number={bd.totals.paidOrders}
+                icon={CheckCircle2}
+                accent="green"
+                title="Заказы, оплаченные за выбранный период"
+                testId="плитка-оплачено"
+                onClick={() =>
+                  setDrill({
+                    title: 'Оплаченные заказы',
+                    subtitle: rangeLabel,
+                    metric: 'revenuePeriod',
+                  })
+                }
+              />
+            )}
+            <StatTile
+              size="sm"
+              label="Всего обращений"
+              number={data.conversion.total}
+              icon={Inbox}
+              accent="brand"
+              title="Все обращения за период"
+              testId="плитка-обращений"
+              onClick={() =>
+                setDrill({
+                  title: 'Все обращения за период',
+                  subtitle: rangeLabel,
+                  metric: 'conversionTotal',
+                })
+              }
+            />
+            <StatTile
+              size="sm"
+              label="Отказы"
+              number={data.conversion.rejected}
+              icon={XCircle}
+              accent="red"
+              title="Кто отказался и почему"
+              testId="плитка-отказы"
+              onClick={() =>
+                setDrill({
+                  title: 'Отказы за период',
+                  subtitle: rangeLabel,
+                  metric: 'conversionRejected',
+                })
+              }
+            />
+            {data.revenue && bd && (
+              <StatTile
+                size="sm"
                 label="Скидки"
-                value={formatPrice(bd?.totals.discountTotal ?? 0)}
-                tone={bd && bd.totals.discountTotal > 0 ? 'negative' : 'default'}
-                hint="сколько отдали клиентам"
+                number={bd.totals.discountTotal}
+                format={formatPrice}
+                icon={Percent}
+                accent="amber"
                 title="Заказы, по которым дали скидку"
+                testId="плитка-скидки"
                 onClick={() =>
                   setDrill({
                     title: 'Скидки за период',
@@ -408,11 +512,17 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   })
                 }
               />
-              <StatCard
+            )}
+            {data.revenue && bd && (
+              <StatTile
+                size="sm"
                 label="Доп. услуги"
-                value={formatPrice(bd?.totals.extrasRevenue ?? 0)}
-                hint="сверх основной уборки"
+                number={bd.totals.extrasRevenue}
+                format={formatPrice}
+                icon={Sparkles}
+                accent="violet"
                 title="Какие доп. услуги брали за период"
+                testId="плитка-доп-услуги"
                 onClick={() =>
                   setDrill({
                     title: 'Доп. услуги за период',
@@ -422,36 +532,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   })
                 }
               />
-            </div>
-          )}
-
-          {/* Конверсия — за тот же период, что и выручка выше */}
-          <div className="mb-5 grid gap-4 sm:grid-cols-2">
-            <StatCard
-              label="Всего обращений"
-              value={data.conversion.total}
-              title="Все обращения за период"
-              onClick={() =>
-                setDrill({
-                  title: 'Все обращения за период',
-                  subtitle: rangeLabel,
-                  metric: 'conversionTotal',
-                })
-              }
-            />
-            <StatCard
-              label="Отказы"
-              value={data.conversion.rejected}
-              tone="negative"
-              title="Кто отказался и почему"
-              onClick={() =>
-                setDrill({
-                  title: 'Отказы за период',
-                  subtitle: rangeLabel,
-                  metric: 'conversionRejected',
-                })
-              }
-            />
+            )}
           </div>
 
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">

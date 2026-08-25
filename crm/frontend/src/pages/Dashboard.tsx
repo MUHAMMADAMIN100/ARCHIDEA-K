@@ -13,6 +13,7 @@ import { useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { Skeleton, PageHeader, ErrorState } from '../components/ui';
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
+import { AnimatedNumber } from '../components/live';
 import { TaskModal } from '../components/TaskModal';
 import { formatDate, formatPrice, formatVolume } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
@@ -130,7 +131,7 @@ export function Dashboard() {
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'DONE').slice(0, 5);
 
   return (
-    <div className="animate-page-in">
+    <div className="animate-page-in zone-live">
       <PageHeader
         title={`Здравствуйте, ${user?.fullName?.split(' ')[0]}!`}
         subtitle="Сводка по работе на сегодня"
@@ -155,7 +156,7 @@ export function Dashboard() {
                 <ArrowRight className="h-3.5 w-3.5 text-navy-600 sm:h-4 sm:w-4" />
               </div>
               <div className="mt-2.5 text-2xl font-extrabold leading-none text-navy-900 sm:mt-4 sm:text-3xl">
-                {c.value}
+                {typeof c.value === 'number' ? <AnimatedNumber value={c.value} /> : c.value}
               </div>
               <div className="mt-1 text-xs leading-tight text-navy-600 sm:mt-0 sm:text-sm">
                 {c.label}
@@ -209,7 +210,7 @@ export function Dashboard() {
                 title="Из каких заказов сложился доход"
                 className="press text-2xl font-extrabold underline decoration-dotted underline-offset-4 decoration-white/50 transition hover:decoration-white sm:text-3xl"
               >
-                {formatPrice(data.revenueMonth)}
+                <AnimatedNumber value={data.revenueMonth} format={formatPrice} />
               </button>
             </div>
           </div>

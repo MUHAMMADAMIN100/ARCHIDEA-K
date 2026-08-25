@@ -578,6 +578,8 @@ export interface Analytics {
   };
   /** date — подпись оси («07-28»), day — полная дата для расшифровки столбика */
   revenueSeries?: { date: string; day: string; revenue: number; expense: number; net: number }[];
+  /** зарплаты за период — только тем, кому открыты финансы */
+  payroll?: { cleanersAccrued: number; staffPay: number };
   managerWorkload?: { id: string; name: string; active: number; paid: number }[];
   /** KPI по каждому менеджеру за выбранный период */
   managerKpi?: {

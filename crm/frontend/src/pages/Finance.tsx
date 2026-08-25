@@ -29,7 +29,8 @@ import {
   useWideScreen,
   valueLabel,
 } from '../components/charts';
-import { Gift, Link2, Pencil, Plus, Search, Trash2, Wallet, X } from 'lucide-react';
+import { Gift, Link2, Pencil, PiggyBank, Plus, Search, Trash2, TrendingDown, TrendingUp, Wallet, X } from 'lucide-react';
+import { StatTile } from '../components/live';
 import { api } from '../api/client';
 import { deleteRecord, invalidate, removeFrom, useFetch } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
@@ -45,7 +46,6 @@ import {
   Period,
   FilterReset,
   PeriodFilter,
-  StatCard,
   Tabs,
 } from '../components/common';
 import { rangeOf, todayISO, toISODate } from '../lib/date';
@@ -106,7 +106,7 @@ export function Finance() {
 
   if (!seesMoney) {
     return (
-      <div className="animate-page-in">
+      <div className="animate-page-in zone-live">
         <PageHeader title="Аналитика" />
         <Analytics embedded />
       </div>
@@ -114,7 +114,7 @@ export function Finance() {
   }
 
   return (
-    <div className="animate-page-in">
+    <div className="animate-page-in zone-live">
       <PageHeader title="Финансы" />
 
       <div className="mb-5">
@@ -517,34 +517,43 @@ function EntriesTab() {
   return (
     // проявление и при переключении вкладки: содержимое подменяется целиком,
     // и без него смена «Операции → Премии» происходит рывком
-    <div className="animate-page-in">
+    <div className="animate-page-in zone-live">
       {/* Карточки сверху: доход / расход / прибыль за период */}
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
-        <StatCard
+        <StatTile
+          icon={TrendingUp}
+          accent="green"
           label="Доход за период"
-          value={summary ? formatPrice(summary.income) : '—'}
+          number={summary?.income ?? 0}
+          format={formatPrice}
           hint={periodLabel}
-          tone="positive"
+          testId="плитка-доход"
           title="Из каких операций сложился доход"
           onClick={() =>
             setDrill({ title: 'Доход за период', kind: 'INCOME' })
           }
         />
-        <StatCard
+        <StatTile
+          icon={TrendingDown}
+          accent="red"
           label="Расход за период"
-          value={summary ? formatPrice(summary.expense) : '—'}
+          number={summary?.expense ?? 0}
+          format={formatPrice}
           hint={periodLabel}
-          tone="negative"
+          testId="плитка-расход"
           title="Из каких операций сложился расход"
           onClick={() =>
             setDrill({ title: 'Расход за период', kind: 'EXPENSE' })
           }
         />
-        <StatCard
+        <StatTile
+          icon={PiggyBank}
+          accent={summary && summary.profit < 0 ? 'red' : 'green'}
           label="Прибыль"
-          value={summary ? formatPrice(summary.profit) : '—'}
+          number={summary?.profit ?? 0}
+          format={formatPrice}
           hint={periodLabel}
-          tone={summary && summary.profit < 0 ? 'negative' : 'positive'}
+          testId="плитка-прибыль"
           title="Все операции периода: доход минус расход"
           onClick={() =>
             setDrill({

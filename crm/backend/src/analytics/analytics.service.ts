@@ -7,6 +7,7 @@ import {
   Prisma,
   Role,
   FinanceKind,
+  FinanceCategory,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -233,7 +234,7 @@ export class AnalyticsService {
 
     // Выручка — только руководителю
     if (seesFinance(user)) {
-      const [day, week, month, quarter, current, revenueSeries, expenses] =
+      const [day, week, month, quarter, current, revenueSeries, expenses, staffPay] =
         await Promise.all([
           this.revenueInRange(scope, this.rangeOf('day')),
           this.revenueInRange(scope, this.rangeOf('week')),
@@ -242,6 +243,8 @@ export class AnalyticsService {
           this.revenueInRange(scope, range),
           this.revenueSeries(scope, 14),
           this.expensesInRange(range),
+          // зарплата и премии сотрудников — статьи книги за тот же период
+          this.expensesInRange(range, [FinanceCategory.SALARY, FinanceCategory.BONUS]),
         ]);
 
       /*
@@ -260,6 +263,12 @@ export class AnalyticsService {
         expenses,
         net: current.revenue - expenses,
       };
+      /*
+       * Зарплаты — первое, на что смотрит руководитель (решение владельца):
+       * начислено клинерам по сменам и выплаты сотрудникам по книге.
+       * Начисления клинерам считаются ниже, вместе с разрезами.
+       */
+      result.payroll = { cleanersAccrued: 0, staffPay };
       result.revenueSeries = revenueSeries;
       // сверка: расхождения видны сразу, а не «теряются» в цифрах
       result.reconciliation = {
@@ -297,6 +306,10 @@ export class AnalyticsService {
           )
         : undefined;
       const rows = await this.breakdowns(periodScope, paidInRange, dayRange);
+      // ЗП клинеров = все ставки по выездам периода, включая разовых клинеров
+      if (result.payroll && seesFinance(user)) {
+        result.payroll.cleanersAccrued = rows.brigades.reduce((s, r) => s + r.accrued, 0);
+      }
       /*
        * Два разных уровня доступа к цифрам, и путать их нельзя.
        *
@@ -1044,11 +1057,15 @@ export class AnalyticsService {
   }
 
   /** Все расходы из книги за период — для чистого дохода */
-  private async expensesInRange(range: { gte?: Date; lte?: Date }): Promise<number> {
+  private async expensesInRange(
+    range: { gte?: Date; lte?: Date },
+    categories?: FinanceCategory[],
+  ): Promise<number> {
     const where: Prisma.FinanceEntryWhereInput = {
       ...NOT_DELETED,
       kind: FinanceKind.EXPENSE,
     };
+    if (categories) where.category = { in: categories };
     if (range.gte || range.lte) where.date = range;
     const sum = await this.prisma.financeEntry.aggregate({
       where,
