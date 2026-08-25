@@ -30,7 +30,6 @@ const Shifts = lazyWithRetry(() => import('./pages/Shifts').then((m) => ({ defau
 const Reports = lazyWithRetry(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
 const ReportEdit = lazyWithRetry(() => import('./pages/ReportEdit').then((m) => ({ default: m.ReportEdit })));
 const ReportView = lazyWithRetry(() => import('./pages/ReportView').then((m) => ({ default: m.ReportView })));
-const Analytics = lazyWithRetry(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
 const Tariffs = lazyWithRetry(() => import('./pages/Tariffs').then((m) => ({ default: m.Tariffs })));
 const UsersPage = lazyWithRetry(() => import('./pages/Users').then((m) => ({ default: m.UsersPage })));
 const UserDetail = lazyWithRetry(() => import('./pages/UserDetail').then((m) => ({ default: m.UserDetail })));
@@ -48,19 +47,6 @@ function Protected({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
-
-/**
- * Деньги компании: доходы и расходы.
- *
- * Не просто «роль DIRECTOR»: персональная галочка «без доступа к финансам»
- * сильнее роли, и руководитель с ней сюда тоже не попадёт — ни по ссылке
- * из меню, ни по прямому адресу. Ту же проверку делает сервер.
- */
-function FinanceOnly({ children }: { children: JSX.Element }) {
-  const { user } = useAuth();
-  if (user && !userSeesFinance(user)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -257,7 +243,8 @@ export default function App() {
               </MoneyBanned>
             }
           />
-          <Route path="/analytics" element={<Analytics />} />
+          {/* Аналитика живёт вкладкой внутри «Финансов»; старый адрес ведёт туда же */}
+          <Route path="/analytics" element={<Navigate to="/finance" replace />} />
           {/* Услуги и цены — рабочий справочник компании, открыт всем сотрудникам */}
           <Route path="/tariffs" element={<Tariffs />} />
           <Route
@@ -286,17 +273,10 @@ export default function App() {
               </TrashOnly>
             }
           />
-          {/* Книга доходов и расходов — только руководителю: это деньги
-              компании целиком. Раньше пункт был открыт менеджерам, и они
-              упирались в 403 на уже показанной им странице. */}
-          <Route
-            path="/finance"
-            element={
-              <FinanceOnly>
-                <Finance />
-              </FinanceOnly>
-            }
-          />
+          {/* «Финансы»: аналитика — всем сотрудникам, книга и премии —
+              только тем, кому открыты деньги; страница сама прячет вкладки
+              с деньгами, а сервер отвечает 403 на прямые запросы. */}
+          <Route path="/finance" element={<Finance />} />
           {/* История изменений: сотруднику показываются его собственные
               действия, руководству — вся лента. Отбор делает бэкенд. */}
           <Route path="/history" element={<History />} />

@@ -150,7 +150,12 @@ function BreakdownCard<T>({
   );
 }
 
-export function Analytics() {
+/**
+ * `embedded` — аналитика показана вкладкой внутри раздела «Финансы»:
+ * заголовок и «Назад» рисует та страница, здесь остаются подпись
+ * периода и переключатель.
+ */
+export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const seesAll = userSeesAll(user);
   // деньги в аналитике — по праву на финансы (руководитель и управляющий
@@ -194,11 +199,20 @@ export function Analytics() {
 
   return (
     <div className="animate-page-in">
-      <PageHeader
-        title="Аналитика и отчёты"
-        subtitle={seesAll ? `Аналитика компании · ${rangeLabel}` : `Аналитика по вашим заказам · ${rangeLabel}`}
-        action={<PeriodFilter value={period} onChange={setPeriod} />}
-      />
+      {embedded ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-navy-600">
+            {seesAll ? `Аналитика компании · ${rangeLabel}` : `Аналитика по вашим заказам · ${rangeLabel}`}
+          </p>
+          <PeriodFilter value={period} onChange={setPeriod} />
+        </div>
+      ) : (
+        <PageHeader
+          title="Аналитика и отчёты"
+          subtitle={seesAll ? `Аналитика компании · ${rangeLabel}` : `Аналитика по вашим заказам · ${rangeLabel}`}
+          action={<PeriodFilter value={period} onChange={setPeriod} />}
+        />
+      )}
 
       {error ? (
         <ErrorState text={error ?? undefined} onRetry={reload} />

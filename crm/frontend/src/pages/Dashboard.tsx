@@ -214,7 +214,7 @@ export function Dashboard() {
             </div>
           </div>
           <Link
-            to="/analytics"
+            to="/finance"
             className="btn w-full justify-center bg-white/10 text-white hover:bg-white/20 sm:w-auto"
           >
             Подробная аналитика

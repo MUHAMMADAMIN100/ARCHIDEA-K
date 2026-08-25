@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DatePicker } from '../components/DatePicker';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Analytics } from './Analytics';
 import {
   Bar,
   BarChart,
@@ -60,33 +61,51 @@ import type {
 //  Финансы, зарплаты и премии (ТЗ 7)
 // ═══════════════════════════════════════════════════════════
 
-type FinanceTabValue = 'entries' | 'bonuses';
+type FinanceTabValue = 'analytics' | 'entries' | 'bonuses';
 
+/**
+ * Один раздел «Финансы» (решение владельца): аналитика, книга доходов и
+ * расходов и премии — вкладками, аналитика первой.
+ *
+ * Вкладка живёт в адресе (?tab=entries): ссылка «Подробная аналитика» с
+ * дашборда, кнопка «Назад» и обновление страницы возвращают на ту же
+ * вкладку, а старый адрес /analytics ведёт сюда же.
+ *
+ * Кому деньги закрыты (личная галочка или роль без finance:view), тот
+ * видит только аналитику — без вкладок и без книги; сервер проверяет
+ * то же самое на каждом запросе к /finance.
+ */
 export function Finance() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<FinanceTabValue>('entries');
+  const seesMoney = userSeesFinance(user);
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get('tab') as FinanceTabValue | null;
+  const tab: FinanceTabValue =
+    seesMoney && (wanted === 'entries' || wanted === 'bonuses') ? wanted : 'analytics';
+  const setTab = (next: FinanceTabValue) => {
+    const q = new URLSearchParams(params);
+    if (next === 'analytics') q.delete('tab');
+    else q.set('tab', next);
+    setParams(q, { replace: true });
+  };
 
-  // Доступ проверяется и на бэкенде (NoOpsFinanceGuard + finance:view), но
-  // без явной проверки здесь ops-менеджер видел бы пустой экран после 403
-  // вместо понятного объяснения, почему раздел ему недоступен.
-  if (!userSeesFinance(user)) {
+  if (!seesMoney) {
     return (
-      <div>
-        <PageHeader title="Финансы" />
-        <ErrorState text="Раздел финансов доступен руководителю и управляющему компании." />
+      <div className="animate-page-in">
+        <PageHeader title="Аналитика" />
+        <Analytics embedded />
       </div>
     );
   }
 
   return (
     <div className="animate-page-in">
-      <PageHeader
-        title="Финансы"
-      />
+      <PageHeader title="Финансы" />
 
       <div className="mb-5">
         <Tabs
           items={[
+            { value: 'analytics', label: 'Аналитика' },
             { value: 'entries', label: 'Операции' },
             { value: 'bonuses', label: 'Премии' },
           ]}
@@ -95,7 +114,13 @@ export function Finance() {
         />
       </div>
 
-      {tab === 'entries' ? <EntriesTab /> : <BonusesTab />}
+      {tab === 'analytics' ? (
+        <Analytics embedded />
+      ) : tab === 'entries' ? (
+        <EntriesTab />
+      ) : (
+        <BonusesTab />
+      )}
     </div>
   );
 }
