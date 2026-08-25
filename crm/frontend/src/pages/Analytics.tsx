@@ -188,8 +188,8 @@ export function Analytics() {
               ))}
             </div>
           )}
-          <div className="mb-5 grid gap-4 sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
+          <div className="mb-5 grid gap-4 sm:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, i) => (
               <Skeleton key={i} className="h-24 rounded-md" />
             ))}
           </div>
@@ -352,21 +352,7 @@ export function Analytics() {
           )}
 
           {/* Конверсия — за тот же период, что и выручка выше */}
-          <div className="mb-5 grid gap-4 sm:grid-cols-3">
-            <StatCard
-              label="Конверсия в заказы"
-              value={`${data.conversion.rate}%`}
-              tone="positive"
-              hint={`${data.conversion.paid} оплачено из ${data.conversion.total}`}
-              title="Какие обращения дошли до оплаты"
-              onClick={() =>
-                setDrill({
-                  title: 'Дошли до оплаты',
-                  subtitle: `${data.conversion.paid} из ${data.conversion.total} · ${rangeLabel}`,
-                  metric: 'conversionPaid',
-                })
-              }
-            />
+          <div className="mb-5 grid gap-4 sm:grid-cols-2">
             <StatCard
               label="Всего обращений"
               value={data.conversion.total}
@@ -426,43 +412,9 @@ export function Analytics() {
               </div>
             )}
 
-            {/* Заказы по типам уборки — за выбранный период */}
-            <div className="card min-w-0 overflow-hidden p-5">
-              <h3 className="mb-1 font-bold text-navy-900">Заказы по типам уборки</h3>
-              <p className="mb-3 text-xs text-navy-600">{HINT}</p>
-              {data.byType.length === 0 ? (
-                <p className="py-10 text-center text-sm text-navy-600">
-                  За период заявок не было
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={data.byType}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e6f3fb" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#5fb1e8' }} />
-                    <YAxis tick={{ fontSize: 12, fill: '#5fb1e8' }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar
-                      dataKey="count"
-                      fill="#0063a8"
-                      radius={[6, 6, 0, 0]}
-                      cursor="pointer"
-                      onClick={(bar: any) =>
-                        bar?.payload?.type &&
-                        setDrill({
-                          title: bar.payload.label,
-                          subtitle: `Заказы этого типа · ${rangeLabel}`,
-                          metric: 'type',
-                          key: bar.payload.type,
-                        })
-                      }
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
 
-            {/* Источники заявок — за выбранный период */}
-            <div className="card min-w-0 overflow-hidden p-5">
+            {/* Источники заявок — за выбранный период; во всю ширину: соседний график убран */}
+            <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
               <h3 className="mb-1 font-bold text-navy-900">Источники заявок</h3>
               <p className="mb-3 text-xs text-navy-600">{HINT}</p>
               {data.sources.length === 0 ? (
@@ -665,84 +617,6 @@ export function Analytics() {
                   />
 
                   <BreakdownCard
-                    title="Бригады за период"
-                    hint="Выезды и смены по дате выезда"
-                    rows={bd.brigades}
-                    rowKey={(r) => r.id ?? 'none'}
-                    emptyText="Выездов за период не было"
-                    columns={[
-                      {
-                        key: 'name',
-                        header: 'Бригада',
-                        cell: (r) => (
-                          <span>
-                            {r.name}
-                            {r.leader && (
-                              <span className="block text-xs text-navy-600">
-                                бригадир: {r.leader}
-                              </span>
-                            )}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'visits',
-                        header: 'Выездов',
-                        align: 'right',
-                        cell: (r) => (
-                          <DrillValue
-                            align="right"
-                            title="Все выезды бригады: дата, адрес, состав"
-                            onClick={() =>
-                              setDrill({
-                                title: `Выезды — ${r.name}`,
-                                subtitle: rangeLabel,
-                                metric: 'brigadeVisits',
-                                key: r.id ?? 'none',
-                                mode: 'visits',
-                              })
-                            }
-                          >
-                            {r.visits}
-                          </DrillValue>
-                        ),
-                      },
-                      {
-                        key: 'shifts',
-                        header: 'Смен',
-                        align: 'right',
-                        cell: (r) => (
-                          <DrillValue
-                            align="right"
-                            title="Из каких выездов сложились смены"
-                            onClick={() =>
-                              setDrill({
-                                title: `Смены — ${r.name}`,
-                                subtitle: rangeLabel,
-                                metric: 'brigadeVisits',
-                                key: r.id ?? 'none',
-                                mode: 'visits',
-                              })
-                            }
-                          >
-                            {r.shifts}
-                          </DrillValue>
-                        ),
-                      },
-                      ...(isDirector
-                        ? [
-                            {
-                              key: 'accrued',
-                              header: 'Начислено',
-                              align: 'right' as const,
-                              cell: (r: typeof bd.brigades[number]) => formatPrice(r.accrued),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  />
-
-                  <BreakdownCard
                     title="Клинеры за период"
                     hint="Кто сколько отработал смен"
                     rows={bd.cleaners}
@@ -827,46 +701,6 @@ export function Analytics() {
                     ]}
                   />
 
-                  <BreakdownCard
-                    title="Источники за период"
-                    hint="Не только обращения, но и деньги"
-                    rows={bd.sourceRows}
-                    rowKey={(r) => r.source}
-                    emptyText="Обращений за период нет"
-                    columns={[
-                      {
-                        key: 'label',
-                        header: 'Источник',
-                        cell: (r) => (
-                          <DrillValue
-                            title="Обращения из этого источника"
-                            onClick={() =>
-                              setDrill({
-                                title: `Источник — ${r.label}`,
-                                subtitle: rangeLabel,
-                                metric: 'source',
-                                key: r.source,
-                              })
-                            }
-                          >
-                            {r.label}
-                          </DrillValue>
-                        ),
-                      },
-                      { key: 'total', header: 'Обращений', align: 'right', cell: (r) => r.total },
-                      { key: 'paid', header: 'Оплачено', align: 'right', cell: (r) => r.paid },
-                      ...(isDirector
-                        ? [
-                            {
-                              key: 'amount',
-                              header: 'Сумма',
-                              align: 'right' as const,
-                              cell: (r: typeof bd.sourceRows[number]) => formatPrice(r.amount),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  />
                 </div>
               </div>
             )}
