@@ -272,7 +272,7 @@ export function Analytics() {
 
           {/* Доходы — приходят только руководителю (финансовые данные) */}
           {data.revenue && (
-            <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
               <StatCard
                 label="За выбранный период"
                 value={formatPrice(data.revenue.period)}
@@ -286,6 +286,17 @@ export function Analytics() {
                     metric: 'revenuePeriod',
                   })
                 }
+              />
+              {/*
+                Чистый доход (решение владельца): выручка минус все расходы
+                из книги за период. Ушёл в минус — красным, это сигнал.
+              */}
+              <StatCard
+                label="Чистый доход"
+                value={formatPrice(data.revenue.net)}
+                tone={data.revenue.net >= 0 ? 'positive' : 'negative'}
+                hint={`выручка − расходы ${formatPrice(data.revenue.expenses)}`}
+                title="Выручка периода минус все расходы из книги доходов и расходов"
               />
               {/*
                 Раньше здесь стояли четыре окна «за день / неделю / месяц /
@@ -384,7 +395,7 @@ export function Analytics() {
             {/* Доход по дням — финансы, только руководителю */}
             {data.revenueSeries && (
               <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
-                <h3 className="mb-1 font-bold text-navy-900">Доход за 14 дней</h3>
+                <h3 className="mb-1 font-bold text-navy-900">Доход за 14 дней: выручка и чистый</h3>
                 <p className="mb-3 text-xs text-navy-600">{HINT}</p>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={data.revenueSeries}>
@@ -392,9 +403,28 @@ export function Analytics() {
                     <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#5fb1e8' }} />
                     <YAxis tick={{ fontSize: 12, fill: '#5fb1e8' }} />
                     <Tooltip formatter={(v: number) => formatPrice(v)} />
+                    <Legend />
                     <Bar
                       dataKey="revenue"
+                      name="Выручка"
                       fill="#0078c9"
+                      radius={[6, 6, 0, 0]}
+                      cursor="pointer"
+                      onClick={(bar: any) =>
+                        bar?.payload?.day &&
+                        setDrill({
+                          title: `Оплачено ${formatDateTz(bar.payload.day)}`,
+                          subtitle: 'Заказы, закрытые в этот день',
+                          metric: 'revenueDay',
+                          key: bar.payload.day,
+                        })
+                      }
+                    />
+                    {/* чистый доход дня: выручка минус расходы книги за этот день */}
+                    <Bar
+                      dataKey="net"
+                      name="Чистый доход"
+                      fill="#10b981"
                       radius={[6, 6, 0, 0]}
                       cursor="pointer"
                       onClick={(bar: any) =>

@@ -5,7 +5,8 @@ import {
   FunnelStage,
   LeadSource,
   Prisma,
-  Role,
+  Role,,
+  FinanceKind,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -232,7 +233,7 @@ export class AnalyticsService {
 
     // Выручка — только руководителю
     if (seesFinance(user)) {
-      const [day, week, month, quarter, current, revenueSeries] =
+      const [day, week, month, quarter, current, revenueSeries, expenses] =
         await Promise.all([
           this.revenueInRange(scope, this.rangeOf('day')),
           this.revenueInRange(scope, this.rangeOf('week')),
@@ -240,14 +241,24 @@ export class AnalyticsService {
           this.revenueInRange(scope, this.rangeOf('quarter')),
           this.revenueInRange(scope, range),
           this.revenueSeries(scope, 14),
+          this.expensesInRange(range),
         ]);
 
+      /*
+       * Чистый доход (решение владельца): выручка периода минус ВСЕ расходы
+       * из книги «Доходы и расходы» за тот же период — зарплата, премии,
+       * материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее.
+       * Выручка одна и та же, что на плитке рядом, поэтому на странице
+       * видна арифметика: выручка − расходы = чистый.
+       */
       result.revenue = {
         day: day.revenue,
         week: week.revenue,
         month: month.revenue,
         quarter: quarter.revenue,
         period: current.revenue,
+        expenses,
+        net: current.revenue - expenses,
       };
       result.revenueSeries = revenueSeries;
       // сверка: расхождения видны сразу, а не «теряются» в цифрах
@@ -987,11 +998,43 @@ export class AnalyticsService {
         buckets.set(key, (buckets.get(key) ?? 0) + priceOf(o));
       }
     }
-    return order.map((key) => ({
-      date: key.slice(5), // «07-28» — как ожидает график
-      day: key, // полная дата — по ней открывается расшифровка столбика
-      revenue: buckets.get(key) ?? 0,
-    }));
+
+    // расходы по дням — из книги, по дате операции (тоже по Душанбе)
+    const spent = new Map<string, number>();
+    const entries = await this.prisma.financeEntry.findMany({
+      where: { ...NOT_DELETED, kind: FinanceKind.EXPENSE, date: { gte: start } },
+      select: { amount: true, date: true },
+    });
+    for (const e of entries) {
+      const key = dayKey(e.date);
+      if (buckets.has(key)) spent.set(key, (spent.get(key) ?? 0) + e.amount);
+    }
+
+    return order.map((key) => {
+      const revenue = buckets.get(key) ?? 0;
+      const expense = spent.get(key) ?? 0;
+      return {
+        date: key.slice(5), // «07-28» — как ожидает график
+        day: key, // полная дата — по ней открывается расшифровка столбика
+        revenue,
+        expense,
+        net: revenue - expense,
+      };
+    });
+  }
+
+  /** Все расходы из книги за период — для чистого дохода */
+  private async expensesInRange(range: { gte?: Date; lte?: Date }): Promise<number> {
+    const where: Prisma.FinanceEntryWhereInput = {
+      ...NOT_DELETED,
+      kind: FinanceKind.EXPENSE,
+    };
+    if (range.gte || range.lte) where.date = range;
+    const sum = await this.prisma.financeEntry.aggregate({
+      where,
+      _sum: { amount: true },
+    });
+    return sum._sum.amount ?? 0;
   }
 
   /**

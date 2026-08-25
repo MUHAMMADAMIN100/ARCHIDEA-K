@@ -564,9 +564,18 @@ export interface Analytics {
   byType: { type: CleaningType; label: string; count: number }[];
   sources: { source: LeadSource; label: string; count: number }[];
   conversion: { total: number; paid: number; rejected: number; rate: number };
-  revenue?: { day: number; week: number; month: number; quarter: number };
+  revenue?: {
+    day: number;
+    week: number;
+    month: number;
+    quarter: number;
+    period: number;
+    /** все расходы из книги за период и чистый доход (выручка − расходы) */
+    expenses: number;
+    net: number;
+  };
   /** date — подпись оси («07-28»), day — полная дата для расшифровки столбика */
-  revenueSeries?: { date: string; day: string; revenue: number }[];
+  revenueSeries?: { date: string; day: string; revenue: number; expense: number; net: number }[];
   managerWorkload?: { id: string; name: string; active: number; paid: number }[];
   /** KPI по каждому менеджеру за выбранный период */
   managerKpi?: {
@@ -1014,6 +1023,8 @@ export interface AnalyticsFull extends Omit<Analytics, 'revenue'> {
     quarter: number;
     /** выручка ровно за выбранный период — то, с чем нужно сверять остальные разрезы */
     period: number;
+    expenses: number;
+    net: number;
   };
   /** Разрезы: менеджеры, услуги, бригады, клиенты, источники */
   breakdowns?: AnalyticsBreakdowns;
