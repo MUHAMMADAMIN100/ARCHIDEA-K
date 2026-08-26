@@ -246,8 +246,12 @@ export class ShiftGroupsService {
       select: { id: true },
     });
     if (existing) return null;
+    return this.createVisitsForOrder(tx, orderId, fallbackUserId, 'inspection');
+  }
 
-    const order = await tx.order.findFirst({
+  /** Заказ так, как его видят выезды: адрес, даты, команда, менеджер */
+  private orderForVisits(tx: Prisma.TransactionClient, orderId: string) {
+    return tx.order.findFirst({
       where: { id: orderId, ...NOT_DELETED },
       select: {
         id: true,
@@ -269,17 +273,32 @@ export class ShiftGroupsService {
         },
       },
     });
-    if (!order) return null;
+  }
 
+  /**
+   * Команда заказа глазами выезда: состав со снапшотом ставок, бригадир
+   * (кто из команды ведёт бригаду) и бригада (по первому, у кого она есть).
+   */
+  private async teamOf(
+    tx: Prisma.TransactionClient,
+    order: {
+      cleaners: {
+        id: string;
+        fullName: string;
+        rate: number;
+        brigadeId: string | null;
+        leaderOf: { id: string } | null;
+      }[];
+    },
+  ) {
     const members = order.cleaners.map((c) => ({
       cleanerId: c.id,
       fullName: c.fullName,
       rate: c.rate,
       role: c.leaderOf ? 'Бригадир' : 'Клинер',
     }));
-
     // бригада и бригадир — по составу: если в команде есть бригадир, он и ведёт выезд
-    const leader = order.cleaners.find((c) => c.leaderOf);
+    const leader = order.cleaners.find((c) => c.leaderOf) ?? null;
     const brigadeId =
       order.cleaners.find((c) => c.brigadeId)?.brigadeId ?? null;
     const brigade = brigadeId
@@ -288,7 +307,27 @@ export class ShiftGroupsService {
           select: { id: true, name: true },
         })
       : null;
+    return { members, leader, brigade };
+  }
 
+  /**
+   * Создаёт выезд на каждый день уборки по данным заказа.
+   * `reason` — откуда взялся выезд: этап «Осмотр объекта» или выбранная
+   * в карточке команда; это видно в заметке выезда.
+   */
+  private async createVisitsForOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    fallbackUserId: string,
+    reason: 'inspection' | 'team',
+  ): Promise<{ id: string } | null> {
+    const order = await this.orderForVisits(tx, orderId);
+    if (!order) return null;
+    const { members, leader, brigade } = await this.teamOf(tx, order);
+    const источник =
+      reason === 'inspection'
+        ? 'Создан автоматически на этапе «Осмотр объекта»'
+        : 'Создан автоматически по команде из карточки заказа';
     const when = order.scheduledDate ?? order.preferredDate ?? new Date();
     /*
      * Уборка на несколько дней — выезд на КАЖДЫЙ день.
@@ -315,8 +354,8 @@ export class ShiftGroupsService {
           managerName: order.manager?.fullName ?? null,
           note:
             дни.length > 1
-              ? `Создан автоматически на этапе «Осмотр объекта» — день ${индекс + 1} из ${дни.length}`
-              : 'Создан автоматически на этапе «Осмотр объекта»',
+              ? `${источник} — день ${индекс + 1} из ${дни.length}`
+              : источник,
           createdById: fallbackUserId,
           members: { create: members },
         },
@@ -325,6 +364,293 @@ export class ShiftGroupsService {
       if (!первый) первый = созданный;
     }
     return первый;
+  }
+
+  /**
+   * Выезды следуют за карточкой заказа (решение владельца).
+   *
+   * Раньше выезд создавался один раз — на этапе «Осмотр объекта» — с тем
+   * составом, что был в карточке в ту секунду. Клинеров, выбранных позже,
+   * выезд не видел, и в «Сменах» команда была неполной. Теперь при любой
+   * правке заказа (команда, адрес, даты, менеджер) открытые выезды заказа
+   * подтягиваются к карточке, а если выездов ещё нет и команда выбрана —
+   * они создаются, по одному на каждый день уборки.
+   *
+   * Что не трогаем: закрытые выезды (они архив), разовых клинеров в составе
+   * (их нет в карточке заказа) и ставки уже добавленных участников (снапшот
+   * на день выезда). Лишние автоматические выезды, если дней стало меньше,
+   * уходят в корзину — заведённые руками остаются.
+   */
+  async syncFromOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    user: AuthUser,
+    opts: { createIfMissing?: boolean } = {},
+  ): Promise<{ created: number; updated: number }> {
+    const order = await this.orderForVisits(tx, orderId);
+    if (!order) return { created: 0, updated: 0 };
+    const existing = await tx.shiftGroup.findMany({
+      where: { orderId, ...NOT_DELETED },
+      include: { members: true },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (existing.length === 0) {
+      if (order.cleaners.length === 0 && !opts.createIfMissing) {
+        return { created: 0, updated: 0 };
+      }
+      const first = await this.createVisitsForOrder(tx, orderId, user.id, 'team');
+      return { created: first ? 1 : 0, updated: 0 };
+    }
+
+    const { members, leader, brigade } = await this.teamOf(tx, order);
+    const when = order.scheduledDate ?? order.preferredDate ?? existing[0].date;
+    const дни = daysBetween(when, order.scheduledEndDate);
+    let updated = 0;
+    let created = 0;
+    for (const [индекс, день] of дни.entries()) {
+      const visit = existing[индекс];
+      if (!visit) {
+        // дней стало больше — новый выезд на добавленный день
+        await tx.shiftGroup.create({
+          data: {
+            date: dayUTC(день),
+            address: order.address?.trim() || 'Адрес не указан',
+            orderId: order.id,
+            startTime: order.preferredTime ?? null,
+            brigadeId: brigade?.id ?? null,
+            brigadeName: brigade?.name ?? null,
+            brigadierId: leader?.id ?? null,
+            brigadierName: leader?.fullName ?? null,
+            managerId: order.managerId ?? user.id,
+            managerName: order.manager?.fullName ?? null,
+            note: `Создан автоматически по команде из карточки заказа — день ${индекс + 1} из ${дни.length}`,
+            createdById: user.id,
+            members: { create: members },
+          },
+        });
+        created += 1;
+        continue;
+      }
+      if (visit.status === ShiftGroupStatus.CLOSED) continue;
+
+      // состав: штатные — по карточке заказа, разовые остаются как есть
+      const wanted = new Set(members.map((m) => m.cleanerId));
+      const have = new Map(
+        visit.members.filter((m) => m.cleanerId).map((m) => [m.cleanerId as string, m]),
+      );
+      const toRemove = visit.members.filter((m) => m.cleanerId && !wanted.has(m.cleanerId));
+      const toAdd = members.filter((m) => !have.has(m.cleanerId));
+      if (toRemove.length) {
+        await tx.shiftGroupMember.deleteMany({
+          where: { id: { in: toRemove.map((m) => m.id) } },
+        });
+      }
+      if (toAdd.length) {
+        await tx.shiftGroupMember.createMany({
+          data: toAdd.map((m) => ({ ...m, groupId: visit.id })),
+        });
+      }
+      // роль бригадира могла смениться — держим в актуальном виде
+      for (const m of members) {
+        const cur = have.get(m.cleanerId);
+        if (cur && cur.role !== m.role) {
+          await tx.shiftGroupMember.update({ where: { id: cur.id }, data: { role: m.role } });
+        }
+      }
+      const data: Prisma.ShiftGroupUncheckedUpdateInput = {
+        date: dayUTC(день),
+        address: order.address?.trim() || visit.address,
+        brigadeId: brigade?.id ?? null,
+        brigadeName: brigade?.name ?? null,
+        brigadierId: leader?.id ?? null,
+        brigadierName: leader?.fullName ?? null,
+        managerId: order.managerId ?? visit.managerId,
+        managerName: order.manager?.fullName ?? visit.managerName,
+        ...(order.preferredTime && !visit.startTime ? { startTime: order.preferredTime } : {}),
+      };
+      const after = await tx.shiftGroup.update({
+        where: { id: visit.id },
+        data,
+        include: { members: true },
+      });
+      const was = visit.members.map((m) => m.fullName).join(', ') || '—';
+      const now = after.members.map((m) => m.fullName).join(', ') || '—';
+      const changes = this.audit.diff(visit as any, after as any, [
+        'date',
+        'address',
+        'brigadeName',
+        'brigadierName',
+        'managerName',
+        'startTime',
+      ]);
+      if (was !== now) {
+        changes.push({ field: 'members', label: 'Состав группы', before: was, after: now });
+      }
+      if (changes.length) {
+        await this.audit.log(tx, {
+          user,
+          entity: 'SHIFT_GROUP',
+          entityId: visit.id,
+          entityTitle: this.titleOf(after),
+          action: AuditAction.UPDATE,
+          summary: 'Обновлён по карточке заказа',
+          changes,
+        });
+        updated += 1;
+      }
+    }
+    // дней стало меньше — лишние АВТОМАТИЧЕСКИЕ открытые выезды в корзину
+    for (const extra of existing.slice(дни.length)) {
+      if (extra.status === ShiftGroupStatus.CLOSED) continue;
+      if (!(extra.note ?? '').startsWith('Создан автоматически')) continue;
+      await tx.shift.updateMany({ where: { groupId: extra.id }, data: { groupId: null } });
+      await tx.shiftGroup.update({
+        where: { id: extra.id },
+        data: softDeleteData(user, 'Дней уборки в заказе стало меньше'),
+      });
+    }
+    return { created, updated };
+  }
+
+  /**
+   * «Оплачено» = смены закрыты (решение владельца): все открытые выезды
+   * заказа закрываются, каждому участнику начисляется смена. Возвращает
+   * закрытые выезды — вызывающий сообщит руководству одним уведомлением.
+   */
+  async closeForOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    user: AuthUser,
+  ): Promise<{ id: string; date: Date; address: string; members: number }[]> {
+    const open = await tx.shiftGroup.findMany({
+      where: { orderId, ...NOT_DELETED, status: { not: ShiftGroupStatus.CLOSED } },
+      include: { members: true },
+      orderBy: { date: 'asc' },
+    });
+    const closed: { id: string; date: Date; address: string; members: number }[] = [];
+    for (const group of open) {
+      if (group.members.length === 0) {
+        throw new BadRequestException(
+          'Укажите, кто делал уборку: выберите клинеров в карточке заказа — иначе зарплата не начислится',
+        );
+      }
+      await this.closeInTx(tx, group, user, {});
+      closed.push({ id: group.id, date: group.date, address: group.address, members: group.members.length });
+    }
+    return closed;
+  }
+
+  /**
+   * Заказ вернули из «Оплачено» (ошиблись этапом): начисленные этим выездом
+   * смены снимаются, выезд снова открыт. Повторное «Оплачено» начислит
+   * заново — двойной зарплаты не будет. Смены с другого выезда того же дня
+   * не трогаем: у них другой groupId.
+   */
+  async reopenForOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    user: AuthUser,
+  ): Promise<number> {
+    const closedOnes = await tx.shiftGroup.findMany({
+      where: { orderId, ...NOT_DELETED, status: ShiftGroupStatus.CLOSED },
+      select: { id: true, date: true, address: true },
+    });
+    for (const g of closedOnes) {
+      const removed = await tx.shift.deleteMany({ where: { groupId: g.id } });
+      await tx.shiftGroup.update({
+        where: { id: g.id },
+        data: {
+          status: ShiftGroupStatus.IN_PROGRESS,
+          closedAt: null,
+          closedById: null,
+          closedByName: null,
+          closedSnapshot: Prisma.DbNull,
+        },
+      });
+      await this.audit.log(tx, {
+        user,
+        entity: 'SHIFT_GROUP',
+        entityId: g.id,
+        entityTitle: this.titleOf(g),
+        action: AuditAction.UPDATE,
+        summary: `Заказ вернули из «Оплачено»: выезд снова открыт, снято смен: ${removed.count}`,
+      });
+    }
+    return closedOnes.length;
+  }
+
+  /** Само закрытие — внутри чужой транзакции; слепок, смены, журнал */
+  private async closeInTx(
+    tx: Prisma.TransactionClient,
+    group: {
+      id: string;
+      date: Date;
+      address: string;
+      startTime: string | null;
+      endTime: string | null;
+      brigadeName: string | null;
+      brigadierName: string | null;
+      managerName: string | null;
+      orderId: string | null;
+      members: { cleanerId: string | null; fullName: string; role: string; rate: number }[];
+    },
+    user: AuthUser,
+    dto: { endTime?: string; note?: string },
+  ) {
+    const closedAt = new Date();
+    const snapshot = {
+      address: group.address,
+      date: group.date,
+      startTime: group.startTime,
+      endTime: dto.endTime ?? group.endTime,
+      brigadeName: group.brigadeName,
+      brigadierName: group.brigadierName,
+      managerName: group.managerName,
+      orderId: group.orderId,
+      members: group.members.map((m) => ({
+        cleanerId: m.cleanerId,
+        fullName: m.fullName,
+        role: m.role,
+        rate: m.rate,
+      })),
+    };
+    // начисляем смены участникам; уже отмеченные за этот день не дублируем
+    await tx.shift.createMany({
+      data: group.members
+        .filter((m): m is typeof m & { cleanerId: string } => !!m.cleanerId)
+        .map((m) => ({
+          date: group.date,
+          cleanerId: m.cleanerId,
+          rate: m.rate,
+          note: group.address,
+          groupId: group.id,
+        })),
+      skipDuplicates: true,
+    });
+    const res = await tx.shiftGroup.update({
+      where: { id: group.id },
+      data: {
+        status: ShiftGroupStatus.CLOSED,
+        closedAt,
+        closedById: user.id,
+        closedByName: user.fullName,
+        closedSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+        ...(dto.endTime ? { endTime: dto.endTime } : {}),
+        ...(dto.note !== undefined ? { note: dto.note } : {}),
+      },
+      include: groupInclude,
+    });
+    await this.audit.log(tx, {
+      user,
+      entity: 'SHIFT_GROUP',
+      entityId: group.id,
+      entityTitle: this.titleOf(res),
+      action: AuditAction.UPDATE,
+      summary: `Выезд закрыт; начислено смен: ${res.shifts.length}, состав: ${res.members
+        .map((m) => m.fullName)
+        .join(', ')}`,
+    });
+    return res;
   }
 
   async update(user: AuthUser, id: string, dto: UpdateShiftGroupDto) {
@@ -498,68 +824,7 @@ export class ShiftGroupsService {
       );
     }
 
-    const closedAt = new Date();
-    const snapshot = {
-      address: group.address,
-      date: group.date,
-      startTime: group.startTime,
-      endTime: dto.endTime ?? group.endTime,
-      brigadeName: group.brigadeName,
-      brigadierName: group.brigadierName,
-      managerName: group.managerName,
-      orderId: group.orderId,
-      members: group.members.map((m) => ({
-        cleanerId: m.cleanerId,
-        fullName: m.fullName,
-        role: m.role,
-        rate: m.rate,
-      })),
-    };
-
-    const closed = await this.prisma.$transaction(async (tx) => {
-      // начисляем смены участникам; уже отмеченные за этот день не дублируем
-      await tx.shift.createMany({
-        data: group.members
-          .filter(
-            (m): m is typeof m & { cleanerId: string } => !!m.cleanerId,
-          )
-          .map((m) => ({
-            date: group.date,
-            cleanerId: m.cleanerId,
-            rate: m.rate,
-            note: group.address,
-            groupId: group.id,
-          })),
-        skipDuplicates: true,
-      });
-
-      const res = await tx.shiftGroup.update({
-        where: { id },
-        data: {
-          status: ShiftGroupStatus.CLOSED,
-          closedAt,
-          closedById: user.id,
-          closedByName: user.fullName,
-          closedSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-          ...(dto.endTime ? { endTime: dto.endTime } : {}),
-          ...(dto.note !== undefined ? { note: dto.note } : {}),
-        },
-        include: groupInclude,
-      });
-
-      await this.audit.log(tx, {
-        user,
-        entity: 'SHIFT_GROUP',
-        entityId: id,
-        entityTitle: this.titleOf(res),
-        action: AuditAction.UPDATE,
-        summary: `Выезд закрыт; начислено смен: ${res.shifts.length}, состав: ${res.members
-          .map((m) => m.fullName)
-          .join(', ')}`,
-      });
-      return res;
-    });
-
+    const closed = await this.prisma.$transaction((tx) => this.closeInTx(tx, group, user, dto));
     // уведомление руководству — вне транзакции, чтобы сбой отправки
     // не откатывал закрытие смены
     await this.notifications.notifyDirectors({

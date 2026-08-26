@@ -762,6 +762,11 @@ export class OrdersService {
         summary: `Создан заказ на ${finalPrice || estimatedPrice} сомони`,
       });
 
+      // команда выбрана при оформлении — выезд появляется в «Сменах» сразу
+      if (cleanerIds.length) {
+        await this.shiftGroups.syncFromOrder(tx, created.id, user);
+      }
+
       return created;
     },
     /*
@@ -1089,6 +1094,9 @@ export class OrdersService {
         );
       }
 
+      // адрес, даты, менеджер — открытые выезды заказа следуют за карточкой
+      await this.shiftGroups.syncFromOrder(tx, updated.id, user);
+
       await this.audit.log(tx, {
         user,
         entity: 'ORDER',
@@ -1116,7 +1124,9 @@ export class OrdersService {
       });
 
       return updated;
-    });
+    },
+    // синхронизация выездов — ещё несколько запросов; на удалённой базе 5 с не хватает
+    { timeout: 20000, maxWait: 10000 });
 
     // уведомляем, только если предпочтения действительно поменялись —
     // иначе чат завалит сообщениями при каждой правке адреса
@@ -1238,6 +1248,18 @@ export class OrdersService {
       }
     }
 
+    /*
+     * «Оплачено» начисляет зарплату клинерам само (решение владельца), поэтому
+     * без команды в карточке этап закрыт: иначе смены не на кого начислить,
+     * и работа бригады потеряется в выплатах.
+     */
+    if (dto.stage === FunnelStage.PAID && order.stage !== FunnelStage.PAID) {
+      if (!order.cleaners || order.cleaners.length === 0) {
+        throw new BadRequestException(
+          'Укажите, кто делал уборку: выберите клинеров в карточке заказа — иначе зарплата не начислится',
+        );
+      }
+    }
     if (dto.stage === FunnelStage.PAID) {
       const total = order.finalPrice ?? order.estimatedPrice ?? 0;
       const due = Math.max(0, total - (order.paidAmount ?? 0));
@@ -1279,6 +1301,7 @@ export class OrdersService {
 
     let draftReport: { id: string } | null = null;
     let autoVisit: { id: string } | null = null;
+    let autoClosed: { id: string; date: Date; address: string; members: number }[] = [];
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.order.update({
@@ -1333,6 +1356,17 @@ export class OrdersService {
       if (dto.stage === FunnelStage.INSPECTION) {
         autoVisit = await this.shiftGroups.createFromOrder(tx, res.id, user.id);
       }
+      /*
+       * «Оплачено» = смены закрыты (решение владельца): выезды заказа
+       * подтягиваются к карточке и закрываются, клинерам начисляются смены.
+       * Вернули заказ из «Оплачено» — начисления снимаются, выезд открыт.
+       */
+      if (dto.stage === FunnelStage.PAID && order.stage !== FunnelStage.PAID) {
+        await this.shiftGroups.syncFromOrder(tx, res.id, user, { createIfMissing: true });
+        autoClosed = await this.shiftGroups.closeForOrder(tx, res.id, user);
+      } else if (order.stage === FunnelStage.PAID && dto.stage !== FunnelStage.PAID) {
+        await this.shiftGroups.reopenForOrder(tx, res.id, user);
+      }
 
       await this.audit.log(tx, {
         user,
@@ -1385,6 +1419,15 @@ export class OrdersService {
      * незаметна: человек не знает, что в «Сменах» уже есть запись, и заводит
      * вторую руками.
      */
+    // смены закрыты автоматически — одно уведомление руководству на заказ
+    if (autoClosed.length) {
+      await this.notifications.notifyDirectors({
+        type: 'SHIFT_CLOSED',
+        title: 'Смены закрыты по оплате заказа',
+        message: `${updated.client.fullName} · выездов: ${autoClosed.length} · начислено ${autoClosed.reduce((s, g) => s + g.members, 0)} смен`,
+        orderId: updated.id,
+      });
+    }
     if (autoVisit) {
       await this.notifications.notify({
         userId: updated.managerId ?? user.id,
@@ -1421,6 +1464,9 @@ export class OrdersService {
         include: orderDetailInclude,
       });
 
+      // состав выезда в «Сменах» всегда равен команде в карточке
+      await this.shiftGroups.syncFromOrder(tx, res.id, user);
+
       const wasNames = before.cleaners.map((c) => c.fullName).join(', ') || '—';
       const nowNames = res.cleaners.map((c) => c.fullName).join(', ') || '—';
       if (wasNames !== nowNames) {
@@ -1434,7 +1480,9 @@ export class OrdersService {
         });
       }
       return res;
-    });
+    },
+    // синхронизация выездов — ещё несколько запросов; на удалённой базе 5 с не хватает
+    { timeout: 20000, maxWait: 10000 });
 
     return updated;
   }

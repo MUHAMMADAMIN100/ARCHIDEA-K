@@ -416,6 +416,11 @@ function ShiftGroupCard({
             <div className="mt-1 text-xs text-navy-600">
               Заказ: {group.order.client.fullName}
               {group.order.address ? ` · ${group.order.address}` : ''}
+              {!closed && (
+                <span className="ml-1 text-emerald-700">
+                  · закроется сам, когда заказ станет «Оплачено»
+                </span>
+              )}
             </div>
           )}
         </div>
