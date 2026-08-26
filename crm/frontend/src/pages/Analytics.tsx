@@ -795,7 +795,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   ]}
                 />
 
-                <div className="grid min-w-0 gap-4">
+                {/*
+                  Узкие таблицы (три колонки) — парами в два столбца (решение
+                  владельца): во всю ширину они выглядели пустыми. «Менеджеры»
+                  и «KPI» с их колонками остаются во всю ширину. На планшете и
+                  телефоне пары снова встают в столбик.
+                */}
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                   <BreakdownCard
                     title="Услуги за период"
                     hint="По оплаченным заказам"
@@ -910,6 +916,9 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                     ]}
                   />
 
+                </div>
+
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                   <BreakdownCard
                     title="Клинеры за период"
                     hint={
