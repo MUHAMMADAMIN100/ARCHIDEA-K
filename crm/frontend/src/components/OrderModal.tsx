@@ -611,6 +611,13 @@ export function OrderModal({
     // иначе он безусловно перезаписывал бы назначенную бригаду пустым/чужим
     // набором (диагноз бага 3.1, пп.3-4 ТЗ)
     const cleanersChangedFlag = cleanersTouched && cleanersChanged();
+    /*
+     * Даты уборки — то же правило, что у команды: отправляем, ТОЛЬКО если их
+     * трогали. Слать безусловно нельзя: на медленной сети карточка может
+     * открыться раньше, чем доехали данные заказа, поля дат в этот момент
+     * пустые — и сохранение любой другой правки стёрло бы даты на сервере.
+     */
+    const datesTouched = touched('scheduledDate');
 
     // 1) Оптимистично обновляем карточку/доску и закрываем окно — без ожидания
     const patch: Partial<Order> = {
@@ -631,8 +638,15 @@ export function OrderModal({
       isManualPrice,
       preferences: trimmedPrefs || null,
       address: editAddress || order.address,
-      scheduledDate: scheduledWithTime || order.scheduledDate,
-      scheduledEndDate: scheduledEndDate || null,
+      scheduledDate: datesTouched
+        ? scheduledWithTime || null
+        : order.scheduledDate,
+      // последний день без первого не бывает: очистили дату — очистился и он
+      scheduledEndDate: datesTouched
+        ? scheduledWithTime
+          ? scheduledEndDate || null
+          : null
+        : order.scheduledEndDate,
       rejectionReason: stage === 'REJECTED' ? rejectionReason : order.rejectionReason,
     };
     // cleaners подмешиваем в патч, только если реально трогали — иначе в кэш
@@ -702,6 +716,27 @@ export function OrderModal({
         ...(editEstimated !== '' ? { estimatedPrice: toInt(editEstimated) } : {}),
         preferredDate: editPreferredDate,
         preferredTime: editPreferredTime,
+        /*
+         * Даты уборки — в ОСНОВНОМ запросе, обе, и только когда их трогали.
+         *
+         * Раньше они уходили отдельным запросом, и последний день в него не
+         * попадал вовсе: экранная копия показывала «11 — 12 августа, 2 дня»,
+         * а сервер получал только дату начала. Повторное открытие карточки
+         * честно показывало то, что сохранилось, — поле пустело.
+         * Нетронутые даты не отправляем совсем: на медленной сети карточка
+         * открывается раньше данных заказа, поля в этот момент пустые, и
+         * безусловная отправка стирала бы даты любой другой правкой.
+         * Последний день без первого не бывает — при пустой дате начала
+         * очищается и он.
+         */
+        ...(datesTouched
+          ? {
+              scheduledDate: scheduledWithTime || null,
+              scheduledEndDate: scheduledWithTime
+                ? scheduledEndDate || null
+                : null,
+            }
+          : {}),
       });
       /*
        * ФИО, телефон и статус принадлежат клиенту, а не заказу.
@@ -731,10 +766,14 @@ export function OrderModal({
           stage,
           rejectionReason: stage === 'REJECTED' ? rejectionReason : undefined,
           scheduledDate: scheduledWithTime || undefined,
+          // последний день едет вместе с датой — иначе смена этапа сохраняла
+          // бы период уборки наполовину
+          scheduledEndDate:
+            (scheduledWithTime && scheduledEndDate) || undefined,
         });
-      } else if (scheduledWithTime) {
-        await api.patch(`/orders/${order.id}`, { scheduledDate: scheduledWithTime });
       }
+      // отдельный запрос с датой больше не нужен: обе даты уборки уходят в
+      // основном PATCH выше — и заполнение, и очистка
       /*
        * Смена этапа порождает записи в других разделах: осмотр — выезд в
        * «Сменах», оплата — черновик ведомости. Их кэш надо забыть, иначе при
