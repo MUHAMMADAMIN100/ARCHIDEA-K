@@ -668,8 +668,9 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
             )}
 
 
-            {/* Источники заявок — за выбранный период; во всю ширину: соседний график убран */}
-            <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
+            <div className="grid min-w-0 gap-4 lg:col-span-2 xl:grid-cols-2">
+            {/* Источники заявок и загруженность — парой в два столбца (решение владельца) */}
+            <div className="card min-w-0 overflow-hidden p-5">
               <h3 className="mb-1 font-bold text-navy-900">Источники заявок</h3>
               <p className="mb-3 text-xs text-navy-600">{HINT}</p>
               {data.sources.length === 0 ? (
@@ -694,6 +695,79 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   }
                 />
               )}
+            </div>
+
+            {/* «Загруженность» — рядом с «Источниками» (решение владельца) */}
+            {data.managerWorkload && (
+              <div className="card min-w-0 overflow-hidden p-5">
+                <h3 className="mb-1 font-bold text-navy-900">Загруженность сотрудников</h3>
+                <p className="mb-3 text-xs text-navy-600">
+                  Текущая нагрузка (не зависит от периода выше): сколько заказов сейчас в работе
+                  и сколько всего доведено до оплаты. {HINT}
+                </p>
+                {data.managerWorkload.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-navy-600">
+                    Пока ни один заказ не назначен ответственному
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart
+                      data={data.managerWorkload}
+                      margin={{ top: 18, right: 8, left: 0, bottom: 0 }}
+                      barCategoryGap={barGap(wide)}
+                    >
+                      {chartGradients()}
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5fb1e8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip
+                        cursor={CURSOR_FILL}
+                        content={<ChartTooltip colors={{ active: CHART.blue, paid: CHART.sky }} />}
+                      />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                      <Bar
+                        dataKey="active"
+                        name="Активные заказы"
+                        fill={gradient('blue')}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        {...BAR_ANIMATION}
+                        onClick={(bar: any) =>
+                          bar?.payload &&
+                          setDrill({
+                            title: `${bar.payload.name} — в работе`,
+                            subtitle: 'Заказы, которые сейчас на этом сотруднике',
+                            metric: 'managerActive',
+                            key: bar.payload.id || 'none',
+                          })
+                        }
+                      >
+                        {wide && <LabelList dataKey="active" {...valueLabel(String)} />}
+                      </Bar>
+                      <Bar
+                        dataKey="paid"
+                        name="Завершено"
+                        fill={gradient('sky')}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        {...BAR_ANIMATION}
+                        onClick={(bar: any) =>
+                          bar?.payload &&
+                          setDrill({
+                            title: `${bar.payload.name} — доведено до оплаты`,
+                            subtitle: 'Все оплаченные заказы этого сотрудника',
+                            metric: 'managerPaid',
+                            key: bar.payload.id || 'none',
+                          })
+                        }
+                      >
+                        {wide && <LabelList dataKey="paid" {...valueLabel(String)} />}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            )}
             </div>
 
             {/* Загруженность сотрудников — руководителю и ops-менеджеру, за всё время */}
@@ -1174,76 +1248,6 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
               </div>
             )}
 
-            {data.managerWorkload && (
-              <div className="card min-w-0 overflow-hidden p-5 lg:col-span-2">
-                <h3 className="mb-1 font-bold text-navy-900">Загруженность сотрудников</h3>
-                <p className="mb-3 text-xs text-navy-600">
-                  Текущая нагрузка (не зависит от периода выше): сколько заказов сейчас в работе
-                  и сколько всего доведено до оплаты. {HINT}
-                </p>
-                {data.managerWorkload.length === 0 ? (
-                  <p className="py-10 text-center text-sm text-navy-600">
-                    Пока ни один заказ не назначен ответственному
-                  </p>
-                ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart
-                      data={data.managerWorkload}
-                      margin={{ top: 18, right: 8, left: 0, bottom: 0 }}
-                      barCategoryGap={barGap(wide)}
-                    >
-                      {chartGradients()}
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5fb1e8' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip
-                        cursor={CURSOR_FILL}
-                        content={<ChartTooltip colors={{ active: CHART.blue, paid: CHART.sky }} />}
-                      />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                      <Bar
-                        dataKey="active"
-                        name="Активные заказы"
-                        fill={gradient('blue')}
-                        radius={[6, 6, 0, 0]}
-                        cursor="pointer"
-                        {...BAR_ANIMATION}
-                        onClick={(bar: any) =>
-                          bar?.payload &&
-                          setDrill({
-                            title: `${bar.payload.name} — в работе`,
-                            subtitle: 'Заказы, которые сейчас на этом сотруднике',
-                            metric: 'managerActive',
-                            key: bar.payload.id || 'none',
-                          })
-                        }
-                      >
-                        {wide && <LabelList dataKey="active" {...valueLabel(String)} />}
-                      </Bar>
-                      <Bar
-                        dataKey="paid"
-                        name="Завершено"
-                        fill={gradient('sky')}
-                        radius={[6, 6, 0, 0]}
-                        cursor="pointer"
-                        {...BAR_ANIMATION}
-                        onClick={(bar: any) =>
-                          bar?.payload &&
-                          setDrill({
-                            title: `${bar.payload.name} — доведено до оплаты`,
-                            subtitle: 'Все оплаченные заказы этого сотрудника',
-                            metric: 'managerPaid',
-                            key: bar.payload.id || 'none',
-                          })
-                        }
-                      >
-                        {wide && <LabelList dataKey="paid" {...valueLabel(String)} />}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            )}
           </div>
         </>
       )}
