@@ -1,8 +1,9 @@
-import { Fragment, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Download,
+  Image as ImageIcon,
   Copy,
   Pencil,
   Send,
@@ -13,36 +14,15 @@ import {
 import { api } from '../api/client';
 import { useFetch, invalidate, deleteRecord } from '../api/hooks';
 import { Spinner, Badge, ErrorState } from '../components/ui';
-import { PrintSheet } from '../components/common';
-import { COMPANY } from '../lib/company';
+import { OfferReceipt } from '../components/OfferReceipt';
+import { toPng } from 'html-to-image';
 import { useToast } from '../components/Toast';
 import { useDialog } from '../components/Dialog';
-import {
-  PROPOSAL_STATUS_LABEL,
-  PROPOSAL_STATUS_COLOR,
-  formatPrice,
-} from '../lib/labels';
+import { PROPOSAL_STATUS_LABEL, PROPOSAL_STATUS_COLOR } from '../lib/labels';
 import { formatDateTz, formatDateTimeTz } from '../lib/date';
 import { printDocument } from '../lib/print';
 import { ProposalEditModal } from '../components/ProposalEditModal';
 import type { Proposal, ProposalStatus } from '../types';
-
-/** Строки шапки печатного листа: клиент, адрес, объём и цена, скидка, срок, автор */
-function headerRows(p: Proposal, volumeLabel: string): [string, string][] {
-  const rows: [string, string][] = [
-    ['Клиент', `${p.clientName}${p.clientPhone ? ` · ${p.clientPhone}` : ''}`],
-    ['Адрес объекта', p.address || '—'],
-    [
-      'Объём и цена',
-      p.pricePerSqm != null ? `${volumeLabel} × ${formatPrice(p.pricePerSqm)}` : volumeLabel,
-    ],
-  ];
-  if (p.discount) rows.push(['Скидка', formatPrice(p.discount)]);
-  rows.push(['Итоговая сумма', formatPrice(p.total)]);
-  rows.push(['Действует до', p.validUntil ? formatDateTz(p.validUntil) : '—']);
-  rows.push(['Подготовил', p.createdByName]);
-  return rows;
-}
 
 export function OfferView() {
   const { id } = useParams();
@@ -55,6 +35,52 @@ export function OfferView() {
     { deps: [id] },
   );
   const [editing, setEditing] = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+
+  /*
+   * Поля страницы при печати — нулевые: тогда браузер не печатает свои
+   * шапку и подвал (адрес сайта, дату, «1/2»), и клиент получает чистый
+   * лист. Правило @page нельзя привязать к странице, поэтому добавляем его
+   * только пока открыт этот экран и убираем при уходе.
+   */
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = '@page { size: A4; margin: 0; }';
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  /*
+   * Картинка для мессенджера: тот же чек, что уходит в PDF, но PNG —
+   * его удобнее кинуть клиенту с телефона. Рисуем в двойном разрешении,
+   * чтобы на экране телефона текст не мылился.
+   */
+  const savePicture = async () => {
+    const node = receiptRef.current;
+    if (!node || !p) return;
+    setSaving(true);
+    try {
+      const url = await toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `КП №${p.number} — ${p.clientName}.png`.replace(/[\\/:*?"<>|]+/g, ' ');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success('Картинка сохранена — можно отправить клиенту');
+    } catch {
+      toast.error('Не удалось собрать картинку, скачайте PDF');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading && !p) return <Spinner />;
   if (error || !p) {
@@ -149,8 +175,6 @@ export function OfferView() {
     }
   };
 
-  const items = p.items ?? [];
-  const volumeLabel = p.area != null ? `${p.area} м²` : '—';
 
   return (
     <div className="mx-auto max-w-4xl animate-page-in">
@@ -170,6 +194,10 @@ export function OfferView() {
           <button onClick={() => printDocument(fileName)} className="btn-ghost">
             <Download className="h-4 w-4" />
             Скачать PDF
+          </button>
+          <button onClick={savePicture} disabled={saving} className="btn-primary" data-testid="кнопка-картинка">
+            <ImageIcon className="h-4 w-4" />
+            {saving ? 'Собираю…' : 'Картинка для WhatsApp/Telegram'}
           </button>
           {/*
             Правка КП (ТЗ 9). Сервер умел это с самого начала, а из интерфейса
@@ -219,191 +247,14 @@ export function OfferView() {
         </div>
       )}
 
-      {/* ── КП (печатается) ── */}
-      <PrintSheet
-        title={`ARCHIDEA · Коммерческое предложение №${p.number}`}
-        subtitle={
-          <div className="flex items-center gap-2">
-            <span>от {formatDateTz(p.createdAt)}</span>
-            <Badge className={`no-print ${PROPOSAL_STATUS_COLOR[p.status]}`}>
-              {PROPOSAL_STATUS_LABEL[p.status]}
-            </Badge>
-          </div>
-        }
-      >
-        {/* Шапка: клиент, адрес, объём и цена */}
-        <div className="overflow-hidden rounded-xl border border-navy-200 text-sm">
-          {headerRows(p, volumeLabel).map(([k, v], i) => (
-            <div key={k} className={`flex ${i > 0 ? 'border-t border-navy-100' : ''}`}>
-              <div className="w-2/5 shrink-0 bg-navy-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-navy-600">
-                {k}
-              </div>
-              <div
-                className={`flex-1 px-3 py-2 text-navy-900 ${
-                  k === 'Итоговая сумма' ? 'font-bold' : ''
-                }`}
-              >
-                {v}
-              </div>
-            </div>
-          ))}
+      {/* ── КП (печатается): фирменный чек, один лист ── */}
+      <div className="offer-print-wrap flex flex-col items-center gap-3">
+        <div className="no-print flex items-center gap-2 text-xs text-navy-600">
+          <Badge className={PROPOSAL_STATUS_COLOR[p.status]}>{PROPOSAL_STATUS_LABEL[p.status]}</Badge>
+          <span>Так КП увидит клиент — в PDF и на картинке</span>
         </div>
-
-        {/* Текст предложения — снимок текста на момент создания/правки */}
-        {p.bodySnapshot && (
-          <div className="mt-6">
-            <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-navy-700">
-              Текст предложения
-            </h3>
-            <p className="whitespace-pre-wrap rounded-xl bg-navy-50/60 p-4 text-sm leading-relaxed text-navy-800">
-              {p.bodySnapshot}
-            </p>
-          </div>
-        )}
-
-        {/*
-          Список услуг — по бумажному бланку компании: номер, развёрнутое
-          описание услуги и стоимость. Раньше здесь была плоская таблица из
-          пяти колонок (объём, цена за ед., сумма), и состав работ в неё не
-          помещался вовсе — из-за этого предложения собирали руками в
-          текстовом редакторе, а CRM оставалась в стороне.
-
-          Средняя колонка несёт всё, что клиент читает глазами: объём, цену за
-          единицу, что входит в услугу и срок сдачи. Ширина не задаётся жёстко
-          — на телефоне текст переносится, горизонтальной прокрутки нет.
-        */}
-        {items.length > 0 && (
-          <div className="mt-6">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-navy-500 text-left text-xs text-white print:bg-white print:text-navy-900">
-                  <th className="w-8 border border-navy-300 px-2 py-1.5 font-semibold">
-                    №
-                  </th>
-                  <th className="border border-navy-300 px-2 py-1.5 font-semibold">
-                    Список предоставляемых услуг
-                  </th>
-                  <th className="w-24 border border-navy-300 px-2 py-1.5 text-right font-semibold sm:w-28">
-                    Стоимость
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, i) => (
-                  <Fragment key={i}>
-                    {/*
-                      Заголовок раздела печатается один раз перед его первой
-                      позицией: клиент читает смету блоками — работы отдельно,
-                      доп. услуги отдельно, — а не сплошным списком.
-                    */}
-                    {it.section && it.section !== items[i - 1]?.section && (
-                      <tr className="bg-navy-100/70 print:bg-navy-50">
-                        <td
-                          className="border border-navy-200 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-navy-700"
-                          colSpan={3}
-                        >
-                          {it.section}
-                        </td>
-                      </tr>
-                    )}
-                    <tr className="align-top">
-                      <td className="border border-navy-200 px-2 py-2 text-navy-600">
-                        {i + 1}
-                      </td>
-                      <td className="border border-navy-200 px-2 py-2 text-navy-900">
-                        <div className="font-semibold">{it.title}</div>
-                        <ul className="mt-1 space-y-0.5 text-xs text-navy-700">
-                          {it.volume != null && (
-                            <li>
-                              • Объём: {it.volume}
-                              {it.unit ? ` ${it.unit}` : ''}
-                            </li>
-                          )}
-                          {it.unitPrice != null && (
-                            <li>
-                              • Стоимость услуги — {formatPrice(it.unitPrice)}
-                              {it.unit ? `/${it.unit}` : ''}
-                            </li>
-                          )}
-                        </ul>
-                        {it.includes && it.includes.length > 0 && (
-                          <div className="mt-2">
-                            <div className="text-xs font-semibold text-navy-800">
-                              В состав услуги входит:
-                            </div>
-                            <ul className="mt-0.5 space-y-0.5 text-xs text-navy-700">
-                              {it.includes.map((w, k) => (
-                                <li key={k}>• {w}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {it.note && (
-                          <div className="mt-2 text-xs text-navy-600">{it.note}</div>
-                        )}
-                      </td>
-                      <td className="border border-navy-200 px-2 py-2 text-right font-bold text-navy-900">
-                        {it.amount != null ? (
-                          <>
-                            <span className="block whitespace-nowrap tabular-nums">
-                              {it.amount.toLocaleString('ru-RU')}
-                            </span>
-                            <span className="block text-xs font-normal text-navy-600">
-                              сомони
-                            </span>
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    </tr>
-                  </Fragment>
-                ))}
-                {/*
-                  Скидка отдельной строкой: в позиции она не входит, иначе
-                  вычлась бы дважды. Клиент должен видеть, из чего сложился
-                  итог, а не гадать, почему сумма меньше слагаемых.
-                */}
-                {p.discount > 0 && (
-                  <tr className="text-navy-800">
-                    <td className="border border-navy-200 px-2 py-1.5" colSpan={2}>
-                      Скидка
-                    </td>
-                    <td className="whitespace-nowrap border border-navy-200 px-2 py-1.5 text-right font-semibold tabular-nums">
-                      −{p.discount.toLocaleString('ru-RU')}
-                    </td>
-                  </tr>
-                )}
-                <tr className="bg-navy-50 font-bold text-navy-900">
-                  <td className="border border-navy-200 px-2 py-2" colSpan={2}>
-                    Стоимость комплексного клининга помещения
-                  </td>
-                  <td className="whitespace-nowrap border border-navy-200 px-2 py-2 text-right tabular-nums">
-                    {p.total.toLocaleString('ru-RU')}
-                    <span className="block text-xs font-normal text-navy-600">
-                      сомони
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/*
-          Подпись бланка. На экране она тоже видна — менеджер должен понимать,
-          что уйдёт клиенту, не открывая предпросмотр печати.
-        */}
-        <div className="mt-8 text-sm text-navy-800">
-          <div>С уважением и надеждой на долгосрочное сотрудничество</div>
-          <div className="mt-3 font-medium">{COMPANY.directorTitle}</div>
-          <div className="font-semibold">{COMPANY.director}</div>
-        </div>
-        <div className="mt-6 hidden justify-between gap-8 text-xs text-navy-600 print:flex">
-          <div>Подготовил: {p.createdByName}</div>
-          <div>Подпись ____________________ дата ____________</div>
-        </div>
-      </PrintSheet>
+        <OfferReceipt ref={receiptRef} p={p} />
+      </div>
 
       {editing && (
         <ProposalEditModal

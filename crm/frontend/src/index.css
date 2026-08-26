@@ -368,6 +368,16 @@ select.input {
   @page {
     margin: 14mm;
   }
+  /* КП-чек: по центру листа, с собственными полями (поля страницы — нулевые) */
+  .offer-print-wrap {
+    padding: 14mm 0;
+  }
+  .offer-receipt {
+    box-shadow: none !important;
+    border: 1px solid #d6d9e0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 /*
