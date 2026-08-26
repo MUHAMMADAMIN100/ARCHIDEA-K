@@ -85,17 +85,7 @@ export const OfferReceipt = forwardRef<HTMLDivElement, { p: Proposal }>(function
           ))}
         </div>
 
-        {/* текст предложения — целиком, как был */}
-        {p.bodySnapshot && (
-          <div className="mt-6" data-testid="чек-текст">
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-700">
-              Текст предложения
-            </h3>
-            <p className="whitespace-pre-wrap rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm leading-relaxed">
-              {p.bodySnapshot}
-            </p>
-          </div>
-        )}
+        {/* текст предложения в документ не идёт (решение владельца) — он остаётся в «Скопировать текст» */}
 
         {/* услуги */}
         {items.length > 0 && (
