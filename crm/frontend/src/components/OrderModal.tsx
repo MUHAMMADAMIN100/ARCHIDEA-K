@@ -204,6 +204,17 @@ export function OrderModal({
   const [discount, setDiscount] = useState('');
   // скидка подставлена из карточки клиента, а не задана у самого заказа
   const [discountFromClient, setDiscountFromClient] = useState(false);
+  /*
+   * «Договорились на» — итог, о котором договорились с клиентом.
+   *
+   * Своего значения у поля нет: это та же цифра, что «К оплате», просто с
+   * другой стороны. Пока в него не печатают, оно ПОВТОРЯЕТ расчёт — иначе
+   * менеджер, поменяв площадь, видел бы в нём вчерашнюю сумму. Как только
+   * начали печатать — показываем ровно набранное, чтобы «40» по дороге к
+   * «4000» не превращалось в скидку на всю стоимость и не прыгало под
+   * пальцами.
+   */
+  const [agreedInput, setAgreedInput] = useState<string | null>(null);
   // данные заявки: раньше блок был только для чтения
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -339,6 +350,7 @@ export function OrderModal({
     subtotalSum,
   );
   const toPaySum = subtotalSum - discountSum;
+  const agreedTotal = agreedInput ?? (toPaySum > 0 ? String(toPaySum) : '');
   // оплата не может превышать итог — остаток никогда не уходит в минус
   const paidSum = Math.min(paidRaw, toPaySum);
   const dueSum = toPaySum - paidSum;
@@ -473,6 +485,9 @@ export function OrderModal({
     setTab('order');
     setShowReminder(false);
     setError('');
+    // набранное в «Договорились на» принадлежит ЭТОМУ заказу — при переходе
+    // к другому поле снова следует за расчётом
+    setAgreedInput(null);
     touchedRef.current = new Set();
 
     if (!orderId) {
@@ -1638,22 +1653,71 @@ export function OrderModal({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="label">Скидка, сомони</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="input"
-                      value={discount}
-                      onChange={(ev) => {
-                        markTouched('discount');
-                        setDiscountFromClient(false);
-                        setDiscount(ev.target.value);
-                      }}
-                      placeholder="0"
-                    />
+                    {/*
+                      Скидка и итог — две стороны одной цифры.
+
+                      С клиентом договариваются на КОНЕЧНУЮ сумму («отдашь
+                      4000»), а форма спрашивала скидку — и разницу считали в
+                      уме. Одна ошибка в этом счёте — и заказ на 5110 со
+                      скидкой 1140 давал 3970 вместо 4000, а внесённые
+                      клиентом деньги превращались в переплату на 30 сомони.
+                      Теперь любое из двух полей можно заполнить, второе
+                      посчитается само.
+                    */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="label">Скидка, сомони</label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="input"
+                          value={discount}
+                          onChange={(ev) => {
+                            markTouched('discount');
+                            setDiscountFromClient(false);
+                            setDiscount(ev.target.value);
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Договорились на</label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="input"
+                          value={agreedTotal}
+                          onChange={(ev) => {
+                            markTouched('discount');
+                            setDiscountFromClient(false);
+                            const raw = ev.target.value;
+                            setAgreedInput(raw);
+                            if (raw === '') return;
+                            /*
+                              Скидка не может быть больше стоимости и не
+                              бывает отрицательной: вписали сумму больше
+                              работ — скидки просто нет.
+                            */
+                            const wanted = Math.max(0, Math.round(Number(raw) || 0));
+                            const next = Math.max(0, subtotalSum - wanted);
+                            setDiscount(next > 0 ? String(next) : '');
+                          }}
+                          placeholder={subtotalSum > 0 ? String(subtotalSum) : '0'}
+                        />
+                      </div>
+                    </div>
                     {discountFromClient && (
                       <p className="mt-1 text-xs text-navy-600">
                         Постоянная скидка клиента — можно изменить
+                      </p>
+                    )}
+                    {discountSum > 0 && (
+                      <p className="mt-1 text-xs text-navy-600">
+                        {subtotalSum.toLocaleString('ru-RU')} −{' '}
+                        {discountSum.toLocaleString('ru-RU')} ={' '}
+                        <span className="font-semibold text-navy-800">
+                          {toPaySum.toLocaleString('ru-RU')} сомони
+                        </span>
                       </p>
                     )}
 

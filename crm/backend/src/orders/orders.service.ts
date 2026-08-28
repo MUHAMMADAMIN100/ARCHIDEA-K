@@ -26,6 +26,7 @@ import {
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { seesFinance } from '../common/permissions';
+import { guestsOf } from '../common/order-guests';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { resolveManager } from '../common/resolve-manager';
 import {
@@ -74,6 +75,20 @@ const orderInclude = {
   },
   manager: { select: { id: true, fullName: true } },
   cleaners: { select: { id: true, fullName: true } },
+  /*
+   * Состояние ведомости прямо на карточке воронки.
+   *
+   * Владелец разбирает закрытые заказы отчётами и раньше не мог понять, по
+   * кому ведомость уже сделана, а кто остался: приходилось открывать каждый
+   * заказ. Берём только статус самой свежей — их у заказа обычно одна, но
+   * порядок фиксируем, чтобы карточка не показывала случайную.
+   */
+  reports: {
+    where: NOT_DELETED,
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+    select: { id: true, status: true },
+  },
 };
 
 /**
@@ -1249,14 +1264,20 @@ export class OrdersService {
     }
 
     /*
-     * «Оплачено» начисляет зарплату клинерам само (решение владельца), поэтому
-     * без команды в карточке этап закрыт: иначе смены не на кого начислить,
-     * и работа бригады потеряется в выплатах.
+     * «Оплачено» начисляет зарплату само (решение владельца), поэтому без
+     * людей в карточке этап закрыт: иначе работа потеряется в выплатах.
+     *
+     * Считаются И штатные клинеры, И разовые сотрудники. Раньше проверка
+     * смотрела только на штат, и заказ, который целиком сделал позванный на
+     * один раз человек, закрыть было нельзя вовсе — хотя в карточке стояло
+     * его имя и отданная ему сумма.
      */
     if (dto.stage === FunnelStage.PAID && order.stage !== FunnelStage.PAID) {
-      if (!order.cleaners || order.cleaners.length === 0) {
+      const штатных = order.cleaners?.length ?? 0;
+      const разовых = guestsOf(order.guestCleaners).length;
+      if (штатных + разовых === 0) {
         throw new BadRequestException(
-          'Укажите, кто делал уборку: выберите клинеров в карточке заказа — иначе зарплата не начислится',
+          'Укажите, кто делал уборку: выберите клинеров или впишите разового сотрудника в карточке заказа — иначе зарплата не начислится',
         );
       }
     }

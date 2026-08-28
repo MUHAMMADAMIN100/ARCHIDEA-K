@@ -73,6 +73,36 @@ function closedLongAgo(o: Order): string | null {
   return o.stage === 'REJECTED' ? `Отказ ${when}` : `Закрыт ${when}`;
 }
 
+/**
+ * Состояние ведомости по заказу — то, что видно на карточке.
+ *
+ * Закрытые заказы владелец разбирает ведомостями и раньше не мог понять,
+ * по кому отчёт уже готов, а кто остался: приходилось открывать каждый.
+ * Черновик система создаёт сама при закрытии заказа, поэтому «нет строки
+ * вовсе» и «черновик» для владельца значат одно — не разобран.
+ */
+type ReportMark = { label: string; className: string } | null;
+
+function reportMark(o: Order): ReportMark {
+  // метка только у закрытых: в работе отчёта ещё и быть не должно
+  if (o.stage !== 'PAID') return null;
+  const status = o.reports?.[0]?.status;
+  if (status === 'ACCEPTED') {
+    return { label: 'Отчёт ✓', className: 'bg-emerald-100 text-emerald-700' };
+  }
+  if (status === 'SENT') {
+    return { label: 'Отчёт отправлен', className: 'bg-blue-100 text-blue-700' };
+  }
+  return { label: 'Отчёт: черновик', className: 'bg-amber-100 text-amber-700' };
+}
+
+/** Заказ ещё не разобран отчётом — по нему ведомость не отправлена */
+function reportPending(o: Order): boolean {
+  if (o.stage !== 'PAID') return false;
+  const status = o.reports?.[0]?.status;
+  return status !== 'ACCEPTED' && status !== 'SENT';
+}
+
 const NO_MANAGER = '__none__';
 
 /**
@@ -172,6 +202,14 @@ function OrderCardBody({
       {closedLongAgo(o) && (
         <div className="mt-1 inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
           {closedLongAgo(o)}
+        </div>
+      )}
+      {/* состояние ведомости: по закрытым заказам владелец отчитывается ими */}
+      {reportMark(o) && (
+        <div
+          className={`mt-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${reportMark(o)!.className}`}
+        >
+          {reportMark(o)!.label}
         </div>
       )}
       {/* телефон нужен прямо в карточке: по воронке чаще всего звонят */}
@@ -894,6 +932,8 @@ export function Funnel() {
               const total = col.orders.reduce((sum, o) => sum + orderTotal(o), 0);
               // долг по этапу: сумма остатков заказов, где оплата ещё не полная
               const debt = col.orders.reduce((sum, o) => sum + orderDebt(o), 0);
+              // закрытые заказы без отправленной ведомости — «сколько осталось»
+              const noReport = col.orders.filter(reportPending).length;
               const isDue = col.stage === 'DONE';
               return (
               <div
@@ -991,6 +1031,16 @@ export function Funnel() {
                   {debt > 0 && (
                     <div className="mt-0.5 whitespace-nowrap text-xs font-semibold text-red-700">
                       Из них долг: {formatPrice(debt)}
+                    </div>
+                  )}
+                  {/*
+                    Сколько закрытых заказов ещё не разобрано ведомостью.
+                    Считаем по карточкам НА ДОСКЕ: в архив уезжают сделки
+                    прошлых месяцев, а разбирают отчётами текущую работу.
+                  */}
+                  {noReport > 0 && (
+                    <div className="mt-0.5 whitespace-nowrap text-xs font-semibold text-amber-700">
+                      Без отчёта: {noReport}
                     </div>
                   )}
                 </div>

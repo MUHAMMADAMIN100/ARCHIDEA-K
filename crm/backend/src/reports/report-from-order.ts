@@ -1,5 +1,6 @@
 import { CleaningType, Prisma } from '@prisma/client';
 import { dayKey, dayUTC } from '../common/time/dushanbe';
+import { guestsOf } from '../common/order-guests';
 
 /**
  * Черновик платёжной ведомости из заказа.
@@ -36,6 +37,8 @@ export type OrderForReport = {
     /** бригада клинера — из неё берётся ответственный бригадир */
     brigade?: { id: string; name: string; leader: { fullName: string } | null } | null;
   }[];
+  /** Разовые сотрудники заказа — сырой JSON из базы, разбирает guestsOf */
+  guestCleaners?: unknown;
 };
 
 /**
@@ -62,10 +65,19 @@ export function volumeLabel(order: OrderForReport): string | null {
   return order.area ? `${order.area} м²${perUnit}` : null;
 }
 
-/** Строки работников: назначенная на заказ команда со ставкой на сегодня */
+/**
+ * Строки работников ведомости: назначенная команда и разовые сотрудники.
+ *
+ * Разовый идёт СТРОКОЙ БЕЗ cleanerId — так и задумано в этой модели:
+ * «работник без привязки к клинеру — только в ведомости». Смену ему не
+ * начислить, его нет в базе клинеров и постоянных выплат у него не бывает,
+ * но отданные ему деньги обязаны быть в документе, который уходит владельцу.
+ * Раньше их не было нигде: 800 сомони наличными жили только пометкой в
+ * карточке заказа и ни в один отчёт не попадали.
+ */
 export function workersFromOrder(order: OrderForReport) {
-  return order.cleaners.map((c) => ({
-    cleanerId: c.id,
+  const штат = order.cleaners.map((c) => ({
+    cleanerId: c.id as string | null,
     fullName: c.fullName,
     // бригадир определяется по тому, руководит ли клинер бригадой
     role: c.leaderOf ? 'Бригадир' : 'Клинер',
@@ -76,6 +88,16 @@ export function workersFromOrder(order: OrderForReport) {
     fine: 0,
     extra: 0,
   }));
+  const разовые = guestsOf(order.guestCleaners).map((g) => ({
+    cleanerId: null,
+    fullName: g.fullName,
+    role: 'Разовый',
+    days: 1,
+    rate: g.rate,
+    fine: 0,
+    extra: 0,
+  }));
+  return [...штат, ...разовые];
 }
 
 /**

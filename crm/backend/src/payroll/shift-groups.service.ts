@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
+import { guestsOf } from '../common/order-guests';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { dayKey, dayUTC, formatDate, rangeUTC } from '../common/time/dushanbe';
 import {
@@ -271,6 +272,8 @@ export class ShiftGroupsService {
             leaderOf: { select: { id: true } },
           },
         },
+        // разовые сотрудники заказа — они тоже делали уборку
+        guestCleaners: true,
       },
     });
   }
@@ -289,14 +292,28 @@ export class ShiftGroupsService {
         brigadeId: string | null;
         leaderOf: { id: string } | null;
       }[];
+      guestCleaners?: unknown;
     },
   ) {
-    const members = order.cleaners.map((c) => ({
-      cleanerId: c.id,
-      fullName: c.fullName,
-      rate: c.rate,
-      role: c.leaderOf ? 'Бригадир' : 'Клинер',
-    }));
+    /*
+     * Состав выезда = штатные клинеры + разовые сотрудники заказа.
+     *
+     * Разовых раньше здесь не было вовсе: человека звали на один раз, отдавали
+     * ему деньги наличными, а в выезде он не появлялся — выходило, что убирал
+     * никто. Смену ему не начислить (его нет в базе клинеров), но в составе
+     * выезда он обязан быть: по нему видно, кто на объекте работал и сколько
+     * получил.
+     */
+    const members = [
+      ...order.cleaners.map((c) => ({
+        cleanerId: c.id as string | null,
+        isGuest: false,
+        fullName: c.fullName,
+        rate: c.rate,
+        role: c.leaderOf ? 'Бригадир' : 'Клинер',
+      })),
+      ...this.guestRows(guestsOf(order.guestCleaners)),
+    ];
     // бригада и бригадир — по составу: если в команде есть бригадир, он и ведёт выезд
     const leader = order.cleaners.find((c) => c.leaderOf) ?? null;
     const brigadeId =
@@ -433,13 +450,23 @@ export class ShiftGroupsService {
       }
       if (visit.status === ShiftGroupStatus.CLOSED) continue;
 
-      // состав: штатные — по карточке заказа, разовые остаются как есть
-      const wanted = new Set(members.map((m) => m.cleanerId));
-      const have = new Map(
-        visit.members.filter((m) => m.cleanerId).map((m) => [m.cleanerId as string, m]),
-      );
-      const toRemove = visit.members.filter((m) => m.cleanerId && !wanted.has(m.cleanerId));
-      const toAdd = members.filter((m) => !have.has(m.cleanerId));
+      /*
+       * Состав приводим к карточке заказа.
+       *
+       * Штатные сводятся по идентификатору клинера, разовые — ПО ИМЕНИ:
+       * у них нет карточки в базе, и ключа кроме имени не существует.
+       * Сводить их тем же способом, что штатных, нельзя: у всех разовых
+       * cleanerId равен null, они никогда бы не нашлись среди уже
+       * записанных — и каждая синхронизация добавляла бы их заново, пока
+       * в выезде не окажется десять «Убайдов».
+       */
+      const ключ = (m: { cleanerId: string | null; fullName: string }) =>
+        m.cleanerId ?? `гость:${m.fullName.trim().toLowerCase()}`;
+
+      const wanted = new Set(members.map(ключ));
+      const have = new Map(visit.members.map((m) => [ключ(m), m]));
+      const toRemove = visit.members.filter((m) => !wanted.has(ключ(m)));
+      const toAdd = members.filter((m) => !have.has(ключ(m)));
       if (toRemove.length) {
         await tx.shiftGroupMember.deleteMany({
           where: { id: { in: toRemove.map((m) => m.id) } },
@@ -450,11 +477,15 @@ export class ShiftGroupsService {
           data: toAdd.map((m) => ({ ...m, groupId: visit.id })),
         });
       }
-      // роль бригадира могла смениться — держим в актуальном виде
+      // роль бригадира и сумма разового могли смениться — держим в актуальном виде
       for (const m of members) {
-        const cur = have.get(m.cleanerId);
-        if (cur && cur.role !== m.role) {
-          await tx.shiftGroupMember.update({ where: { id: cur.id }, data: { role: m.role } });
+        const cur = have.get(ключ(m));
+        if (!cur) continue;
+        if (cur.role !== m.role || cur.rate !== m.rate) {
+          await tx.shiftGroupMember.update({
+            where: { id: cur.id },
+            data: { role: m.role, rate: m.rate },
+          });
         }
       }
       const data: Prisma.ShiftGroupUncheckedUpdateInput = {
