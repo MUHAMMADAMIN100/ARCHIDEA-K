@@ -220,7 +220,15 @@ function OrderCardBody({
           {formatPhone(o.client.phone)}
         </div>
       )}
-      <div className="mt-1 text-[11px] leading-snug text-navy-600 sm:text-xs">
+      {/*
+        Строка состава ограничена двумя строчками: у заказа из одних доп.
+        услуг тут перечень названий, и длинный список иначе раздувал бы
+        карточку и всю колонку. Полностью он виден по наведению.
+      */}
+      <div
+        className="mt-1 line-clamp-2 text-[11px] leading-snug text-navy-600 sm:text-xs"
+        title={orderSubject(o)}
+      >
         {orderSubject(o)}
       </div>
       {/*
