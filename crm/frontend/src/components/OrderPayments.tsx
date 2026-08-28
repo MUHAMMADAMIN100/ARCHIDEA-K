@@ -208,15 +208,29 @@ export function OrderPayments({
 
   return (
     <div className="rounded-xl border border-navy-100 bg-white p-3" data-testid="payments-block">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-medium uppercase tracking-wide text-navy-600">
+      {/*
+        Шапка блока: подпись слева, суммы справа — строго в одну линию.
+
+        Раньше справа стояли ДВЕ суммы с валютой: «4 000 сомони из 3 970
+        сомони». В узкой карточке они не помещались, переносились, и подпись
+        «ОПЛАТЫ» съезжала вверх, наезжая на цифру. Слово «сомони» нужно один
+        раз — валюта у обеих сумм одна и та же; whitespace-nowrap не даёт
+        разорвать сумму посреди числа, а min-w-0 с truncate у подписи
+        отдаёт цифрам всё нужное место на самых узких экранах.
+      */}
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-navy-600">
           Оплаты
         </div>
-        <div className="text-sm font-semibold tabular-nums text-navy-900">
-          {formatPrice(paid)}
+        <div className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-navy-900">
+          {paid.toLocaleString('ru-RU')}
           {total > 0 && (
-            <span className="font-normal text-navy-500"> из {formatPrice(total)}</span>
+            <span className="font-normal text-navy-500">
+              {' '}
+              из {total.toLocaleString('ru-RU')}
+            </span>
           )}
+          <span className="ml-1 text-xs font-normal text-navy-500">сомони</span>
         </div>
       </div>
 
