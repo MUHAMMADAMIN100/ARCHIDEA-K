@@ -81,6 +81,62 @@ describe('itemsFromOrder — состав услуги попадает в см�
     additionalServices: null,
   };
 
+  it('заказ без основной услуги: в смету идут одни доп. услуги', () => {
+    const безУслуги = {
+      ...order,
+      serviceKey: null,
+      area: 0,
+      pricePerSqm: null,
+      customExtras: [
+        { title: 'Химчистка мягкой мебели', price: 140, checked: true },
+        { title: 'Мойка матраса', price: 250, checked: true },
+      ],
+    };
+    const items = itemsFromOrder(безУслуги, [tariff], []);
+    expect(items).toHaveLength(2);
+    expect(items.map((i) => i.title)).toEqual([
+      'Химчистка мягкой мебели',
+      'Мойка матраса',
+    ]);
+    expect(items.reduce((s, i) => s + (i.amount ?? 0), 0)).toBe(390);
+  });
+
+  it('снятая галочка доп. услуги в смету не попадает', () => {
+    const items = itemsFromOrder(
+      {
+        ...order,
+        serviceKey: null,
+        area: 0,
+        pricePerSqm: null,
+        customExtras: [
+          { title: 'Мойка окон', price: 250, checked: true },
+          { title: 'Передумали', price: 900, checked: false },
+        ],
+      },
+      [tariff],
+      [],
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0].amount).toBe(250);
+  });
+
+  it('строки заказа отменяют список ключей — двойного счёта нет', () => {
+    const каталог = [{ key: 'WINDOWS', title: 'Мойка окон', price: 250, hasQty: false }];
+    const items = itemsFromOrder(
+      {
+        ...order,
+        area: 0,
+        serviceKey: null,
+        pricePerSqm: null,
+        extras: { WINDOWS: 1 },
+        customExtras: [{ title: 'Мойка окон', price: 250, checked: true }],
+      },
+      [tariff],
+      каталог,
+    );
+    expect(items).toHaveLength(1);
+  });
+
   it('строка работ несёт состав и срок', () => {
     const [work] = itemsFromOrder(order, [tariff], []);
     expect(work.title).toBe('Генеральная уборка дома');

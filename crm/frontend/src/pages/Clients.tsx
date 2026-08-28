@@ -23,6 +23,8 @@ import {
   cleaningTypeForKey,
   TYPE_LABEL,
   ACTIVE_TYPES,
+  NO_SERVICE,
+  serviceTitle,
   DIRT_LABEL,
   DIRT_ORDER,
   STAGE_COLOR,
@@ -551,8 +553,14 @@ export function AddClientModal({
       checked: r.checked,
     })),
   );
+  /*
+   * У существующего заказа пустая услуга — это осознанное «только доп.
+   * услуги», а не «не указано»: подставлять сюда GENERAL нельзя, иначе
+   * сохранение формы вернуло бы заказу уборку, которой в нём нет.
+   * GENERAL остаётся значением по умолчанию только для нового заказа.
+   */
   const [serviceKey, setServiceKey] = useState(
-    initial?.order?.serviceKey ?? 'GENERAL',
+    initial?.order ? (initial.order.serviceKey ?? NO_SERVICE) : 'GENERAL',
   );
   const [dirtLevel, setDirtLevel] = useState<DirtLevel>(
     initial?.order?.dirtLevel ?? 'LIGHT',
@@ -641,10 +649,22 @@ export function AddClientModal({
     (t) => t.isActive !== false,
   );
   const tariff = serviceOptions.find((t) => t.key === serviceKey);
-  const isFurniture = tariff
-    ? tariff.unit !== 'м²'
-    : serviceKey === 'FURNITURE';
-  const hasLevels = tariff ? tariff.hasLevels : serviceKey !== 'FURNITURE';
+  /*
+   * Заказ без основной уборки: клиент заказал только химчистку или мойку
+   * матраса. Тогда ни объёма, ни цены за единицу, ни степени загрязнения
+   * не существует — спрашивать их не о чем, и в сумму идут одни доп. услуги.
+   */
+  const noService = serviceKey === NO_SERVICE;
+  const isFurniture = noService
+    ? false
+    : tariff
+      ? tariff.unit !== 'м²'
+      : serviceKey === 'FURNITURE';
+  const hasLevels = noService
+    ? false
+    : tariff
+      ? tariff.hasLevels
+      : serviceKey !== 'FURNITURE';
 
   /*
    * ТЗ 5: цена за единицу берётся из услуги по степени загрязнения,
@@ -665,7 +685,10 @@ export function AddClientModal({
     if (!manualPrice) setPricePerUnit(String(suggestedUnitPrice || ''));
   }, [suggestedUnitPrice, manualPrice]);
 
-  const units = Math.round(Number(isFurniture ? seats : area)) || 0;
+  // без основной услуги объёма нет вовсе — работы в сумму не идут
+  const units = noService
+    ? 0
+    : Math.round(Number(isFurniture ? seats : area)) || 0;
   const unitPrice = Math.round(Number(pricePerUnit)) || 0;
   // строки «ещё услуг»: цена из справочника по выбранной степени загрязнения
   const moreRows = moreServices.map((r) => {
@@ -743,7 +766,14 @@ export function AddClientModal({
     const toInt = (s: string) => Math.round(Number(s)) || 0;
     const order: NewOrderInput | null = makeOrder
       ? {
-          cleaningType: cleaningTypeForKey(serviceKey),
+          /*
+           * Заказ без основной услуги: serviceKey уходит пустым, и сервер
+           * не считает работы по площади — в сумму идут одни доп. услуги.
+           * cleaningType всё равно нужен: это старое поле, оно есть у каждого
+           * заказа, поэтому ставим общий вид, а «услуги нет» несёт именно
+           * пустой serviceKey.
+           */
+          cleaningType: cleaningTypeForKey(serviceKey || 'GENERAL'),
           serviceKey,
           additionalServices: moreRows
             .filter((r) => r.qtyN > 0)
@@ -992,6 +1022,13 @@ export function AddClientModal({
                 value={serviceKey}
                 onChange={(e) => setServiceKey(e.target.value)}
               >
+                {/*
+                  Первым пунктом — «без основной услуги»: клиент может
+                  заказать только химчистку или мойку матраса, и уборки по
+                  площади у него нет вовсе. Раньше сказать это было нечем,
+                  и в воронке появлялась карточка «Генеральная уборка · 0 м²».
+                */}
+                <option value={NO_SERVICE}>— без основной услуги —</option>
                 {serviceOptions.length > 0
                   ? serviceOptions.map((t) => (
                       <option key={t.key} value={t.key}>{t.title}</option>
@@ -1000,6 +1037,11 @@ export function AddClientModal({
                       <option key={t} value={t}>{TYPE_LABEL[t]}</option>
                     ))}
               </select>
+              {noService && (
+                <p className="mt-1 text-xs text-navy-600">
+                  Уборки по площади нет — сумма сложится из доп. услуг ниже
+                </p>
+              )}
 
               {/* Ещё услуги в этой же заявке (ТЗ 1.3) */}
               {moreRows.map((r, i) => (
@@ -1101,34 +1143,42 @@ export function AddClientModal({
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              {isFurniture ? (
+            {/*
+              Объём и цена за единицу — только когда основная услуга выбрана.
+              Без неё спрашивать нечего: «сколько м² химчистки матраса» —
+              вопрос без ответа, а пустое поле рядом с ценой выглядело как
+              недозаполненная форма.
+            */}
+            {!noService && (
+              <div className="grid grid-cols-2 gap-3">
+                {isFurniture ? (
+                  <div>
+                    <label className="label">Посадочных мест</label>
+                    <input type="number" className="input" value={seats} onChange={(e) => setSeats(e.target.value)} />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="label">Площадь, м²</label>
+                    <input type="number" className="input" value={area} onChange={(e) => setArea(e.target.value)} />
+                  </div>
+                )}
                 <div>
-                  <label className="label">Посадочных мест</label>
-                  <input type="number" className="input" value={seats} onChange={(e) => setSeats(e.target.value)} />
+                  <label className="label">
+                    Цена за {isFurniture ? 'место' : 'м²'}
+                  </label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={pricePerUnit}
+                    onChange={(e) => {
+                      setPricePerUnit(e.target.value);
+                      setManualPrice(false);
+                    }}
+                    placeholder="0"
+                  />
                 </div>
-              ) : (
-                <div>
-                  <label className="label">Площадь, м²</label>
-                  <input type="number" className="input" value={area} onChange={(e) => setArea(e.target.value)} />
-                </div>
-              )}
-              <div>
-                <label className="label">
-                  Цена за {isFurniture ? 'место' : 'м²'}
-                </label>
-                <input
-                  type="number"
-                  className="input"
-                  value={pricePerUnit}
-                  onChange={(e) => {
-                    setPricePerUnit(e.target.value);
-                    setManualPrice(false);
-                  }}
-                  placeholder="0"
-                />
               </div>
-            </div>
+            )}
 
             {/*
               Доп. услуги — тот же блок, что в карточке заказа (просьба
@@ -1369,7 +1419,9 @@ export function AddClientModal({
                         )}
                       </span>
                     ) : (
-                      'Укажите объём и цену — сумма посчитается сама'
+                      noService
+                      ? 'Добавьте доп. услуги — из них и сложится сумма'
+                      : 'Укажите объём и цену — сумма посчитается сама'
                     )}
                   </span>
                 )}
@@ -1490,7 +1542,7 @@ function ClientOrdersModal({
                 header: 'Уборка',
                 cell: (o) => (
                   <div>
-                    <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
+                    <div className="text-navy-800">{serviceTitle(o)}</div>
                     <div className="text-xs text-navy-600">
                       {o.address || 'адрес не указан'}
                     </div>

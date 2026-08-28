@@ -16,12 +16,22 @@ const num = (v: number) => v.toLocaleString('ru-RU');
 
 /** Строки таблицы реквизитов */
 function headerRows(p: Proposal): [string, string][] {
-  const volume = p.area != null ? `${p.area} м²` : '—';
+  const volume = p.area ? `${p.area} м²` : '';
   const rows: [string, string][] = [
     ['Клиент', `${p.clientName}${p.clientPhone ? ` · ${p.clientPhone}` : ''}`],
     ['Адрес объекта', p.address || '—'],
-    ['Объём и цена', p.pricePerSqm != null ? `${volume} × ${formatPrice(p.pricePerSqm)}` : volume],
   ];
+  /*
+   * Заказ без основной услуги — только доп. услуги: объёма у него нет.
+   * Строку «Объём и цена» тогда не печатаем вовсе: «0 м²» в предложении
+   * клиенту выглядит как ошибка, а состав работ он и так видит в таблице.
+   */
+  if (volume) {
+    rows.push([
+      'Объём и цена',
+      p.pricePerSqm ? `${volume} × ${formatPrice(p.pricePerSqm)}` : volume,
+    ]);
+  }
   if (p.discount) rows.push(['Скидка', formatPrice(p.discount)]);
   rows.push(['Итоговая сумма', formatPrice(p.total)]);
   rows.push(['Действует до', p.validUntil ? formatDateTz(p.validUntil) : '—']);
@@ -34,6 +44,15 @@ export const OfferReceipt = forwardRef<HTMLDivElement, { p: Proposal }>(function
   ref,
 ) {
   const items = p.items ?? [];
+  /*
+   * Заказ бывает и без уборки помещения — из одних доп. услуг (химчистка
+   * мебели, мойка матраса). Обещать в таком предложении «комплексный клининг
+   * помещения» нельзя: клиент читает этот лист как договор.
+   */
+  const естьУборка = items.some((i) => i.section === 'Работы');
+  const итогоПодпись = естьУборка
+    ? 'Стоимость комплексного клининга помещения'
+    : 'Итого по предложению';
   return (
     <div
       ref={ref}
@@ -156,7 +175,7 @@ export const OfferReceipt = forwardRef<HTMLDivElement, { p: Proposal }>(function
               )}
               <tr className="bg-brand-50 font-bold" data-testid="чек-итого">
                 <td className="rounded-bl-xl border-x border-b border-brand-100 px-2 py-3 text-brand-700" colSpan={2}>
-                  Стоимость комплексного клининга помещения
+                  {итогоПодпись}
                 </td>
                 <td className="whitespace-nowrap border-x border-b border-brand-100 px-2 py-3 text-right text-lg tabular-nums text-brand-700">
                   {num(p.total)}

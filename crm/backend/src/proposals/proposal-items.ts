@@ -29,6 +29,7 @@ interface OrderSource {
   pricePerSqm: number | null;
   discount: number | null;
   extras: unknown;
+  customExtras?: unknown;
   additionalServices: unknown;
 }
 
@@ -151,7 +152,37 @@ export function itemsFromOrder(
     });
   }
 
-  // ── доп. услуги (окна, духовка и т.п.) ──
+  /*
+   * Доп. услуги, вписанные в заказ строками.
+   *
+   * Это основной способ: менеджер пишет название и цену прямо в форме.
+   * Пока КП их не видело, состав работ терялся — а у заказа без основной
+   * услуги терялось вообще всё, и клиент получал лист с одной суммой.
+   */
+  const custom = Array.isArray(order.customExtras)
+    ? (order.customExtras as { title?: unknown; price?: unknown; checked?: unknown }[])
+    : [];
+  for (const row of custom) {
+    if (row?.checked === false) continue;
+    const title = String(row?.title ?? '').trim();
+    const price = Math.max(0, Math.round(Number(row?.price) || 0));
+    if (!title || price <= 0) continue;
+    items.push({
+      section: SECTION_EXTRA,
+      title,
+      unit: '',
+      volume: null,
+      unitPrice: price,
+      amount: price,
+    });
+  }
+
+  /*
+   * Доп. услуги ключами из справочника — так приходит заявка с сайта.
+   * Когда в заказе есть строки, список игнорируем: иначе одна и та же
+   * услуга попала бы в смету дважды (то же правило, что и в расчёте цены).
+   */
+  if (custom.length) return items;
   const extras =
     order.extras && typeof order.extras === 'object'
       ? (order.extras as Record<string, number>)

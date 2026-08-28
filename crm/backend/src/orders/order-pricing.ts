@@ -150,6 +150,12 @@ export function billableUnits(
   input: PricingInput,
   tariff?: PricingTariff | null,
 ): number {
+  /*
+   * Заказ без основной услуги — только доп. услуги: объём не оплачивается.
+   * Смотрим именно на null/пустую строку; undefined значит «услуга в этом
+   * расчёте не участвует», и там объём по-прежнему считается по тарифу.
+   */
+  if (input.serviceKey === null || input.serviceKey === '') return 0;
   const bySeats = tariff ? tariff.unit !== 'м²' : input.serviceKey === 'FURNITURE';
   const raw = bySeats ? input.seats : input.area;
   const n = Math.round(Number(raw) || 0);

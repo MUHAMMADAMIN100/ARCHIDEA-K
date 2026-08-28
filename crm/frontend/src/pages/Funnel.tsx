@@ -33,6 +33,8 @@ import {
   TYPE_LABEL,
   formatPrice,
   formatVolume,
+  orderSubject,
+  serviceTitle,
   isLargeOrder,
   orderDue,
   orderTotal,
@@ -219,7 +221,7 @@ function OrderCardBody({
         </div>
       )}
       <div className="mt-1 text-[11px] leading-snug text-navy-600 sm:text-xs">
-        {TYPE_LABEL[o.cleaningType]} · {formatVolume(o)}
+        {orderSubject(o)}
       </div>
       {/*
         Главное число карточки — сколько ещё предстоит получить: заказчик
@@ -1502,7 +1504,7 @@ function ArchiveModal({
             header: 'Уборка',
             cell: (o) => (
               <div>
-                <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
+                <div className="text-navy-800">{serviceTitle(o)}</div>
                 <div className="text-xs text-navy-600">
                   {formatVolume(o)}
                   {o.address ? ` · ${o.address}` : ''}
@@ -1594,7 +1596,7 @@ function StageOrdersModal({
             header: 'Уборка',
             cell: (o) => (
               <div>
-                <div className="text-navy-800">{TYPE_LABEL[o.cleaningType]}</div>
+                <div className="text-navy-800">{serviceTitle(o)}</div>
                 <div className="text-xs text-navy-600">
                   {formatVolume(o)}
                   {o.address ? ` · ${o.address}` : ''}

@@ -98,10 +98,40 @@ export function cleaningTypeForKey(key: string): CleaningType {
 
 /** «60 м²» / «3 места» — объём работ по типу услуги */
 export function formatVolume(
-  o: Pick<Order, 'cleaningType' | 'area' | 'seats'>,
+  o: Pick<Order, 'cleaningType' | 'area' | 'seats'> & {
+    serviceKey?: string | null;
+    customExtras?: { title: string; checked?: boolean }[] | null;
+  },
 ): string {
+  /*
+   * Заказ без основной услуги оплачивается доп. услугами, объёма у него нет —
+   * «0 м²» было бы неправдой. Сравниваем именно с null и пустой строкой:
+   * undefined значит, что поле в этот список просто не пришло, и объём
+   * по-прежнему считается по виду уборки.
+   */
+  if (o.serviceKey === null || o.serviceKey === '') {
+    return extrasSummary(o.customExtras);
+  }
   if (o.cleaningType === 'FURNITURE') return `${o.seats ?? 0} мест`;
   return `${o.area} м²`;
+}
+
+/** Заголовок услуги в списках: вид уборки, а без неё — «Доп. услуги» */
+export function serviceTitle(
+  o: Pick<Order, 'cleaningType'> & { serviceKey?: string | null },
+): string {
+  if (o.serviceKey === null || o.serviceKey === '') return 'Доп. услуги';
+  return TYPE_LABEL[o.cleaningType];
+}
+
+/** Названия отмеченных доп. услуг через запятую */
+export function extrasSummary(
+  rows?: { title: string; checked?: boolean }[] | null,
+): string {
+  const названия = (rows ?? [])
+    .filter((r) => r.checked !== false && r.title?.trim())
+    .map((r) => r.title.trim());
+  return названия.length ? названия.join(', ') : 'Доп. услуги';
 }
 
 export const SOURCE_LABEL: Record<LeadSource, string> = {
@@ -567,4 +597,36 @@ export function notificationTarget(n: {
     default:
       return null;
   }
+}
+
+/**
+ * «Без основной услуги» — заказ только из доп. услуг.
+ *
+ * Клиент заказывает химчистку мебели или мойку матраса, и никакой уборки по
+ * площади нет вовсе. Раньше сказать это было нечем: в списке услуг всегда
+ * стояла какая-то уборка, и в воронке появлялась карточка «Генеральная
+ * уборка · 0 м²» — то, чего клиент не заказывал.
+ *
+ * Ключ пустой намеренно: на сервер уходит именно пустое значение, и заказ
+ * остаётся без serviceKey. Отдельного значения в справочнике заводить нельзя —
+ * это не услуга, а её отсутствие.
+ */
+export const NO_SERVICE = '';
+
+/**
+ * Из чего состоит заказ — строкой для карточки, календаря и списков.
+ *
+ * Обычный заказ описывается видом уборки и объёмом. Заказ без основной
+ * услуги описать так нечем: писать «0 м²» — врать. Для него перечисляем
+ * доп. услуги, ради которых его и завели.
+ */
+export function orderSubject(
+  o: Pick<Order, 'cleaningType' | 'area' | 'seats' | 'serviceKey'> & {
+    customExtras?: { title: string; checked?: boolean }[] | null;
+  },
+): string {
+  if (o.serviceKey === null || o.serviceKey === '') {
+    return extrasSummary(o.customExtras);
+  }
+  return `${TYPE_LABEL[o.cleaningType]} · ${formatVolume(o)}`;
 }

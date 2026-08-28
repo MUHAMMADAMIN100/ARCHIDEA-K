@@ -35,6 +35,7 @@ import {
   SHIFT_GROUP_STATUS_COLOR,
   formatPrice,
   formatDate,
+  NO_SERVICE,
 } from '../lib/labels';
 import type {
   Cleaner,
@@ -278,8 +279,22 @@ export function OrderModal({
       : null;
   const serviceOptions = legacyTariff ? [legacyTariff, ...activeTariffs] : activeTariffs;
   const selectedTariff = serviceOptions.find((t) => t.key === serviceKey);
-  const isSeatsUnit = selectedTariff ? selectedTariff.unit !== 'м²' : serviceKey === 'FURNITURE';
-  const hasLevelsNow = selectedTariff ? selectedTariff.hasLevels : serviceKey !== 'FURNITURE';
+  /*
+   * Заказ без основной уборки — только доп. услуги: химчистка, мойка
+   * матраса. Ни объёма, ни цены за единицу, ни степени загрязнения у него
+   * нет, и спрашивать их не о чем.
+   */
+  const noService = serviceKey === NO_SERVICE;
+  const isSeatsUnit = noService
+    ? false
+    : selectedTariff
+      ? selectedTariff.unit !== 'м²'
+      : serviceKey === 'FURNITURE';
+  const hasLevelsNow = noService
+    ? false
+    : selectedTariff
+      ? selectedTariff.hasLevels
+      : serviceKey !== 'FURNITURE';
 
   /*
    * Расчёт для показа повторяет серверный (order-pricing.ts): работы +
@@ -294,7 +309,10 @@ export function OrderModal({
   );
 
   const unitLabel = selectedTariff?.unit ?? (isSeatsUnit ? 'место' : 'м²');
-  const unitsNow = Number((isSeatsUnit ? editSeats : editArea) || 0);
+  // без основной услуги объёма нет — работы в сумму не идут
+  const unitsNow = noService
+    ? 0
+    : Number((isSeatsUnit ? editSeats : editArea) || 0);
 
   /*
    * Дополнительные основные услуги (ТЗ 1.3): каждая строка — объём × цена.
@@ -386,7 +404,9 @@ export function OrderModal({
       setScheduledTime(o.scheduledDate ? toDateTimeInput(o.scheduledDate).slice(11, 16) : '');
     }
     if (!skip('pricing')) {
-      setServiceKey(o.serviceKey ?? o.cleaningType);
+      // пустой ключ — заказ «только доп. услуги», подменять его видом
+      // уборки нельзя: услуга вернулась бы сама собой
+      setServiceKey(o.serviceKey ?? NO_SERVICE);
       setEditDirt(o.dirtLevel ?? '');
       setEditArea(String(o.area ?? ''));
       setEditSeats(o.seats != null ? String(o.seats) : '');
@@ -525,6 +545,15 @@ export function OrderModal({
   const onServiceChange = (key: string) => {
     markTouched('pricing');
     setServiceKey(key);
+    if (key === NO_SERVICE) {
+      // уборки по площади больше нет — ни степени загрязнения, ни объёма,
+      // иначе прошлая площадь продолжила бы участвовать в сумме
+      setEditDirt('');
+      setEditArea('');
+      setEditSeats('');
+      setPricePerSqm('');
+      return;
+    }
     const tariff = serviceOptions.find((t) => t.key === key);
     const nextHasLevels = tariff ? tariff.hasLevels : key !== 'FURNITURE';
     const nextDirt: DirtLevel | '' = nextHasLevels ? editDirt || 'MEDIUM' : '';
@@ -638,7 +667,7 @@ export function OrderModal({
     const patch: Partial<Order> = {
       stage,
       cleaningType: cleaningTypeFor(serviceKey || order.cleaningType),
-      serviceKey: serviceKey || order.serviceKey,
+      serviceKey: serviceKey || null,
       dirtLevel: newDirt,
       area: newArea,
       seats: newSeats,
@@ -678,7 +707,9 @@ export function OrderModal({
     try {
       await api.patch(`/orders/${order.id}`, {
         cleaningType: cleaningTypeFor(serviceKey || order.cleaningType),
-        serviceKey: serviceKey || undefined,
+        // пустая строка = «без основной услуги»; undefined сервер понял бы
+        // как «поле не трогали» и оставил бы прежнюю услугу
+        serviceKey,
         dirtLevel: newDirt,
         area: newArea,
         ...(isSeatsUnit ? { seats: newSeats ?? 0 } : {}),
@@ -1131,6 +1162,13 @@ export function OrderModal({
                       onChange={(e) => onServiceChange(e.target.value)}
                     >
                       {serviceOptions.length === 0 && <option value={serviceKey}>Загрузка…</option>}
+                      {/*
+                        Заказ может состоять из одних доп. услуг: клиент
+                        заказал химчистку мебели, уборки по площади нет. Пока
+                        этого пункта не было, в воронке висела карточка
+                        «Генеральная уборка · 0 м²» — то, чего не заказывали.
+                      */}
+                      <option value={NO_SERVICE}>— без основной услуги —</option>
                       {serviceOptions.map((t) => (
                         <option key={t.key} value={t.key}>
                           {t.title}
@@ -1138,8 +1176,13 @@ export function OrderModal({
                       ))}
                     </select>
                   )}
+                  {noService && (
+                    <p className="mt-1 text-xs text-navy-600">
+                      Уборки по площади нет — сумма сложится из доп. услуг
+                    </p>
+                  )}
                 </div>
-                {isSeatsUnit ? (
+                {noService ? null : isSeatsUnit ? (
                   <div>
                     <label className="label">Количество ({unitLabel})</label>
                     <input
@@ -1297,16 +1340,19 @@ export function OrderModal({
 
               {/* Расчёт суммы (ТЗ 5) */}
               <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="label">Цена за {unitLabel}</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={pricePerSqm}
-                    onChange={(e) => onPricePerSqmChange(e.target.value)}
-                    placeholder="сомони"
-                  />
-                </div>
+                {/* цена за единицу — только при выбранной основной услуге */}
+                {!noService && (
+                  <div>
+                    <label className="label">Цена за {unitLabel}</label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={pricePerSqm}
+                      onChange={(e) => onPricePerSqmChange(e.target.value)}
+                      placeholder="сомони"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="label">Общая сумма</label>
                   <input

@@ -648,7 +648,13 @@ export class OrdersService {
      */
     const managerId = await resolveManager(this.prisma, user, dto.managerId);
     const cleaningType = dto.cleaningType ?? 'GENERAL';
-    const serviceKey = dto.serviceKey?.trim() || cleaningType;
+    /*
+     * Пустая строка в serviceKey — осознанный выбор «без основной услуги»:
+     * заказ состоит только из доп. услуг, площади и тарифа у него нет.
+     * Отсутствие поля — прежнее поведение: услуга следует за видом уборки.
+     */
+    const serviceKey =
+      dto.serviceKey === undefined ? cleaningType : dto.serviceKey.trim() || null;
     const dirtLevel = cleaningType === 'FURNITURE' ? null : dto.dirtLevel ?? null;
 
     // Цену считаем на сервере (ТЗ 5), из браузера её не принимаем
@@ -713,8 +719,10 @@ export class OrdersService {
           cleaningType,
           serviceKey,
           dirtLevel,
-          area: dto.area ?? 0,
-          seats: dto.seats ?? null,
+          // без основной услуги объём не хранится: карточка не должна писать
+          // «0 м²» там, где уборки по площади вообще нет
+          area: serviceKey ? (dto.area ?? 0) : 0,
+          seats: serviceKey ? (dto.seats ?? null) : null,
           address: dto.address,
           estimatedPrice,
           pricePerSqm: priced.pricePerUnit || null,
@@ -855,6 +863,11 @@ export class OrdersService {
     for (const key of assignable) {
       if (dto[key] !== undefined) (data as any)[key] = dto[key];
     }
+    // «Без основной услуги» приходит пустой строкой — в базе это отсутствие
+    // услуги, а не услуга с пустым ключом.
+    if (dto.serviceKey !== undefined) {
+      data.serviceKey = dto.serviceKey.trim() || null;
+    }
 
     // у мойки мебели нет степени загрязнения
     const cleaningType = (data.cleaningType as any) ?? before.cleaningType;
@@ -905,8 +918,21 @@ export class OrdersService {
     if (dto.managerId && seesAll(user)) data.managerId = dto.managerId;
 
     // ── Пересчёт суммы (ТЗ 5) ──
+    /*
+     * Услугу через `??` брать нельзя — по той же причине, что и степень
+     * загрязнения ниже: у заказа «только доп. услуги» data.serviceKey
+     * намеренно null, и `??` вернул бы СТАРУЮ услугу с её тарифом.
+     */
     const serviceKey =
-      (data.serviceKey as string) ?? before.serviceKey ?? before.cleaningType;
+      'serviceKey' in data
+        ? (data.serviceKey as string | null)
+        : (before.serviceKey ?? before.cleaningType);
+    // услугу убрали — объём вместе с ней: иначе площадь прошлой уборки
+    // осталась бы в заказе и продолжала считаться
+    if (!serviceKey) {
+      data.area = 0;
+      data.seats = null;
+    }
     const [tariff, extrasList] = await Promise.all([
       this.tariffFor(serviceKey),
       this.extrasCatalogue(),

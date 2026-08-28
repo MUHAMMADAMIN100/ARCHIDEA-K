@@ -62,6 +62,7 @@ import {
   orderTotal,
   formatDate,
   formatVolume,
+  serviceTitle,
 } from '../lib/labels';
 import {
   formatPhone,
@@ -684,7 +685,7 @@ export function ClientCard() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-navy-900">
-                          {TYPE_LABEL[o.cleaningType]}
+                          {serviceTitle(o)}
                         </span>
                         {/* этап в одну строку: «В работе» разрывалось пополам */}
                         <Badge

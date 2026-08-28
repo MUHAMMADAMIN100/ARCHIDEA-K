@@ -259,3 +259,42 @@ describe('Итоговый расчёт заказа', () => {
     expect(r.total).toBe(r.subtotal - r.discount);
   });
 });
+
+describe('Заказ без основной услуги', () => {
+  it('площадь не оплачивается, в сумму идут одни доп. услуги', () => {
+    const r = calculatePrice(
+      {
+        serviceKey: null,
+        area: 100,
+        pricePerSqm: 30,
+        customExtras: [
+          { title: 'Химчистка мягкой мебели', price: 140, checked: true },
+          { title: 'Мойка матраса', price: 250, checked: true },
+        ],
+      },
+      CLEANING,
+      CATALOGUE,
+    );
+    expect(r.units).toBe(0);
+    expect(r.workTotal).toBe(0);
+    expect(r.total).toBe(390);
+  });
+
+  it('пустая строка в услуге значит то же, что и отсутствие услуги', () => {
+    const r = calculatePrice(
+      { serviceKey: '', area: 100, pricePerSqm: 30 },
+      CLEANING,
+      CATALOGUE,
+    );
+    expect(r.total).toBe(0);
+  });
+
+  it('обычный заказ считает площадь как прежде', () => {
+    const r = calculatePrice(
+      { serviceKey: 'GENERAL', area: 100, pricePerSqm: 30 },
+      CLEANING,
+      CATALOGUE,
+    );
+    expect(r.workTotal).toBe(3000);
+  });
+});
