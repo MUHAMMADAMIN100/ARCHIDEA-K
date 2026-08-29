@@ -342,12 +342,41 @@ export class ShiftGroupsService {
     return { staff, guests, leader, brigade };
   }
 
-  /** Состав выезда за день: разовые — только в первый */
+  /** Состав выезда за день: разовые — только в том дне, что их несёт */
   private membersOfDay(
     team: { staff: VisitMember[]; guests: VisitMember[] },
-    индекс: number,
+    несётГостей: boolean,
   ): VisitMember[] {
-    return индекс === 0 ? [...team.staff, ...team.guests] : team.staff;
+    return несётГостей ? [...team.staff, ...team.guests] : team.staff;
+  }
+
+  /**
+   * В каком по счёту дне держать разовых сотрудников.
+   *
+   * По умолчанию — в первом: сумма на руки отдана один раз за всю работу.
+   * Но первый день бывает уже ЗАКРЫТ, а разовых вписали позже — тогда они
+   * лежат во втором, и переносить их некуда: закрытый выезд не правится.
+   * Отдать их «первому дню» вслепую значило бы стереть отданные деньги из
+   * учёта совсем. Поэтому берём первый день, который ещё можно править.
+   *
+   * Если разовые уже посчитаны в закрытом выезде — не добавляем их никуда
+   * (вернём -1), иначе те же деньги легли бы в учёт дважды.
+   */
+  private guestDayIndex(
+    existing: { status: ShiftGroupStatus; members: { cleanerId: string | null }[] }[],
+    дней: number,
+  ): number {
+    const уЗакрытых = existing.some(
+      (v) =>
+        v.status === ShiftGroupStatus.CLOSED &&
+        v.members.some((m) => !m.cleanerId),
+    );
+    if (уЗакрытых) return -1;
+    for (let i = 0; i < дней; i++) {
+      const v = existing[i];
+      if (!v || v.status !== ShiftGroupStatus.CLOSED) return i;
+    }
+    return -1;
   }
 
   /**
@@ -398,7 +427,7 @@ export class ShiftGroupsService {
               ? `${источник} — день ${индекс + 1} из ${дни.length}`
               : источник,
           createdById: fallbackUserId,
-          members: { create: this.membersOfDay(team, индекс) },
+          members: { create: this.membersOfDay(team, индекс === 0) },
         },
         select: { id: true },
       });
@@ -447,6 +476,7 @@ export class ShiftGroupsService {
     const { leader, brigade } = team;
     const when = order.scheduledDate ?? order.preferredDate ?? existing[0].date;
     const дни = daysBetween(when, order.scheduledEndDate);
+    const деньГостей = this.guestDayIndex(existing, дни.length);
     let updated = 0;
     let created = 0;
     for (const [индекс, день] of дни.entries()) {
@@ -467,7 +497,7 @@ export class ShiftGroupsService {
             managerName: order.manager?.fullName ?? null,
             note: `Создан автоматически по команде из карточки заказа — день ${индекс + 1} из ${дни.length}`,
             createdById: user.id,
-            members: { create: this.membersOfDay(team, индекс) },
+            members: { create: this.membersOfDay(team, индекс === деньГостей) },
           },
         });
         created += 1;
@@ -488,7 +518,7 @@ export class ShiftGroupsService {
       const ключ = (m: { cleanerId: string | null; fullName: string }) =>
         m.cleanerId ?? `гость:${m.fullName.trim().toLowerCase()}`;
 
-      const members = this.membersOfDay(team, индекс);
+      const members = this.membersOfDay(team, индекс === деньГостей);
       const wanted = new Set(members.map(ключ));
       const have = new Map(visit.members.map((m) => [ключ(m), m]));
       const toRemove = visit.members.filter((m) => !wanted.has(ключ(m)));
