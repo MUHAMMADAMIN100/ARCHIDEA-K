@@ -1,5 +1,9 @@
 import { CleaningType } from '@prisma/client';
-import { shiftsOfOrder, workersFromOrder } from './report-from-order';
+import {
+  reportDataFromOrder,
+  shiftsOfOrder,
+  workersFromOrder,
+} from './report-from-order';
 
 /**
  * Смены в ведомости — по длительности заказа.
@@ -130,6 +134,18 @@ describe('Строки работников ведомости', () => {
   it('тот же заказ на один день — 2 290', () => {
     const rows = workersFromOrder({ ...заказ, scheduledEndDate: null });
     expect(rows.reduce((s, r) => s + r.days * r.rate, 0)).toBe(2290);
+  });
+
+  it('шапка ведомости несёт оба дня уборки', () => {
+    const данные = reportDataFromOrder(заказ, 'm1');
+    const день = (v: unknown) => (v as Date).toISOString().slice(0, 10);
+    expect(день(данные.workDate)).toBe('2026-08-11');
+    expect(день(данные.workEndDate)).toBe('2026-08-12');
+  });
+
+  it('однодневный заказ не выдумывает дату завершения', () => {
+    const данные = reportDataFromOrder({ ...заказ, scheduledEndDate: null }, 'm1');
+    expect(данные.workEndDate).toBeNull();
   });
 
   it('без штатных остаются одни разовые', () => {

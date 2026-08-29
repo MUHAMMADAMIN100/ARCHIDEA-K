@@ -164,6 +164,17 @@ export function reportDataFromOrder(
     workDate: dayUTC(
       dayKey(order.scheduledDate ?? order.closedAt ?? order.createdAt),
     ),
+    /*
+     * Последний день уборки переносим тоже.
+     *
+     * Иначе ведомость по трёхдневному объекту начисляла людям три смены, а
+     * в шапке у неё «дата завершения» пустовала — документ сам себе
+     * противоречил, и по нему нельзя было понять, за что три дня.
+     */
+    workEndDate:
+      order.scheduledEndDate && order.scheduledDate
+        ? dayUTC(dayKey(order.scheduledEndDate))
+        : null,
     unitsLabel: volumeLabel(order),
     // скидка переносится из заказа — в ведомости её не вводят заново
     discount: order.discount ?? 0,

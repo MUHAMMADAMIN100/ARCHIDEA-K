@@ -87,7 +87,20 @@ const reportInclude = {
   workers: { orderBy: { rate: 'desc' as const } },
   expenses: true,
   order: {
-    select: { id: true, cleaningType: true, area: true, seats: true },
+    select: {
+      id: true,
+      cleaningType: true,
+      area: true,
+      seats: true,
+      /*
+       * Даты уборки нужны самой ведомости: по ним видно, сколько смен
+       * причитается штатному клинеру. Без них редактор не мог заметить,
+       * что в заказе три дня, а в строках работников проставлен один —
+       * и заниженная сумма уходила основателю молча.
+       */
+      scheduledDate: true,
+      scheduledEndDate: true,
+    },
   },
 };
 

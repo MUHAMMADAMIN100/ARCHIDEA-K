@@ -568,6 +568,18 @@ export interface Report {
   workers: ReportWorker[];
   expenses: ReportExpense[];
   createdAt: string;
+  /**
+   * Заказ, по которому составлена ведомость. Даты уборки нужны, чтобы
+   * сверить проставленные в строках дни с длительностью самого заказа.
+   */
+  order?: {
+    id: string;
+    cleaningType?: CleaningType;
+    area?: number | null;
+    seats?: number | null;
+    scheduledDate?: string | null;
+    scheduledEndDate?: string | null;
+  } | null;
 }
 
 export interface Analytics {

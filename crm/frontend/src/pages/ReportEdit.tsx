@@ -7,10 +7,11 @@ import { useAuth } from '../auth/AuthContext';
 import { Spinner, PageHeader, EmptyState } from '../components/ui';
 import { ScrollArea } from '../components/ScrollArea';
 import { useToast } from '../components/Toast';
+import { useDialog } from '../components/Dialog';
 import { PhoneInput } from '../components/ContactFields';
 import { DatePicker } from '../components/DatePicker';
-import { cleaningDaysOf } from '../lib/date';
-import { formatPrice, formatVolume } from '../lib/labels';
+import { cleaningDaysOf, dayWord } from '../lib/date';
+import { formatDate, formatPrice, formatVolume } from '../lib/labels';
 import type { Brigade, Cleaner, Order, Report } from '../types';
 
 /** Только цифры, без ведущих нулей */
@@ -79,6 +80,7 @@ export function ReportEdit() {
   const { id } = useParams(); // undefined = новый отчёт
   const navigate = useNavigate();
   const toast = useToast();
+  const dialog = useDialog();
   const { user } = useAuth();
 
   const { data: existing, loading, error } = useFetch<Report>(
@@ -196,6 +198,8 @@ export function ReportEdit() {
     setClientPhone(o.client?.phone ?? '');
     setAddress(o.address ?? '');
     if (o.scheduledDate) setWorkDate(o.scheduledDate.slice(0, 10));
+    // последний день заказа — в шапку ведомости: по нему видно, за что смены
+    setWorkEndDate(o.scheduledEndDate ? o.scheduledEndDate.slice(0, 10) : '');
     setUnitsLabel(formatVolume(o));
     setTotalPrice(String(o.finalPrice ?? o.estimatedPrice ?? ''));
 
@@ -343,6 +347,43 @@ export function ReportEdit() {
       })),
   });
 
+  /*
+   * Сколько дней длится заказ этой ведомости.
+   *
+   * Уборка на 19–21 августа — это три смены каждому штатному клинеру. Пока
+   * ведомость про даты заказа не знала, в строках оставались единицы, и
+   * основателю уходила сумма втрое меньше той, что людям причитается.
+   * Берём заказ из списка (когда его только что выбрали) или из самой
+   * ведомости (когда открыли уже созданную).
+   */
+  const датыЗаказа = (() => {
+    const изСписка = (orders ?? []).find((o) => o.id === orderId);
+    const о = изСписка ?? existing?.order ?? null;
+    return о ? { начало: о.scheduledDate ?? null, конец: о.scheduledEndDate ?? null } : null;
+  })();
+  const днейПоЗаказу = датыЗаказа
+    ? cleaningDaysOf(датыЗаказа.начало, датыЗаказа.конец)
+    : 0;
+  /*
+   * Разовому вписывают сумму на руки за всю работу, а не за день — его
+   * строку это правило не касается и кнопка её не трогает.
+   */
+  const строкиНеПоЗаказу =
+    днейПоЗаказу > 1
+      ? workers.filter(
+          (w) => w.role !== 'Разовый' && w.fullName.trim() && num(w.days) !== днейПоЗаказу,
+        )
+      : [];
+
+  const проставитьДниПоЗаказу = () => {
+    setWorkers((prev) =>
+      prev.map((w) =>
+        w.role === 'Разовый' ? w : { ...w, days: String(днейПоЗаказу) },
+      ),
+    );
+    toast.success(`Проставлено ${днейПоЗаказу} ${dayWord(днейПоЗаказу)} по заказу`);
+  };
+
   const save = async (andSend: boolean) => {
     if (!clientName.trim()) {
       toast.error('Укажите клиента / объект');
@@ -361,6 +402,25 @@ export function ReportEdit() {
       );
       return;
     }
+    /*
+     * Перед отправкой основателю сверяем дни с заказом.
+     *
+     * Именно на этом шаге владелец и заметил ошибку: уборка на три дня, а в
+     * ведомости единицы. Молча отправлять заниженную сумму нельзя.
+     */
+    if (andSend && строкиНеПоЗаказу.length > 0) {
+      const ок = await dialog.confirm({
+        title: 'Дни не совпадают с заказом',
+        message:
+          `В заказе ${днейПоЗаказу} ${dayWord(днейПоЗаказу)}, ` +
+          `а в ведомости другое число смен у ${строкиНеПоЗаказу.length} ` +
+          `${строкиНеПоЗаказу.length === 1 ? 'работника' : 'работников'}. ` +
+          'Отправить как есть?',
+        confirmText: 'Отправить как есть',
+      });
+      if (!ок) return;
+    }
+
     setSaving(true);
     let saved: Report | null = null;
     try {
@@ -567,6 +627,28 @@ export function ReportEdit() {
             </button>
           </div>
         </div>
+
+        {строкиНеПоЗаказу.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+            <span>
+              В заказе {днейПоЗаказу} {dayWord(днейПоЗаказу)}
+              {датыЗаказа?.начало && датыЗаказа?.конец
+                ? ` (${formatDate(датыЗаказа.начало)} — ${formatDate(датыЗаказа.конец)})`
+                : ''}
+              , а здесь у{' '}
+              {строкиНеПоЗаказу.length === 1
+                ? строкиНеПоЗаказу[0].fullName.trim()
+                : `${строкиНеПоЗаказу.length} работников`}{' '}
+              проставлено другое число смен.
+            </span>
+            <button
+              onClick={проставитьДниПоЗаказу}
+              className="press shrink-0 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+            >
+              Проставить {днейПоЗаказу} {dayWord(днейПоЗаказу)}
+            </button>
+          </div>
+        )}
 
         {workers.length === 0 ? (
           <EmptyState text="Добавьте бригаду целиком или работников по одному" />
