@@ -239,7 +239,7 @@ export class TrashService {
       if (entry.cascade) {
         for (const rule of entry.cascade) {
           await this.delegate(tx, rule.type).updateMany({
-            where: { [rule.fk]: id, deletedAt: null },
+            where: { ...(rule.where?.(id) ?? { [rule.fk]: id }), deletedAt: null },
             data,
           });
         }
@@ -309,7 +309,7 @@ export class TrashService {
         // иначе восстановится и то, что было отдельно удалено раньше
         for (const rule of entry.cascade) {
           await this.delegate(tx, rule.type).updateMany({
-            where: { [rule.fk]: id, deletedAt },
+            where: { ...(rule.where?.(id) ?? { [rule.fk]: id }), deletedAt },
             data: restoreData,
           });
         }

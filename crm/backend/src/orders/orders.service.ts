@@ -1538,6 +1538,24 @@ export class OrdersService {
   async remove(user: AuthUser, id: string, reason?: string) {
     const order = await this.getOne(user, id); // проверка доступа
 
+    /*
+     * Принятая ведомость — документ о выплаченной зарплате, и удалить её
+     * вправе только руководитель (то же правило стоит в самих ведомостях).
+     * Раз теперь ведомость уходит в корзину вместе с заказом, через удаление
+     * заказа этот запрет можно было бы обойти молча.
+     */
+    if (!seesFinance(user)) {
+      const принятая = await this.prisma.report.findFirst({
+        where: { orderId: id, status: 'ACCEPTED', ...NOT_DELETED },
+        select: { id: true },
+      });
+      if (принятая) {
+        throw new BadRequestException(
+          'По заказу есть принятая ведомость — удалить его может только руководитель',
+        );
+      }
+    }
+
     await this.prisma.$transaction(async (tx) => {
       const stamp = softDeleteData(user, reason);
       await tx.order.update({ where: { id }, data: stamp });
@@ -1570,6 +1588,28 @@ export class OrdersService {
        * вернётся вместе с ним (см. cascade в trash.registry).
        */
       await tx.financeEntry.updateMany({
+        where: { orderId: id, ...NOT_DELETED },
+        data: stamp,
+      });
+
+      /*
+       * Выезды и ведомость заказа уходят в корзину вместе с ним.
+       *
+       * Раньше считалось, что о них позаботится сама база: у ShiftGroup.orderId
+       * стоит SetNull. Но SetNull срабатывает только при БЕЗВОЗВРАТНОМ удалении,
+       * а до него выезд живёт с ссылкой на удалённый заказ и продолжает
+       * начислять людям смены. После окончательной чистки корзины он вообще
+       * терял ссылку и становился сиротой — найти его по заказу уже нельзя,
+       * а в «ЗП клинеров» и аналитике он числился вечно. Так в августе набежало
+       * 7 510 сомони начислений по заказам, которых давно нет.
+       *
+       * Штамп тот же, что у заказа: восстановление вернёт их вместе с ним.
+       */
+      await tx.shiftGroup.updateMany({
+        where: { orderId: id, ...NOT_DELETED },
+        data: stamp,
+      });
+      await tx.report.updateMany({
         where: { orderId: id, ...NOT_DELETED },
         data: stamp,
       });

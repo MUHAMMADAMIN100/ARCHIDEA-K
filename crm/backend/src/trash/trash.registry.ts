@@ -58,6 +58,14 @@ export interface TrashCascadeRule {
   type: TrashType;
   /** Поле внешнего ключа у ребёнка, указывающее на родителя */
   fk: string;
+  /**
+   * Если ребёнок связан с родителем НЕ напрямую — как искать его по id родителя.
+   *
+   * Выезд и ведомость привязаны к заказу, а не к клиенту, поля clientId у них
+   * нет вовсе. Без этого удаление клиента уносило его заказы, а выезды по ним
+   * продолжали начислять людям смены в «ЗП клинеров».
+   */
+  where?: (parentId: string) => Record<string, unknown>;
 }
 
 export interface TrashEntry {
@@ -145,9 +153,15 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
        * но оставался в книге доходов — прибыль компании завышалась.
        */
       { type: 'financeEntry', fk: 'orderId' },
+      /*
+       * Выезды и ведомость — вместе с заказом. SetNull в схеме срабатывает
+       * только при безвозвратном удалении, а до него выезд удалённого заказа
+       * продолжал начислять смены в «ЗП клинеров» и в аналитике.
+       */
+      { type: 'shiftGroup', fk: 'orderId' },
+      { type: 'report', fk: 'orderId' },
     ],
-    // ShiftGroup и OrderChecklist на заказ отвязываются или каскадируются самой
-    // БД (SetNull/Cascade в схеме) — доп. проверка не нужна.
+    // OrderChecklist каскадируется самой БД (Cascade в схеме).
   },
 
   client: {
@@ -168,6 +182,14 @@ export const TRASH_REGISTRY: Record<TrashType, TrashEntry> = {
       { type: 'order', fk: 'clientId' },
       { type: 'proposal', fk: 'clientId' },
       { type: 'reminder', fk: 'clientId' },
+      /*
+       * Дети заказов клиента: у них нет clientId, они висят на заказе.
+       * Уходят и возвращаются вместе с клиентом — иначе выезды удалённого
+       * клиента остаются в «ЗП клинеров», а доход по его заказам — в книге.
+       */
+      { type: 'shiftGroup', fk: 'orderId', where: (id) => ({ order: { clientId: id } }) },
+      { type: 'report', fk: 'orderId', where: (id) => ({ order: { clientId: id } }) },
+      { type: 'financeEntry', fk: 'orderId', where: (id) => ({ order: { clientId: id } }) },
     ],
     purgeGuard: async (prisma, id) => {
       // Order.client — Cascade: безвозвратное удаление клиента сотрёт заказы
