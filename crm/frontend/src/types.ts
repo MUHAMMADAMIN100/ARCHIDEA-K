@@ -579,6 +579,15 @@ export interface Report {
     seats?: number | null;
     scheduledDate?: string | null;
     scheduledEndDate?: string | null;
+    /** назначенная на заказ команда — по ней видно, кого нет в ведомости */
+    cleaners?: {
+      id: string;
+      fullName: string;
+      rate?: number;
+      leaderOf?: { id: string } | null;
+    }[];
+    /** разовые сотрудники заказа: имя и отданная на руки сумма */
+    guestCleaners?: { fullName: string; rate: number }[] | null;
   } | null;
 }
 

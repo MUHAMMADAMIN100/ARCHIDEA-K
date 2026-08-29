@@ -100,6 +100,22 @@ const reportInclude = {
        */
       scheduledDate: true,
       scheduledEndDate: true,
+      /*
+       * Команда заказа — чтобы ведомость видела, кого в ней не хватает.
+       *
+       * Состав снимается один раз, при создании ведомости. Людей, которых
+       * вписали в заказ позже, она не замечала: в карточке «Итого клинерам
+       * 9 390», а в ведомости 7 890 — двух разовых там просто не было.
+       */
+      cleaners: {
+        select: {
+          id: true,
+          fullName: true,
+          rate: true,
+          leaderOf: { select: { id: true } },
+        },
+      },
+      guestCleaners: true,
     },
   },
 };
