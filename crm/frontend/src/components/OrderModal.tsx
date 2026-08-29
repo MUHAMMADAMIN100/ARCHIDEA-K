@@ -13,7 +13,14 @@ import { CleanerPicker, Tabs, UserPicker } from './common';
 import { NameInput, PhoneInput } from './ContactFields';
 import { isTempId, withRetry } from '../lib/util';
 import { isValidPersonName, normalizePhone } from '../lib/contact';
-import { formatDateTz, formatDateTimeTz, toDateTimeInput } from '../lib/date';
+import {
+  calendarDaysOf,
+  cleaningDaysOf,
+  dayWord,
+  formatDateTz,
+  formatDateTimeTz,
+  toDateTimeInput,
+} from '../lib/date';
 import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
 import { ReminderModal } from './ReminderModal';
@@ -115,14 +122,14 @@ function suggestUnitPrice(
  * последний.
  */
 function spanLabel(startISO: string, endISO: string): string {
-  const день = 24 * 60 * 60 * 1000;
-  const начало = new Date(`${startISO}T00:00:00Z`);
-  const конец = new Date(`${endISO}T00:00:00Z`);
-  const дней = Math.round((конец.getTime() - начало.getTime()) / день) + 1;
-  const слово = дней % 10 === 1 && дней % 100 !== 11 ? 'день' : дней % 10 >= 2 && дней % 10 <= 4 && (дней % 100 < 10 || дней % 100 >= 20) ? 'дня' : 'дней';
-  const формат = (d: Date) =>
-    d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' });
-  return `Уборка ${формат(начало)} — ${формат(конец)}, ${дней} ${слово}`;
+  const дней = calendarDaysOf(startISO, endISO);
+  const формат = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      timeZone: 'UTC',
+    });
+  return `Уборка ${формат(startISO)} — ${формат(endISO)}, ${дней} ${dayWord(дней)}`;
 }
 
 export function OrderModal({
@@ -350,6 +357,15 @@ export function OrderModal({
     (sum, g) => sum + Math.max(0, Math.round(Number(g.rate) || 0)),
     0,
   );
+  /*
+   * Сколько всего уйдёт клинерам по этому заказу.
+   *
+   * Штатному платят за каждый день уборки: заказ на 11–12 августа — это две
+   * смены, а не одна. Разовому вписывают сумму на руки целиком, поэтому её
+   * на дни не умножаем (так же считает и ведомость). Бонусы владелец вносит
+   * строкой разового — значит, они попадают в итог сами собой.
+   */
+  const cleaningDays = cleaningDaysOf(scheduledDate, scheduledEndDate);
   const subtotalSum = workSum + extrasSum;
 
   /*
@@ -389,6 +405,25 @@ export function OrderModal({
   const { data: cleanersList } = useFetch<Cleaner[]>('/cleaners?activeOnly=true');
   const resolveCleanerName = (id: string): { id: string; fullName: string } | undefined =>
     cleanersList?.find((c) => c.id === id) ?? order?.cleaners?.find((c) => c.id === id);
+
+  const staffRows = selectedCleaners.map((id) => ({
+    id,
+    fullName: resolveCleanerName(id)?.fullName ?? 'клинер',
+    rate: cleanersList?.find((c) => c.id === id)?.rate ?? 0,
+  }));
+  const staffTotal = staffRows.reduce((sum, r) => sum + r.rate * cleaningDays, 0);
+  const teamTotal = staffTotal + guestsTotal;
+  /*
+   * Пока справочник клинеров не приехал, ставок мы не знаем.
+   *
+   * Показывать в этот момент нечего: сумма вышла бы нулевой, а рядом
+   * загорелось бы «нет ставки» у всех разом — и погасло через секунду.
+   * На медленной сети это выглядит как поломка учёта.
+   */
+  const ratesReady = cleanersList !== undefined;
+  const withoutRate = ratesReady ? staffRows.filter((r) => !r.rate) : [];
+  const showTeamTotal =
+    staffRows.length === 0 ? guestsTotal > 0 : ratesReady;
 
   /** Пересевает редактируемые поля из авторитетных данных заказа, уважая touchedRef */
   const seedFields = (o: Order, opts: { force?: boolean } = {}) => {
@@ -1427,6 +1462,13 @@ export function OrderModal({
                     <label className="label">Последний день (если уборка не на один день)</label>
                     <DatePicker
                       placeholder="дд.мм.гггг"
+                      /*
+                       * Последний день обязан сниматься.
+                       * Он решает, сколько смен начислить людям: поставили по
+                       * ошибке второй день — зарплата удвоилась, а убрать его
+                       * было нечем, календарь умеет только выбрать другую дату.
+                       */
+                      clearable
                       value={scheduledEndDate}
                       onChange={(v) => {
                         markTouched('scheduledDate');
@@ -1982,6 +2024,40 @@ export function OrderModal({
                   </button>
                 </div>
                 <CleanerPicker value={selectedCleaners} onChange={handleCleanersChange} />
+                {/*
+                  Сколько всего уйдёт людям за этот заказ — под составом,
+                  когда выбор уже сделан. Раньше владелец складывал в уме:
+                  ставки штатных на число дней плюс наличные разовым, и
+                  ошибиться было легко именно на многодневных уборках.
+                */}
+                {showTeamTotal && (
+                  <div
+                    className="mt-2 text-right"
+                    data-testid="team-total"
+                  >
+                    <div className="text-sm font-semibold tabular-nums text-navy-900">
+                      Итого клинерам: {formatPrice(teamTotal)}
+                    </div>
+                    <div className="text-xs text-navy-600">
+                      {[
+                        staffTotal > 0 &&
+                          // считаем только тех, чья ставка известна: иначе
+                          // «2 чел. × 1 день» не сходилось бы с суммой одного
+                          `штат ${staffTotal.toLocaleString('ru-RU')} (${staffRows.length - withoutRate.length} чел. × ${cleaningDays} ${dayWord(cleaningDays)})`,
+                        guestsTotal > 0 &&
+                          `разовые ${guestsTotal.toLocaleString('ru-RU')}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' + ')}
+                    </div>
+                    {withoutRate.length > 0 && (
+                      <div className="text-xs font-medium text-red-600">
+                        не вошли в сумму, нет ставки:{' '}
+                        {withoutRate.map((r) => r.fullName).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {error && (

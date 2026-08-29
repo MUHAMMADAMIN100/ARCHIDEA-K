@@ -169,3 +169,52 @@ export function humanDeadline(s?: string | null): string {
   const word = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней';
   return days > 0 ? `через ${n} ${word}` : `просрочено на ${n} ${word}`;
 }
+
+/** Больше 31 смены по одному заказу не начисляем — см. cleaningDaysOf */
+export const MAX_CLEANING_DAYS = 31;
+
+/**
+ * Календарных дней между датами, оба конца включительно. Для подписи.
+ */
+export function calendarDaysOf(
+  startISO?: string | null,
+  endISO?: string | null,
+): number {
+  if (!startISO || !endISO) return 1;
+  const начало = String(startISO).slice(0, 10);
+  const конец = String(endISO).slice(0, 10);
+  if (конец <= начало) return 1;
+  const день = 24 * 60 * 60 * 1000;
+  const дней =
+    Math.round(
+      (new Date(`${конец}T00:00:00Z`).getTime() -
+        new Date(`${начало}T00:00:00Z`).getTime()) /
+        день,
+    ) + 1;
+  return дней > 0 ? дней : 1;
+}
+
+/**
+ * Сколько смен оплачивается по заказу — оба конца включительно.
+ *
+ * Одно правило на всю систему: итог по клинерам в карточке, дни в платёжной
+ * ведомости и выезды в «Сменах». Заказ 11–12 августа — это две смены, а не
+ * одна. Пустой или более ранний последний день значит «на один день».
+ *
+ * Предел в 31 день — защита от опечатки в годе: без него «2027» вместо
+ * «2026» начислило бы человеку зарплату за год одним нажатием. Тот же
+ * предел стоит на сервере, в выездах и в ведомости.
+ */
+export function cleaningDaysOf(
+  startISO?: string | null,
+  endISO?: string | null,
+): number {
+  return Math.min(calendarDaysOf(startISO, endISO), MAX_CLEANING_DAYS);
+}
+
+/** «1 день» / «2 дня» / «5 дней» */
+export function dayWord(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return 'день';
+  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дня';
+  return 'дней';
+}

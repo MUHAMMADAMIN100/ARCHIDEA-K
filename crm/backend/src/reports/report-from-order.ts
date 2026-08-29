@@ -23,6 +23,8 @@ export type OrderForReport = {
   finalPrice: number | null;
   estimatedPrice: number;
   scheduledDate: Date | null;
+  /** последний день уборки — из него берётся число смен штатного клинера */
+  scheduledEndDate?: Date | null;
   closedAt: Date | null;
   createdAt: Date;
   managerId: string | null;
@@ -75,13 +77,43 @@ export function volumeLabel(order: OrderForReport): string | null {
  * Раньше их не было нигде: 800 сомони наличными жили только пометкой в
  * карточке заказа и ни в один отчёт не попадали.
  */
+/**
+ * Сколько смен начисляется штатному клинеру по заказу.
+ *
+ * Считаем дни уборки, оба конца включительно: заказ на 11–12 августа — это
+ * две смены. Пока здесь стояла единица, ведомость по многодневной уборке
+ * расходилась с деньгами, которые владелец отдаёт людям на руки, ровно во
+ * столько раз, сколько дней длился объект.
+ *
+ * У разового сотрудника смен не бывает: ему вписывают сумму на руки целиком,
+ * поэтому его строка остаётся с одним днём и на дни не умножается.
+ *
+ * Предел в 31 день — тот же, что у выездов: без него опечатка в году
+ * («2027» вместо «2026») начислила бы человеку сотни смен.
+ */
+export function shiftsOfOrder(order: {
+  scheduledDate: Date | null;
+  scheduledEndDate?: Date | null;
+}): number {
+  const { scheduledDate: начало, scheduledEndDate: конец } = order;
+  if (!начало || !конец) return 1;
+  // считаем по календарным дням Душанбе: в базе даты лежат в UTC, и
+  // вычитать их напрямую нельзя — 8 утра и полночь дали бы «полдня»
+  const a = dayUTC(dayKey(начало)).getTime();
+  const b = dayUTC(dayKey(конец)).getTime();
+  if (b <= a) return 1;
+  const дней = Math.round((b - a) / (24 * 60 * 60 * 1000)) + 1;
+  return Math.min(Math.max(дней, 1), 31);
+}
+
 export function workersFromOrder(order: OrderForReport) {
+  const смен = shiftsOfOrder(order);
   const штат = order.cleaners.map((c) => ({
     cleanerId: c.id as string | null,
     fullName: c.fullName,
     // бригадир определяется по тому, руководит ли клинер бригадой
     role: c.leaderOf ? 'Бригадир' : 'Клинер',
-    days: 1,
+    days: смен,
     // ставка — снапшот: пересчёт ставки задним числом не должен менять
     // уже выставленную ведомость
     rate: c.rate,

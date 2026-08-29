@@ -9,6 +9,7 @@ import { ScrollArea } from '../components/ScrollArea';
 import { useToast } from '../components/Toast';
 import { PhoneInput } from '../components/ContactFields';
 import { DatePicker } from '../components/DatePicker';
+import { cleaningDaysOf } from '../lib/date';
 import { formatPrice, formatVolume } from '../lib/labels';
 import type { Brigade, Cleaner, Order, Report } from '../types';
 
@@ -211,6 +212,13 @@ export function ReportEdit() {
      * их приходилось выбирать заново вручную.
      */
     const assigned = o.cleaners ?? [];
+    /*
+     * Дни — по длительности заказа, а не по одному на каждого.
+     * Уборка 11–12 августа оплачивается людям как две смены; пока здесь
+     * стояла единица, ведомость расходилась с тем, что владелец отдаёт
+     * на руки, ровно вдвое на двухдневных объектах.
+     */
+    const дней = cleaningDaysOf(o.scheduledDate, o.scheduledEndDate);
     if (assigned.length) {
       const known = cleaners ?? [];
       const rows: WorkerRow[] = assigned.map((a) => {
@@ -221,7 +229,7 @@ export function ReportEdit() {
           cleanerId: a.id,
           fullName: a.fullName ?? full?.fullName ?? '',
           role: isLeader ? 'Бригадир' : 'Клинер',
-          days: '1',
+          days: String(дней),
           rate: rateOf(full),
           fine: '',
           extra: '',

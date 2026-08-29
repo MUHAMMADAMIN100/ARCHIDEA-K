@@ -17,6 +17,15 @@ import {
   UpdateShiftGroupDto,
 } from './dto/shift-group.dto';
 
+/** Участник выезда в том виде, в каком он уходит в базу */
+interface VisitMember {
+  cleanerId: string | null;
+  isGuest: boolean;
+  fullName: string;
+  rate: number;
+  role: string;
+}
+
 const groupInclude = {
   members: { orderBy: { fullName: 'asc' as const } },
   order: {
@@ -146,7 +155,7 @@ export class ShiftGroupsService {
   }
 
   /** Гостевые строки состава: имя + выплата, без ссылки на базу клинеров */
-  private guestRows(guests?: { fullName: string; rate: number }[]) {
+  private guestRows(guests?: { fullName: string; rate: number }[]): VisitMember[] {
     return (guests ?? [])
       .map((g) => ({
         cleanerId: null,
@@ -304,16 +313,22 @@ export class ShiftGroupsService {
      * выезда он обязан быть: по нему видно, кто на объекте работал и сколько
      * получил.
      */
-    const members = [
-      ...order.cleaners.map((c) => ({
-        cleanerId: c.id as string | null,
-        isGuest: false,
-        fullName: c.fullName,
-        rate: c.rate,
-        role: c.leaderOf ? 'Бригадир' : 'Клинер',
-      })),
-      ...this.guestRows(guestsOf(order.guestCleaners)),
-    ];
+    const staff: VisitMember[] = order.cleaners.map((c) => ({
+      cleanerId: c.id,
+      isGuest: false,
+      fullName: c.fullName,
+      rate: c.rate,
+      role: c.leaderOf ? 'Бригадир' : 'Клинер',
+    }));
+    /*
+     * Разовый идёт ТОЛЬКО в первый день уборки.
+     *
+     * Штатному начисляется смена за каждый день — это его ставка. Разовому
+     * вписывают сумму на руки целиком, за всю работу: «Хавасмох, 360 за два
+     * дня». Положив эту строку в каждый день, учёт удвоил бы отданные
+     * деньги — за двухдневный объект получилось бы 720.
+     */
+    const guests = this.guestRows(guestsOf(order.guestCleaners));
     // бригада и бригадир — по составу: если в команде есть бригадир, он и ведёт выезд
     const leader = order.cleaners.find((c) => c.leaderOf) ?? null;
     const brigadeId =
@@ -324,7 +339,15 @@ export class ShiftGroupsService {
           select: { id: true, name: true },
         })
       : null;
-    return { members, leader, brigade };
+    return { staff, guests, leader, brigade };
+  }
+
+  /** Состав выезда за день: разовые — только в первый */
+  private membersOfDay(
+    team: { staff: VisitMember[]; guests: VisitMember[] },
+    индекс: number,
+  ): VisitMember[] {
+    return индекс === 0 ? [...team.staff, ...team.guests] : team.staff;
   }
 
   /**
@@ -340,7 +363,8 @@ export class ShiftGroupsService {
   ): Promise<{ id: string } | null> {
     const order = await this.orderForVisits(tx, orderId);
     if (!order) return null;
-    const { members, leader, brigade } = await this.teamOf(tx, order);
+    const team = await this.teamOf(tx, order);
+    const { leader, brigade } = team;
     const источник =
       reason === 'inspection'
         ? 'Создан автоматически на этапе «Осмотр объекта»'
@@ -374,7 +398,7 @@ export class ShiftGroupsService {
               ? `${источник} — день ${индекс + 1} из ${дни.length}`
               : источник,
           createdById: fallbackUserId,
-          members: { create: members },
+          members: { create: this.membersOfDay(team, индекс) },
         },
         select: { id: true },
       });
@@ -419,7 +443,8 @@ export class ShiftGroupsService {
       return { created: first ? 1 : 0, updated: 0 };
     }
 
-    const { members, leader, brigade } = await this.teamOf(tx, order);
+    const team = await this.teamOf(tx, order);
+    const { leader, brigade } = team;
     const when = order.scheduledDate ?? order.preferredDate ?? existing[0].date;
     const дни = daysBetween(when, order.scheduledEndDate);
     let updated = 0;
@@ -442,7 +467,7 @@ export class ShiftGroupsService {
             managerName: order.manager?.fullName ?? null,
             note: `Создан автоматически по команде из карточки заказа — день ${индекс + 1} из ${дни.length}`,
             createdById: user.id,
-            members: { create: members },
+            members: { create: this.membersOfDay(team, индекс) },
           },
         });
         created += 1;
@@ -463,6 +488,7 @@ export class ShiftGroupsService {
       const ключ = (m: { cleanerId: string | null; fullName: string }) =>
         m.cleanerId ?? `гость:${m.fullName.trim().toLowerCase()}`;
 
+      const members = this.membersOfDay(team, индекс);
       const wanted = new Set(members.map(ключ));
       const have = new Map(visit.members.map((m) => [ключ(m), m]));
       const toRemove = visit.members.filter((m) => !wanted.has(ключ(m)));
