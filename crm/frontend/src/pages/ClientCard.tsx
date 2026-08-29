@@ -843,16 +843,12 @@ function AddOrderModal({
     : serviceKey === 'FURNITURE';
   const hasLevels = tariff ? tariff.hasLevels : serviceKey !== 'FURNITURE';
 
-  // цена за единицу подставляется из услуги по степени загрязнения
-  const suggestedUnitPrice = !tariff
-    ? 0
-    : !tariff.hasLevels
-      ? tariff.priceMedium || tariff.pricePerSqm
-      : dirtLevel === 'LIGHT'
-        ? tariff.priceLight
-        : dirtLevel === 'HEAVY'
-          ? tariff.priceHeavy
-          : tariff.priceMedium;
+  /*
+   * Цена за единицу — из услуги. Степень загрязнения на неё НЕ влияет
+   * (решение владельца): её ставят, чтобы бригада понимала объект.
+   * Раньше цена шла за степенью и затирала вписанное вручную число.
+   */
+  const suggestedUnitPrice = !tariff ? 0 : tariff.priceMedium || tariff.pricePerSqm;
 
   useEffect(() => {
     if (!manualPrice) setPricePerUnit(String(suggestedUnitPrice || ''));
@@ -863,15 +859,7 @@ function AddOrderModal({
   const moreRows = moreServices.map((r) => {
     const t = serviceOptions.find((x) => x.key === r.key);
     const qty = Math.max(0, Math.round(Number(r.qty) || 0));
-    const price = !t
-      ? 0
-      : !t.hasLevels
-        ? t.priceMedium || t.pricePerSqm
-        : dirtLevel === 'LIGHT'
-          ? t.priceLight
-          : dirtLevel === 'HEAVY'
-            ? t.priceHeavy
-            : t.priceMedium;
+    const price = !t ? 0 : t.priceMedium || t.pricePerSqm;
     return {
       ...r,
       title: t?.title ?? r.key,

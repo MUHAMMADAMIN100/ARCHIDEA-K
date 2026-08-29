@@ -102,15 +102,16 @@ function cleaningTypeFor(key: string): CleaningType {
     : 'GENERAL';
 }
 
-/** Цена за единицу из услуги по степени загрязнения — то же правило, что и в order-pricing.ts на бэкенде */
-function suggestUnitPrice(
-  tariff: Tariff | undefined,
-  dirt: DirtLevel | '',
-): number | null {
+/**
+ * Базовая цена за единицу по услуге — то же правило, что и в order-pricing.ts.
+ *
+ * Степень загрязнения на цену НЕ влияет (решение владельца): её ставят,
+ * чтобы бригада понимала объект, а цену назначает человек. Пока цена шла
+ * за степенью, нажатие на «Среднюю» затирало вписанные вручную 30 сомони
+ * тарифными 27 — даже если нажали на ту же степень, что уже стояла.
+ */
+function suggestUnitPrice(tariff: Tariff | undefined): number | null {
   if (!tariff) return null;
-  if (!tariff.hasLevels) return tariff.priceMedium || tariff.pricePerSqm || null;
-  if (dirt === 'LIGHT') return tariff.priceLight || tariff.priceMedium || null;
-  if (dirt === 'HEAVY') return tariff.priceHeavy || tariff.priceMedium || null;
   return tariff.priceMedium || tariff.pricePerSqm || null;
 }
 
@@ -595,15 +596,14 @@ export function OrderModal({
     setEditDirt(nextDirt);
     const nextIsSeats = tariff ? tariff.unit !== 'м²' : key === 'FURNITURE';
     const units = Number((nextIsSeats ? editSeats : editArea) || 0);
-    const suggested = suggestUnitPrice(tariff, nextDirt);
+    const suggested = suggestUnitPrice(tariff);
     if (suggested != null) applyUnitPrice(String(suggested), units);
   };
 
   const onDirtChange = (d: DirtLevel) => {
     markTouched('pricing');
+    // цену не трогаем: степень нужна бригаде, а не расчёту
     setEditDirt(d);
-    const suggested = suggestUnitPrice(selectedTariff, d);
-    if (suggested != null) applyUnitPrice(String(suggested), unitsNow);
   };
 
   const onAreaChange = (v: string) => {
@@ -1524,7 +1524,7 @@ export function OrderModal({
                                   key,
                                   pricePerUnit: String(
                                     t
-                                      ? suggestUnitPrice(t, editDirt) ??
+                                      ? suggestUnitPrice(t) ??
                                           t.priceMedium ??
                                           0
                                       : 0,
@@ -1610,7 +1610,7 @@ export function OrderModal({
                         qty: '1',
                         pricePerUnit: String(
                           first
-                            ? suggestUnitPrice(first, editDirt) ??
+                            ? suggestUnitPrice(first) ??
                                 first.priceMedium ??
                                 0
                             : 0,

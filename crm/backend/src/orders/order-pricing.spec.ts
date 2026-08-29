@@ -38,16 +38,35 @@ const CATALOGUE: PricingExtra[] = [
   { key: 'fridge', price: 80, hasQty: false },
 ];
 
-describe('Цена за единицу по степени загрязнения', () => {
-  it('лёгкая, средняя и тяжёлая берут свои цены', () => {
-    expect(unitPrice(CLEANING, DirtLevel.LIGHT)).toBe(25);
+describe('Цена за единицу не зависит от степени загрязнения', () => {
+  /*
+   * Степень ставят, чтобы бригада понимала объект, а цену назначает человек.
+   * Пока цена шла за степенью, нажатие на «Среднюю» в карточке затирало
+   * вписанные вручную 30 сомони тарифными 27.
+   */
+  it('лёгкая, средняя и тяжёлая дают одну и ту же цену услуги', () => {
+    expect(unitPrice(CLEANING, DirtLevel.LIGHT)).toBe(27);
     expect(unitPrice(CLEANING, DirtLevel.MEDIUM)).toBe(27);
-    expect(unitPrice(CLEANING, DirtLevel.HEAVY)).toBe(29);
+    expect(unitPrice(CLEANING, DirtLevel.HEAVY)).toBe(27);
   });
 
-  it('степень не указана — считаем по средней', () => {
+  it('степень не указана — та же цена', () => {
     expect(unitPrice(CLEANING, null)).toBe(27);
     expect(unitPrice(CLEANING, undefined)).toBe(27);
+  });
+
+  it('переключение степени НЕ меняет вписанную вручную цену', () => {
+    // ровно случай заказа «Инга»: вписали 30, ткнули в «Среднюю», стало 27
+    const своя = calculatePrice(
+      { area: 50, pricePerSqm: 30, dirtLevel: DirtLevel.LIGHT },
+      CLEANING,
+    );
+    const послеПереключения = calculatePrice(
+      { area: 50, pricePerSqm: 30, dirtLevel: DirtLevel.HEAVY },
+      CLEANING,
+    );
+    expect(своя.total).toBe(1500);
+    expect(послеПереключения.total).toBe(1500);
   });
 
   it('услуга без степеней всегда идёт по одной цене', () => {
@@ -195,7 +214,7 @@ describe('Итоговый расчёт заказа', () => {
   describe('Регрессия: доп. услуги не должны начисляться дважды', () => {
     const area = 120;
     const extras = { windows: 5, fridge: 1 }; // 5×50 + 80 = 330
-    const workOnly = area * CLEANING.priceHeavy; // 3480
+    const workOnly = area * CLEANING.priceMedium; // 3240
     const withExtras = workOnly + 330;
 
     it('цена за единицу из справочника даёт верный итог', () => {
@@ -204,7 +223,7 @@ describe('Итоговый расчёт заказа', () => {
         CLEANING,
         CATALOGUE,
       );
-      expect(r.pricePerUnit).toBe(CLEANING.priceHeavy);
+      expect(r.pricePerUnit).toBe(CLEANING.priceMedium);
       expect(r.total).toBe(withExtras);
     });
 
@@ -218,17 +237,21 @@ describe('Итоговый расчёт заказа', () => {
       expect(r.total).toBeGreaterThan(withExtras);
     });
 
-    it('без ручной цены расчёт идёт по справочнику, а не по прошлому значению', () => {
+    it('без ручной цены расчёт идёт по справочнику', () => {
       const auto = calculatePrice({ area, dirtLevel: DirtLevel.LIGHT }, CLEANING);
-      expect(auto.pricePerUnit).toBe(CLEANING.priceLight);
+      expect(auto.pricePerUnit).toBe(CLEANING.priceMedium);
 
-      // сменили степень загрязнения и НЕ передали цену — она обязана обновиться
+      /*
+       * Степень загрязнения цену не двигает: она нужна бригаде, а не
+       * калькулятору. Раньше здесь ждали priceHeavy, и из-за этого правила
+       * вписанные вручную 30 сомони затирались тарифными 27.
+       */
       const next = calculatePrice(
         { area, dirtLevel: DirtLevel.HEAVY, pricePerSqm: null },
         CLEANING,
       );
-      expect(next.pricePerUnit).toBe(CLEANING.priceHeavy);
-      expect(next.total).toBe(area * CLEANING.priceHeavy);
+      expect(next.pricePerUnit).toBe(CLEANING.priceMedium);
+      expect(next.total).toBe(area * CLEANING.priceMedium);
     });
 
     it('явно заданная менеджером цена по-прежнему главнее справочника', () => {
@@ -253,7 +276,7 @@ describe('Итоговый расчёт заказа', () => {
       CLEANING,
       CATALOGUE,
     );
-    expect(r.workTotal).toBe(80 * 29 + 500);
+    expect(r.workTotal).toBe(80 * CLEANING.priceMedium + 500);
     expect(r.extrasTotal).toBe(4 * 50 + 80);
     expect(r.subtotal).toBe(r.workTotal + r.extrasTotal);
     expect(r.total).toBe(r.subtotal - r.discount);

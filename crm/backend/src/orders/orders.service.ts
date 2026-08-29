@@ -976,10 +976,14 @@ export class OrdersService {
      *
      * Явно присланная цена (менеджер вписал её в поле) по-прежнему главнее всего.
      */
+    /*
+     * Степень загрязнения из этого списка убрана: она больше не влияет на
+     * цену вовсе. Пока она тут стояла, карточка присылала её при каждом
+     * сохранении, вписанная вручную цена считалась «устаревшей» и молча
+     * заменялась тарифной.
+     */
     const pricingBasisChanged =
-      dto.serviceKey !== undefined ||
-      dto.cleaningType !== undefined ||
-      dto.dirtLevel !== undefined;
+      dto.serviceKey !== undefined || dto.cleaningType !== undefined;
     const unitOverride =
       dto.pricePerSqm !== undefined
         ? dto.pricePerSqm

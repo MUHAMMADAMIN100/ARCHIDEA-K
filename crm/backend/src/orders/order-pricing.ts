@@ -126,23 +126,24 @@ export function extrasTotal(
   return Math.min(sum, 2_000_000_000);
 }
 
-/** Цена за единицу для услуги и степени загрязнения */
+/**
+ * Цена за единицу по услуге.
+ *
+ * Степень загрязнения на цену НЕ влияет (решение владельца): её ставят,
+ * чтобы бригада понимала, насколько объект грязный, а цену назначает
+ * человек. Раньше цена шла за степенью, и любое нажатие на «Среднюю» в
+ * карточке затирало вписанные вручную 30 сомони тарифными 27 — владелец
+ * нашёл это на заказе «Инга».
+ *
+ * Аргумент dirtLevel сохранён намеренно: он есть у всех вызывающих сторон,
+ * и его молчаливое удаление сделало бы вызовы неотличимыми от старых.
+ */
 export function unitPrice(
   tariff: PricingTariff | null | undefined,
-  dirtLevel?: DirtLevel | null,
+  _dirtLevel?: DirtLevel | null,
 ): number {
   if (!tariff) return 0;
-  if (!tariff.hasLevels) return tariff.priceMedium || tariff.pricePerSqm || 0;
-
-  switch (dirtLevel) {
-    case DirtLevel.LIGHT:
-      return tariff.priceLight || tariff.priceMedium || 0;
-    case DirtLevel.HEAVY:
-      return tariff.priceHeavy || tariff.priceMedium || 0;
-    case DirtLevel.MEDIUM:
-    default:
-      return tariff.priceMedium || tariff.pricePerSqm || 0;
-  }
+  return tariff.priceMedium || tariff.pricePerSqm || 0;
 }
 
 /** Сколько единиц оплачивается: места для мебели, иначе площадь */

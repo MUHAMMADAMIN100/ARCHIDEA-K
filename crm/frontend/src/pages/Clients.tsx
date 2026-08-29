@@ -667,19 +667,17 @@ export function AddClientModal({
       : serviceKey !== 'FURNITURE';
 
   /*
-   * ТЗ 5: цена за единицу берётся из услуги по степени загрязнения,
-   * сумма считается как объём × цена. Пока менеджер не правил итог руками,
-   * он пересчитывается автоматически.
+   * ТЗ 5: цена за единицу берётся из услуги, сумма считается как
+   * объём × цена. Пока менеджер не правил итог руками, он пересчитывается
+   * автоматически.
+   *
+   * Степень загрязнения на цену НЕ влияет (решение владельца): её ставят,
+   * чтобы бригада понимала объект. Раньше цена шла за степенью, и вписанное
+   * вручную число затиралось тарифным.
    */
   const suggestedUnitPrice = !tariff
     ? 0
-    : !tariff.hasLevels
-      ? tariff.priceMedium || tariff.pricePerSqm
-      : dirtLevel === 'LIGHT'
-        ? tariff.priceLight
-        : dirtLevel === 'HEAVY'
-          ? tariff.priceHeavy
-          : tariff.priceMedium;
+    : tariff.priceMedium || tariff.pricePerSqm;
 
   useEffect(() => {
     if (!manualPrice) setPricePerUnit(String(suggestedUnitPrice || ''));
@@ -694,15 +692,7 @@ export function AddClientModal({
   const moreRows = moreServices.map((r) => {
     const t = serviceOptions.find((x) => x.key === r.key);
     const qty = Math.max(0, Math.round(Number(r.qty) || 0));
-    const price = !t
-      ? 0
-      : !t.hasLevels
-        ? t.priceMedium || t.pricePerSqm
-        : dirtLevel === 'LIGHT'
-          ? t.priceLight
-          : dirtLevel === 'HEAVY'
-            ? t.priceHeavy
-            : t.priceMedium;
+    const price = !t ? 0 : t.priceMedium || t.pricePerSqm;
     return {
       ...r,
       title: t?.title ?? r.key,
