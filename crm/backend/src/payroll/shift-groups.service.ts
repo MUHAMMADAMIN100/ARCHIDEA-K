@@ -283,6 +283,8 @@ export class ShiftGroupsService {
         },
         // разовые сотрудники заказа — они тоже делали уборку
         guestCleaners: true,
+        // состав по дням многодневной уборки (решение владельца)
+        dayTeams: true,
       },
     });
   }
@@ -351,6 +353,38 @@ export class ShiftGroupsService {
   }
 
   /**
+   * Штат дня № (индекс с нуля): для дней со 2-го учитывается раскладка
+   * dayTeams заказа («10 работают, во второй день 5 из них»). Пустой или
+   * неизвестный день — весь штат: потерять человека из смены хуже, чем
+   * показать лишнего.
+   */
+  private teamForDay(
+    staff: VisitMember[],
+    dayTeams: unknown,
+    индекс: number,
+  ): VisitMember[] {
+    if (индекс === 0 || !Array.isArray(dayTeams)) return staff;
+    const entry = (dayTeams as { day?: number; cleanerIds?: string[] }[]).find(
+      (t) => t?.day === индекс + 1,
+    );
+    if (!entry || !Array.isArray(entry.cleanerIds)) return staff;
+    const ids = new Set(entry.cleanerIds);
+    const subset = staff.filter((m) => m.cleanerId && ids.has(m.cleanerId));
+    return subset.length ? subset : staff;
+  }
+
+  /** Состав дня целиком: штат по раскладке + разовые в своём дне */
+  private dayMembers(
+    team: { staff: VisitMember[]; guests: VisitMember[] },
+    dayTeams: unknown,
+    индекс: number,
+    несётГостей: boolean,
+  ): VisitMember[] {
+    const staff = this.teamForDay(team.staff, dayTeams, индекс);
+    return несётГостей ? [...staff, ...team.guests] : staff;
+  }
+
+  /**
    * В каком по счёту дне держать разовых сотрудников.
    *
    * По умолчанию — в первом: сумма на руки отдана один раз за всю работу.
@@ -410,6 +444,9 @@ export class ShiftGroupsService {
     const дни = daysBetween(when, order.scheduledEndDate);
     let первый: { id: string } | null = null;
     for (const [индекс, день] of дни.entries()) {
+      const дневной = this.dayMembers(team, order.dayTeams, индекс, индекс === 0);
+      const деньЛидер =
+        leader && дневной.some((m) => m.cleanerId === leader.id) ? leader : null;
       const созданный = await tx.shiftGroup.create({
         data: {
           date: dayUTC(день),
@@ -418,8 +455,8 @@ export class ShiftGroupsService {
           startTime: order.preferredTime ?? null,
           brigadeId: brigade?.id ?? null,
           brigadeName: brigade?.name ?? null,
-          brigadierId: leader?.id ?? null,
-          brigadierName: leader?.fullName ?? null,
+          brigadierId: деньЛидер?.id ?? null,
+          brigadierName: деньЛидер?.fullName ?? null,
           managerId: order.managerId ?? fallbackUserId,
           managerName: order.manager?.fullName ?? null,
           note:
@@ -427,7 +464,7 @@ export class ShiftGroupsService {
               ? `${источник} — день ${индекс + 1} из ${дни.length}`
               : источник,
           createdById: fallbackUserId,
-          members: { create: this.membersOfDay(team, индекс === 0) },
+          members: { create: дневной },
         },
         select: { id: true },
       });
@@ -491,13 +528,19 @@ export class ShiftGroupsService {
             startTime: order.preferredTime ?? null,
             brigadeId: brigade?.id ?? null,
             brigadeName: brigade?.name ?? null,
-            brigadierId: leader?.id ?? null,
-            brigadierName: leader?.fullName ?? null,
+            brigadierId:
+              leader && this.teamForDay(team.staff, order.dayTeams, индекс).some((m) => m.cleanerId === leader.id)
+                ? leader.id
+                : null,
+            brigadierName:
+              leader && this.teamForDay(team.staff, order.dayTeams, индекс).some((m) => m.cleanerId === leader.id)
+                ? leader.fullName
+                : null,
             managerId: order.managerId ?? user.id,
             managerName: order.manager?.fullName ?? null,
             note: `Создан автоматически по команде из карточки заказа — день ${индекс + 1} из ${дни.length}`,
             createdById: user.id,
-            members: { create: this.membersOfDay(team, индекс === деньГостей) },
+            members: { create: this.dayMembers(team, order.dayTeams, индекс, индекс === деньГостей) },
           },
         });
         created += 1;
@@ -518,7 +561,9 @@ export class ShiftGroupsService {
       const ключ = (m: { cleanerId: string | null; fullName: string }) =>
         m.cleanerId ?? `гость:${m.fullName.trim().toLowerCase()}`;
 
-      const members = this.membersOfDay(team, индекс === деньГостей);
+      const members = this.dayMembers(team, order.dayTeams, индекс, индекс === деньГостей);
+      const деньЛидер =
+        leader && members.some((m) => m.cleanerId === leader.id) ? leader : null;
       const wanted = new Set(members.map(ключ));
       const have = new Map(visit.members.map((m) => [ключ(m), m]));
       const toRemove = visit.members.filter((m) => !wanted.has(ключ(m)));
@@ -549,8 +594,8 @@ export class ShiftGroupsService {
         address: order.address?.trim() || visit.address,
         brigadeId: brigade?.id ?? null,
         brigadeName: brigade?.name ?? null,
-        brigadierId: leader?.id ?? null,
-        brigadierName: leader?.fullName ?? null,
+        brigadierId: деньЛидер?.id ?? null,
+        brigadierName: деньЛидер?.fullName ?? null,
         managerId: order.managerId ?? visit.managerId,
         managerName: order.manager?.fullName ?? visit.managerName,
         ...(order.preferredTime && !visit.startTime ? { startTime: order.preferredTime } : {}),

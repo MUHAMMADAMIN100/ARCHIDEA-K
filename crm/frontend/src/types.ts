@@ -398,6 +398,8 @@ export interface Order {
   payments?: OrderPayment[];
   /** Разовые сотрудники под заказ: кого позвали и сколько отдали */
   guestCleaners?: { fullName: string; rate: number }[] | null;
+  /** Состав по дням со 2-го; нет записи — весь состав заказа */
+  dayTeams?: { day: number; cleanerIds: string[] }[] | null;
   /** Дополнительные основные услуги заявки (мульти-выбор) — снапшот строк */
   additionalServices?:
     | {

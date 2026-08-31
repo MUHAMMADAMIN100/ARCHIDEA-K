@@ -245,6 +245,13 @@ export function OrderModal({
     { key: string; qty: string; pricePerUnit: string }[]
   >([]);
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
+  /*
+   * Состав по дням многодневной уборки (решение владельца): день 1 — весь
+   * выбранный состав, для дней со 2-го хранится свой список. Нет записи —
+   * день с полным составом. Фильтруем по selectedCleaners при чтении,
+   * поэтому удаление человека из команды чистит и его дни само.
+   */
+  const [dayTeams, setDayTeams] = useState<Record<number, string[]>>({});
   // разовые сотрудники под этот заказ: кого позвали и сколько отдали
   const [guests, setGuests] = useState<{ fullName: string; rate: string }[]>([]);
   const [error, setError] = useState('');
@@ -412,7 +419,17 @@ export function OrderModal({
     fullName: resolveCleanerName(id)?.fullName ?? 'клинер',
     rate: cleanersList?.find((c) => c.id === id)?.rate ?? 0,
   }));
-  const staffTotal = staffRows.reduce((sum, r) => sum + r.rate * cleaningDays, 0);
+  const rateOf = (id: string) => cleanersList?.find((c) => c.id === id)?.rate ?? 0;
+  /** Кто выходит в день № (с 1): день 1 — все, дальше — своя раскладка */
+  const rosterOf = (day: number): string[] =>
+    day <= 1
+      ? selectedCleaners
+      : (dayTeams[day] ?? selectedCleaners).filter((id) => selectedCleaners.includes(id));
+  const dayRosters = Array.from({ length: Math.max(1, cleaningDays) }, (_, i) => rosterOf(i + 1));
+  const staffTotal = dayRosters.reduce(
+    (sum, ids) => sum + ids.reduce((s, id) => s + rateOf(id), 0),
+    0,
+  );
   const teamTotal = staffTotal + guestsTotal;
   /*
    * Пока справочник клинеров не приехал, ставок мы не знаем.
@@ -475,6 +492,13 @@ export function OrderModal({
       const value = own > 0 ? own : fromClient;
       setDiscount(value > 0 ? String(value) : '');
       setDiscountFromClient(own === 0 && fromClient > 0);
+    }
+    if (!skip('dayTeams')) {
+      setDayTeams(
+        Object.fromEntries(
+          (o.dayTeams ?? []).map((t) => [t.day, t.cleanerIds]),
+        ),
+      );
     }
     if (!skip('guests')) {
       setGuests(
@@ -767,6 +791,11 @@ export function OrderModal({
           : {}),
         isManualPrice,
         preferences: trimmedPrefs,
+        // состав по дням: явные записи для дней со 2-го; один день — пусто
+        dayTeams: Array.from({ length: Math.max(0, cleaningDays - 1) }, (_, i) => ({
+          day: i + 2,
+          cleanerIds: rosterOf(i + 2),
+        })),
         customExtras: extraRows
           .filter((r) => r.title.trim())
           .map((r) => ({
@@ -2025,6 +2054,53 @@ export function OrderModal({
                 </div>
                 <CleanerPicker value={selectedCleaners} onChange={handleCleanersChange} />
                 {/*
+                  Многодневная уборка: свой состав на каждый день со 2-го.
+                  По умолчанию выходят все — лишних снимают одной галочкой
+                  («10 работают, во второй день 5 из них»).
+                */}
+                {cleaningDays > 1 && selectedCleaners.length > 0 && (
+                  <div className="mt-3 space-y-2.5" data-testid="состав-по-дням">
+                    {Array.from({ length: cleaningDays - 1 }, (_, i) => i + 2).map((d) => (
+                      <div key={d}>
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-navy-600">
+                          День {d} — кто выходит ({rosterOf(d).length} из {selectedCleaners.length})
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {staffRows.map((r) => {
+                            const on = rosterOf(d).includes(r.id);
+                            return (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => {
+                                  markTouched('dayTeams');
+                                  setDayTeams((prev) => {
+                                    const cur = (prev[d] ?? selectedCleaners).filter((id) =>
+                                      selectedCleaners.includes(id),
+                                    );
+                                    return {
+                                      ...prev,
+                                      [d]: on ? cur.filter((x) => x !== r.id) : [...cur, r.id],
+                                    };
+                                  });
+                                }}
+                                className={`press rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                                  on
+                                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                                    : 'border-navy-200 text-navy-500 hover:border-navy-300'
+                                }`}
+                              >
+                                {on ? '✓ ' : ''}
+                                {r.fullName}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/*
                   Сколько всего уйдёт людям за этот заказ — под составом,
                   когда выбор уже сделан. Раньше владелец складывал в уме:
                   ставки штатных на число дней плюс наличные разовым, и
@@ -2043,7 +2119,16 @@ export function OrderModal({
                         staffTotal > 0 &&
                           // считаем только тех, чья ставка известна: иначе
                           // «2 чел. × 1 день» не сходилось бы с суммой одного
-                          `штат ${staffTotal.toLocaleString('ru-RU')} (${staffRows.length - withoutRate.length} чел. × ${cleaningDays} ${dayWord(cleaningDays)})`,
+                          (cleaningDays > 1
+                            ? `штат ${staffTotal.toLocaleString('ru-RU')} · ${dayRosters
+                                .map(
+                                  (ids, i) =>
+                                    `день ${i + 1} — ${ids.length} чел. (${ids
+                                      .reduce((s2, id) => s2 + rateOf(id), 0)
+                                      .toLocaleString('ru-RU')})`,
+                                )
+                                .join(', ')}`
+                            : `штат ${staffTotal.toLocaleString('ru-RU')} (${staffRows.length - withoutRate.length} чел. × ${cleaningDays} ${dayWord(cleaningDays)})`),
                         guestsTotal > 0 &&
                           `разовые ${guestsTotal.toLocaleString('ru-RU')}`,
                       ]

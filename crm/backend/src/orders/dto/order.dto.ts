@@ -75,6 +75,12 @@ export class CustomExtraDto {
   @IsOptional() @IsBoolean() checked?: boolean;
 }
 
+/** Состав конкретного дня многодневной уборки (со 2-го дня) */
+export class DayTeamDto {
+  @IsInt() @Min(2) @Max(31) day: number;
+  @IsArray() @IsString({ each: true }) cleanerIds: string[];
+}
+
 export class CreateOrderDto {
   @IsString() clientId: string;
   @IsOptional() @IsEnum(CleaningType) cleaningType?: CleaningType;
@@ -101,6 +107,13 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => CustomExtraDto)
   customExtras?: CustomExtraDto[];
+
+  /** Кто выходит в каждый день со 2-го; нет записи — весь состав заказа */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DayTeamDto)
+  dayTeams?: DayTeamDto[];
 
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   @IsOptional()
@@ -200,6 +213,13 @@ export class UpdateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => CustomExtraDto)
   customExtras?: CustomExtraDto[];
+
+  /** Кто выходит в каждый день со 2-го; нет записи — весь состав заказа */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DayTeamDto)
+  dayTeams?: DayTeamDto[];
   /** Скидка в сомони — вычитается из суммы работ и доп. услуг */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_INT) discount?: number;
   /** Разовые сотрудники под этот заказ */

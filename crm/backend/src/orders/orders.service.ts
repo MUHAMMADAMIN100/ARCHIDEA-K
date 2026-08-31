@@ -629,6 +629,19 @@ export class OrdersService {
     return order;
   }
 
+  /** Состав по дням: оставляем дни 2..31 и уникальные id клинеров */
+  private sanitizeDayTeams(
+    input?: { day: number; cleanerIds: string[] }[],
+  ): { day: number; cleanerIds: string[] }[] | undefined {
+    if (!input) return undefined;
+    return input
+      .filter((t) => t && Number.isInteger(t.day) && t.day >= 2 && t.day <= 31)
+      .map((t) => ({
+        day: t.day,
+        cleanerIds: [...new Set((t.cleanerIds ?? []).filter(Boolean))],
+      }));
+  }
+
   async create(user: AuthUser, dto: CreateOrderDto) {
     // менеджер может создавать заказ только своему клиенту
     const client = await this.prisma.client.findFirst({
@@ -756,6 +769,14 @@ export class OrdersService {
             ? {
                 guestCleaners:
                   dto.guestCleaners as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
+          // состав по дням многодневной уборки (решение владельца)
+          ...(dto.dayTeams
+            ? {
+                dayTeams: this.sanitizeDayTeams(
+                  dto.dayTeams,
+                ) as unknown as Prisma.InputJsonValue,
               }
             : {}),
           ...(additional !== null
@@ -1023,6 +1044,11 @@ export class OrdersService {
       tariff,
       extrasList,
     );
+    if (dto.dayTeams !== undefined) {
+      // пустой список стирает раскладку: снова все дни полным составом
+      data.dayTeams = (this.sanitizeDayTeams(dto.dayTeams) ??
+        []) as unknown as Prisma.InputJsonValue;
+    }
     if (dto.customExtras !== undefined) {
       data.customExtras = (nextCustomExtras ??
         []) as unknown as Prisma.InputJsonValue;
