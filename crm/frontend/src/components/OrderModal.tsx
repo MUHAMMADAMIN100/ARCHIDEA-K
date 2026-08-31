@@ -424,7 +424,7 @@ export function OrderModal({
   const rosterOf = (day: number): string[] =>
     day <= 1
       ? selectedCleaners
-      : (dayTeams[day] ?? selectedCleaners).filter((id) => selectedCleaners.includes(id));
+      : (dayTeams[day] ?? []).filter((id) => selectedCleaners.includes(id));
   const dayRosters = Array.from({ length: Math.max(1, cleaningDays) }, (_, i) => rosterOf(i + 1));
   const staffTotal = dayRosters.reduce(
     (sum, ids) => sum + ids.reduce((s, id) => s + rateOf(id), 0),
@@ -2055,8 +2055,8 @@ export function OrderModal({
                 <CleanerPicker value={selectedCleaners} onChange={handleCleanersChange} />
                 {/*
                   Многодневная уборка: свой состав на каждый день со 2-го.
-                  По умолчанию выходят все — лишних снимают одной галочкой
-                  («10 работают, во второй день 5 из них»).
+                  Дни открываются пустыми (решение владельца) — владелец сам
+                  отмечает, кто выходит; без отметок «Оплачено» не пустит.
                 */}
                 {cleaningDays > 1 && selectedCleaners.length > 0 && (
                   <div className="mt-3 space-y-2.5" data-testid="состав-по-дням">
@@ -2075,7 +2075,7 @@ export function OrderModal({
                                 onClick={() => {
                                   markTouched('dayTeams');
                                   setDayTeams((prev) => {
-                                    const cur = (prev[d] ?? selectedCleaners).filter((id) =>
+                                    const cur = (prev[d] ?? []).filter((id) =>
                                       selectedCleaners.includes(id),
                                     );
                                     return {

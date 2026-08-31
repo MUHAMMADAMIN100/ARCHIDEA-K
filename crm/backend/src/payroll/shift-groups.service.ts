@@ -368,9 +368,14 @@ export class ShiftGroupsService {
       (t) => t?.day === индекс + 1,
     );
     if (!entry || !Array.isArray(entry.cleanerIds)) return staff;
+    /*
+     * Раскладка задана явно: пустой день = «ещё не отметили, кто выходит»
+     * (решение владельца). Полный состав сами не подставляем — иначе
+     * зарплата начислилась бы тем, кто в этот день не работал; «Оплачено»
+     * остановится с подсказкой, пока день не отмечен.
+     */
     const ids = new Set(entry.cleanerIds);
-    const subset = staff.filter((m) => m.cleanerId && ids.has(m.cleanerId));
-    return subset.length ? subset : staff;
+    return staff.filter((m) => m.cleanerId && ids.has(m.cleanerId));
   }
 
   /** Состав дня целиком: штат по раскладке + разовые в своём дне */
@@ -663,7 +668,7 @@ export class ShiftGroupsService {
     for (const group of open) {
       if (group.members.length === 0) {
         throw new BadRequestException(
-          'Укажите, кто делал уборку: выберите клинеров в карточке заказа — иначе зарплата не начислится',
+          `Отметьте, кто выходил ${formatDate(group.date)}: в этом дне уборки никого нет — иначе зарплата не начислится`,
         );
       }
       await this.closeInTx(tx, group, user, {});
