@@ -52,6 +52,19 @@ export class OrdersController {
   }
 
   /**
+   * Заказы для календаря: весь диапазон дней целиком, любые этапы.
+   * Тоже выше маршрута ':id' — иначе «calendar» прочитался бы как id заказа.
+   */
+  @Get('calendar')
+  calendar(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.calendar(user, { from, to });
+  }
+
+  /**
    * Архив этапа: закрытые заказы старше 45 дней.
    *
    * Стоит ВЫШЕ маршрута ':id' — иначе слово archive попало бы в него как

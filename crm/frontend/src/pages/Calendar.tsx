@@ -37,7 +37,6 @@ import { tempId, nowISO } from '../lib/util';
 import { useAuth } from '../auth/AuthContext';
 import { formatPhone } from '../lib/contact';
 import type {
-  BoardColumn,
   Callback,
   FunnelStage,
   Order,
@@ -435,14 +434,6 @@ export function Calendar() {
   const [undatedOpen, setUndatedOpen] = useState(false);
 
   /*
-   * Заказы берём из той же доски, что и воронка: один запрос, общий кэш —
-   * переключение между разделами мгновенное, а этапы гарантированно совпадают.
-   */
-  const boardQuery = useFetch<BoardColumn[]>('/orders/board', {
-    pollMs: 20000,
-  });
-
-  /*
    * Перезвоны клиентов — оранжевые отметки «позвонить».
    *
    * Берём весь список без диапазона: перезвонов в работе десятки, а не
@@ -482,6 +473,20 @@ export function Calendar() {
     const total = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
     return Array.from({ length: total }, (_, i) => addDays(start, i));
   }, [view, cursor]);
+
+  /*
+   * Заказы видимого диапазона — отдельным запросом, а не из доски воронки.
+   *
+   * Доска по правилу владельца держит закрытые сделки только текущего
+   * месяца (остальное — в папке «Архив»), поэтому прошлый месяц в календаре
+   * выглядел пустым: за август был виден один заказ из десятков. Сервер
+   * отдаёт диапазон целиком, любые этапы; листание месяцев подгружает
+   * нужный отрезок, а кэш по адресу делает возврат мгновенным.
+   */
+  const ordersQuery = useFetch<Order[]>(
+    `/orders/calendar?from=${dayKey(days[0])}&to=${dayKey(days[days.length - 1])}`,
+    { pollMs: 20000 },
+  );
 
   // задачи по дням (с учётом фильтра типа)
   const { byDay, undated } = useMemo(() => {
@@ -530,28 +535,26 @@ export function Calendar() {
   const { ordersByDay, ordersUndated } = useMemo(() => {
     const map = new Map<string, Order[]>();
     const none: Order[] = [];
-    for (const col of boardQuery.data ?? []) {
-      if (stageFilter !== 'ALL' && col.stage !== stageFilter) continue;
-      for (const o of col.orders) {
-        const iso = orderDate(o);
-        if (!iso) {
-          none.push(o);
-          continue;
-        }
-        /*
-          Уборка на несколько дней стоит в календаре КАЖДЫЙ свой день.
-          Иначе двухдневный заказ виден только в первый день, и на второй
-          календарь показывает свободный день, хотя бригада занята.
-        */
-        for (const key of orderDays(o, iso)) {
-          const list = map.get(key);
-          if (list) list.push(o);
-          else map.set(key, [o]);
-        }
+    for (const o of ordersQuery.data ?? []) {
+      if (stageFilter !== 'ALL' && o.stage !== stageFilter) continue;
+      const iso = orderDate(o);
+      if (!iso) {
+        none.push(o);
+        continue;
+      }
+      /*
+        Уборка на несколько дней стоит в календаре КАЖДЫЙ свой день.
+        Иначе двухдневный заказ виден только в первый день, и на второй
+        календарь показывает свободный день, хотя бригада занята.
+      */
+      for (const key of orderDays(o, iso)) {
+        const list = map.get(key);
+        if (list) list.push(o);
+        else map.set(key, [o]);
       }
     }
     return { ordersByDay: map, ordersUndated: none };
-  }, [boardQuery.data, stageFilter]);
+  }, [ordersQuery.data, stageFilter]);
 
   const title =
     view === 'week'
@@ -1441,7 +1444,7 @@ export function Calendar() {
         orderId={openOrder?.id ?? null}
         initial={openOrder ?? undefined}
         onClose={() => setOpenOrder(null)}
-        onUpdated={boardQuery.reload}
+        onUpdated={ordersQuery.reload}
       />
 
       {modal && (modal.mode === 'create' || liveTask) && (
