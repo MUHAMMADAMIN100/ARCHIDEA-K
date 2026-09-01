@@ -624,19 +624,12 @@ export function ReportEdit() {
 
         <div className="mb-4">
           <label className="label">Заполнить из заказа (необязательно)</label>
-          <select
-            className="input"
+          <OrderPicker
+            orders={activeOrders}
             value={orderId}
-            onChange={(e) => fillFromOrder(e.target.value)}
-          >
-            <option value="">— выбрать заказ из воронки —</option>
-            {activeOrders.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.client?.fullName} · {formatVolume(o)} ·{' '}
-                {(o.finalPrice ?? o.estimatedPrice).toLocaleString('ru-RU')} с
-              </option>
-            ))}
-          </select>
+            onPick={fillFromOrder}
+            onClear={() => setOrderId('')}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -1049,6 +1042,148 @@ export function ReportEdit() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Выбор заказа с живым поиском — вместо длинного выпадающего списка.
+ *
+ * На планшете найти нужный заказ прокруткой десятков строк было неудобно
+ * (просьба владельца). Печатаете любой обрывок — имя, кусок телефона,
+ * адреса или сумму — и список сужается. Вид тот же, что у выбора клиента
+ * в задачах (ClientPicker): выбранный заказ — карточкой с «Изменить» и
+ * «Убрать». «Убрать» снимает только привязку — заполненные поля формы
+ * остаются как есть.
+ */
+function OrderPicker({
+  orders,
+  value,
+  onPick,
+  onClear,
+}: {
+  orders: Order[];
+  value: string;
+  onPick: (id: string) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const chosen = orders.find((o) => o.id === value) ?? null;
+
+  const found = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return orders.slice(0, 30);
+    const digits = q.replace(/\D/g, '');
+    return orders
+      .filter((o) => {
+        const сумма = String(o.finalPrice ?? o.estimatedPrice ?? '');
+        return (
+          (o.client?.fullName ?? '').toLowerCase().includes(q) ||
+          (o.address ?? '').toLowerCase().includes(q) ||
+          (digits.length >= 2 &&
+            ((o.client?.phone ?? '').replace(/\D/g, '').includes(digits) ||
+              сумма.includes(digits)))
+        );
+      })
+      .slice(0, 30);
+  }, [orders, query]);
+
+  const строка = (o: Order) =>
+    `${formatVolume(o)} · ${formatPrice(o.finalPrice ?? o.estimatedPrice ?? 0)}`;
+
+  if (chosen && !open) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-xl border border-navy-200 bg-white px-3 py-2"
+        data-testid="выбранный-заказ"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-navy-900">
+            {chosen.client?.fullName ?? 'Клиент'} · {строка(chosen)}
+          </span>
+          {chosen.address && (
+            <span className="block truncate text-xs text-navy-600">
+              {chosen.address}
+            </span>
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setQuery('');
+            setOpen(true);
+          }}
+          className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
+        >
+          Изменить
+        </button>
+        <button
+          type="button"
+          onClick={onClear}
+          className="shrink-0 text-xs font-medium text-navy-600 hover:underline"
+        >
+          Убрать
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <input
+        className="input"
+        value={query}
+        autoFocus={open}
+        placeholder="Поиск заказа: имя, телефон, адрес или сумма"
+        data-testid="поиск-заказа"
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      {open && (
+        <div
+          className="mt-1 animate-drop-in rounded-xl border border-navy-100 bg-white py-1 shadow-pop"
+          data-testid="список-заказов"
+        >
+          <ScrollArea
+            axis="y"
+            innerClassName="max-h-52 overscroll-contain"
+            label="Заказы"
+          >
+            {found.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-navy-600">
+                Заказы не найдены
+              </div>
+            ) : (
+              found.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => {
+                    onPick(o.id);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className="press block w-full px-3 py-2 text-left hover:bg-navy-50"
+                >
+                  <span className="block truncate text-sm font-medium text-navy-900">
+                    {o.client?.fullName ?? 'Клиент'} · {строка(o)}
+                  </span>
+                  {o.address && (
+                    <span className="block truncate text-xs text-navy-600">
+                      {o.address}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </ScrollArea>
+        </div>
+      )}
     </div>
   );
 }
