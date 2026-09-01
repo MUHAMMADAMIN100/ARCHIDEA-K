@@ -6,6 +6,7 @@ import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, Badge, Modal, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useDialog } from '../components/Dialog';
 import {
   Column,
   DataTable,
@@ -84,6 +85,7 @@ export interface NewOrderInput {
 export function Clients() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const dialog = useDialog();
   const [search, setSearch] = useState('');
   const [tag, setTag] = useState('');
   const [source, setSource] = useState('');
@@ -200,8 +202,21 @@ export function Clients() {
       }
       reload();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось создать клиента');
       setData((list) => (list ? list.filter((c) => c.id !== id) : list));
+      // дубль номера — окно с кнопкой «Открыть карточку» (решение владельца)
+      const dupId = e?.response?.data?.clientId as string | undefined;
+      if (dupId) {
+        const открыть = await dialog.confirm({
+          title: 'Клиент уже есть',
+          message:
+            e?.response?.data?.message ?? 'Клиент с этим номером уже заведён',
+          confirmText: 'Открыть карточку',
+          cancelText: 'Закрыть',
+        });
+        if (открыть) navigate(`/clients/${dupId}`);
+        return;
+      }
+      toast.error(e?.response?.data?.message || 'Не удалось создать клиента');
     }
   };
 

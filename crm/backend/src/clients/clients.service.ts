@@ -292,6 +292,7 @@ export class ClientsService {
       const existing = await this.prisma.client.findUnique({
         where: { phone },
         select: {
+          id: true,
           fullName: true,
           deletedAt: true,
           manager: { select: { fullName: true } },
@@ -304,11 +305,14 @@ export class ClientsService {
       }
       if (existing) {
         const owner = existing.manager?.fullName;
-        throw new ConflictException(
-          `Клиент с этим номером уже есть — «${existing.fullName}»` +
+        // clientId в теле ошибки — сайт показывает кнопку «Открыть карточку»
+        throw new ConflictException({
+          message:
+            `Клиент с этим номером уже есть — «${existing.fullName}»` +
             (owner ? `, ответственный ${owner}` : '') +
             '. Новую заявку заведите из его карточки',
-        );
+          clientId: existing.id,
+        });
       }
     }
 

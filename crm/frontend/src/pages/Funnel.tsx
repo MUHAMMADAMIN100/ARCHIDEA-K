@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DragDropContext,
   Droppable,
@@ -382,6 +382,7 @@ export function Funnel() {
     window.scrollTo(0, 0);
   }, []);
   const dialog = useDialog();
+  const navigate = useNavigate();
   const { user } = useAuth();
   // фильтр по менеджеру — только для тех, кто видит всю компанию
   const canFilter = userSeesAll(user);
@@ -1391,11 +1392,33 @@ export function Funnel() {
                       )
                     : cols,
                 );
+                /*
+                 * Дубль номера: вместо тоста-тупика — окно с кнопкой, из
+                 * которого карточка существующего клиента открывается сразу
+                 * (решение владельца). «Назад к форме» возвращает набранное.
+                 */
+                const dupId = e?.response?.data?.clientId as string | undefined;
+                if (dupId) {
+                  const открыть = await dialog.confirm({
+                    title: 'Клиент уже есть',
+                    message:
+                      e?.response?.data?.message ??
+                      'Клиент с этим номером уже заведён',
+                    confirmText: 'Открыть карточку',
+                    cancelText: 'Назад к форме',
+                  });
+                  if (открыть) {
+                    navigate(`/clients/${dupId}`);
+                    return;
+                  }
+                }
                 setDraft({ payload, managerName, order });
                 setShowAddClient(true);
-                toast.error(
-                  e?.response?.data?.message || 'Не удалось создать клиента',
-                );
+                if (!dupId) {
+                  toast.error(
+                    e?.response?.data?.message || 'Не удалось создать клиента',
+                  );
+                }
               }
             })();
           }}

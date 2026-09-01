@@ -239,6 +239,7 @@ export function ClientCard() {
     area: number;
     seats?: number;
     estimatedPrice: number;
+    address?: string;
     managerId?: string;
     cleanerIds?: string[];
   }) => {
@@ -259,6 +260,7 @@ export function ClientCard() {
       area: payload.area,
       seats: payload.seats ?? null,
       estimatedPrice: payload.estimatedPrice,
+      address: payload.address ?? data.address ?? undefined,
       finalPrice: null,
       isLarge: isLargeOrder({
         finalPrice: null,
@@ -752,6 +754,10 @@ export function ClientCard() {
         <AddOrderModal
           isDirector={userSeesAll(user)}
           cleaners={cleaners ?? []}
+          defaultAddress={data?.address ?? null}
+          pastAddresses={(data?.orders ?? [])
+            .map((o) => (o.address ?? '').trim())
+            .filter(Boolean)}
           onClose={() => setShowAddOrder(false)}
           onCreate={createOrder}
         />
@@ -794,11 +800,17 @@ function Row({ label, value }: { label: string; value: string }) {
 function AddOrderModal({
   isDirector,
   cleaners,
+  defaultAddress,
+  pastAddresses,
   onClose,
   onCreate,
 }: {
   isDirector: boolean;
   cleaners: Cleaner[];
+  /** основной адрес клиента — подставляется в новый заказ */
+  defaultAddress?: string | null;
+  /** адреса прошлых заказов: у клиента бывает 2–3 дома (решение владельца) */
+  pastAddresses?: string[];
   onClose: () => void;
   onCreate: (payload: {
     cleaningType: CleaningType;
@@ -808,6 +820,7 @@ function AddOrderModal({
     area: number;
     seats?: number;
     estimatedPrice: number;
+    address?: string;
     /** ТЗ 5 — цена за единицу и итог */
     pricePerSqm?: number;
     finalPrice?: number;
@@ -816,6 +829,7 @@ function AddOrderModal({
   }) => void;
 }) {
   const [serviceKey, setServiceKey] = useState('GENERAL');
+  const [orderAddress, setOrderAddress] = useState(defaultAddress ?? '');
   const [dirtLevel, setDirtLevel] = useState<DirtLevel>('LIGHT');
   const [area, setArea] = useState('');
   const [seats, setSeats] = useState('');
@@ -897,6 +911,7 @@ function AddOrderModal({
        */
       managerId: managerId || undefined,
       cleanerIds: cleanerIds.length > 0 ? cleanerIds : undefined,
+      address: orderAddress.trim() || undefined,
     });
     onClose();
   };
@@ -1090,6 +1105,28 @@ function AddOrderModal({
                 )}
               </span>
             )}
+          </div>
+        </div>
+        <div>
+          <label className="label">Адрес уборки</label>
+            <input
+              className="input"
+              list="адреса-клиента"
+              value={orderAddress}
+              onChange={(e) => setOrderAddress(e.target.value)}
+              placeholder="куда выезжает бригада"
+              data-testid="заказ-адрес"
+            />
+            <datalist id="адреса-клиента">
+              {[...new Set([defaultAddress ?? '', ...(pastAddresses ?? [])])]
+                .filter(Boolean)
+                .map((a) => (
+                  <option key={a} value={a} />
+                ))}
+            </datalist>
+          <div className="mt-1 text-xs text-navy-600">
+            Подставлен адрес из карточки; для другого дома выберите из списка
+            или впишите новый
           </div>
         </div>
         {isDirector && (
