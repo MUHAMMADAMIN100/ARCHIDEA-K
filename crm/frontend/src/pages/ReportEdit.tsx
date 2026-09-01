@@ -38,6 +38,38 @@ const rateOf = (c?: { rate?: number } | null): string =>
 let rowCounter = 0;
 const rowKey = () => `row_${++rowCounter}`;
 
+/**
+ * Сколько дней выходит каждый штатный клинер заказа — с учётом «состава
+ * по дням» многодневной уборки.
+ *
+ * День 1 выходят все назначенные; для дней 2+ смотрим раскладку: день
+ * описан — только отмеченные в нём (пустой день = никто), не описан — все.
+ * Ровно так же считают карточка заказа и начисление смен на сервере.
+ * Пока ведомость раскладку не читала, она ставила каждому все дни заказа:
+ * у «Вали» в карточке 14 710 сомони, а в отчёте 18 820 — лишние 4 110 за
+ * дни, в которые люди не выходили.
+ */
+function дниПоРаскладке(o: {
+  scheduledDate?: string | null;
+  scheduledEndDate?: string | null;
+  cleaners?: { id: string }[] | null;
+  dayTeams?: { day: number; cleanerIds: string[] }[] | null;
+}): Map<string, number> {
+  const всего = Math.max(1, cleaningDaysOf(o.scheduledDate, o.scheduledEndDate));
+  const штат = (o.cleaners ?? []).map((c) => c.id);
+  const дни = new Map(штат.map((id) => [id, 0]));
+  for (let день = 1; день <= всего; день++) {
+    const запись =
+      день >= 2 ? (o.dayTeams ?? []).find((t) => t.day === день) : undefined;
+    const вышли =
+      день === 1 || !запись || !Array.isArray(запись.cleanerIds)
+        ? штат
+        : запись.cleanerIds.filter((id) => дни.has(id));
+    for (const id of вышли) дни.set(id, (дни.get(id) ?? 0) + 1);
+  }
+  return дни;
+}
+
 interface WorkerRow {
   key: string;
   cleanerId: string;
@@ -223,6 +255,8 @@ export function ReportEdit() {
      * на руки, ровно вдвое на двухдневных объектах.
      */
     const дней = cleaningDaysOf(o.scheduledDate, o.scheduledEndDate);
+    // дни каждому — по раскладке «кто выходил в какой день», не всем подряд
+    const поДням = дниПоРаскладке(o);
     if (assigned.length) {
       const known = cleaners ?? [];
       const rows: WorkerRow[] = assigned.map((a) => {
@@ -233,7 +267,7 @@ export function ReportEdit() {
           cleanerId: a.id,
           fullName: a.fullName ?? full?.fullName ?? '',
           role: isLeader ? 'Бригадир' : 'Клинер',
-          days: String(дней),
+          days: String(поДням.get(a.id) ?? дней),
           rate: rateOf(full),
           fine: '',
           extra: '',
@@ -427,13 +461,26 @@ export function ReportEdit() {
   const нетШтата = командаЗаказа.filter((c) => !ужеВВедомости.has(имя(c.fullName)));
   const нетРазовых = разовыеЗаказа.filter((g) => !ужеВВедомости.has(имя(g.fullName)));
   /*
+   * Дни каждому — по раскладке «кто выходил в какой день». Человека без
+   * карточки в заказе сверяем по имени; совсем чужого (вписан руками, в
+   * заказе его нет) — по полной длительности, как раньше.
+   */
+  const дниРаскладки = заказВедомости
+    ? дниПоРаскладке(заказВедомости)
+    : new Map<string, number>();
+  const идПоИмени = new Map(командаЗаказа.map((c) => [имя(c.fullName), c.id]));
+  const ожидаемыеДни = (w: WorkerRow): number => {
+    const ид = w.cleanerId || идПоИмени.get(имя(w.fullName)) || '';
+    return дниРаскладки.get(ид) ?? днейПоЗаказу;
+  };
+  /*
    * Разовому вписывают сумму на руки за всю работу, а не за день — дни
    * его строки это правило не касается.
    */
   const дниНеПоЗаказу =
     днейПоЗаказу > 1
       ? workers.filter(
-          (w) => w.role !== 'Разовый' && w.fullName.trim() && num(w.days) !== днейПоЗаказу,
+          (w) => w.role !== 'Разовый' && w.fullName.trim() && num(w.days) !== ожидаемыеДни(w),
         )
       : [];
   const естьРасхождение =
@@ -456,7 +503,11 @@ export function ReportEdit() {
             дниНеПоЗаказу.length === 1
               ? дниНеПоЗаказу[0].fullName.trim()
               : `${дниНеПоЗаказу.length} работников`
-          } проставлено другое число смен`,
+          } ${
+            (заказВедомости?.dayTeams ?? []).length
+              ? 'число смен не совпадает с составом по дням заказа'
+              : 'проставлено другое число смен'
+          }`,
       );
     }
     const пропущены = [...нетШтата, ...нетРазовых].map((x) => x.fullName.trim());
@@ -483,7 +534,7 @@ export function ReportEdit() {
         cleanerId: c.id,
         fullName: c.fullName,
         role: leaderIds.has(c.id) || c.leaderOf ? 'Бригадир' : 'Клинер',
-        days: String(дней),
+        days: String(дниРаскладки.get(c.id) ?? дней),
         rate: rateOf(c) || rateOf((cleaners ?? []).find((x) => x.id === c.id)),
         fine: '',
         extra: '',
@@ -504,7 +555,7 @@ export function ReportEdit() {
       ...prev.map((w) =>
         w.role === 'Разовый' || днейПоЗаказу <= 1
           ? w
-          : { ...w, days: String(днейПоЗаказу) },
+          : { ...w, days: String(ожидаемыеДни(w)) },
       ),
       ...добавленные,
     ]);

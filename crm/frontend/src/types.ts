@@ -590,6 +590,8 @@ export interface Report {
     }[];
     /** разовые сотрудники заказа: имя и отданная на руки сумма */
     guestCleaners?: { fullName: string; rate: number }[] | null;
+    /** состав по дням со 2-го — дни работникам считаются по нему */
+    dayTeams?: { day: number; cleanerIds: string[] }[] | null;
   } | null;
 }
 
