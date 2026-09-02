@@ -23,6 +23,8 @@ enum Role {
 enum LeadSource {
   SITE // сайт (автоматическая заявка)
   INSTAGRAM
+  WHATSAPP
+  TIKTOK
   CALL // звонок
   COLD_CALL // холодный обзвон — менеджер позвонил первым
   RECOMMENDATION

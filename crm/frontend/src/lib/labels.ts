@@ -137,6 +137,8 @@ export function extrasSummary(
 export const SOURCE_LABEL: Record<LeadSource, string> = {
   SITE: 'Сайт',
   INSTAGRAM: 'Instagram',
+  WHATSAPP: 'WhatsApp',
+  TIKTOK: 'TikTok',
   CALL: 'Звонок',
   COLD_CALL: 'Холодный обзвон',
   RECOMMENDATION: 'Рекомендация',
@@ -147,6 +149,8 @@ export const SOURCE_LABEL: Record<LeadSource, string> = {
 export const SOURCE_ORDER: LeadSource[] = [
   'SITE',
   'INSTAGRAM',
+  'WHATSAPP',
+  'TIKTOK',
   'CALL',
   'COLD_CALL',
   'RECOMMENDATION',

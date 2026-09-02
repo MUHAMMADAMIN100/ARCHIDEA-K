@@ -9,6 +9,8 @@ export const ROLE_TITLE: Record<Role, string> = {
 export type LeadSource =
   | 'SITE'
   | 'INSTAGRAM'
+  | 'WHATSAPP'
+  | 'TIKTOK'
   | 'CALL'
   | 'COLD_CALL'
   | 'RECOMMENDATION'

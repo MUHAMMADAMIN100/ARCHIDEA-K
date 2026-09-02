@@ -36,7 +36,10 @@ const TYPE_LABEL: Record<string, string> = {
 const SOURCE_LABEL: Record<string, string> = {
   SITE: 'Сайт',
   INSTAGRAM: 'Instagram',
+  WHATSAPP: 'WhatsApp',
+  TIKTOK: 'TikTok',
   CALL: 'Звонок',
+  COLD_CALL: 'Холодный обзвон',
   RECOMMENDATION: 'Рекомендация',
   ANISA: 'От Анисы',
 };
