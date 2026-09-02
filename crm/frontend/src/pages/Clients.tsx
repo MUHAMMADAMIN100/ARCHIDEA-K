@@ -6,7 +6,6 @@ import { useFetch, mutateCache } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { PageHeader, Badge, Modal, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
-import { useDialog } from '../components/Dialog';
 import {
   Column,
   DataTable,
@@ -85,7 +84,6 @@ export interface NewOrderInput {
 export function Clients() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const dialog = useDialog();
   const [search, setSearch] = useState('');
   const [tag, setTag] = useState('');
   const [source, setSource] = useState('');
@@ -203,17 +201,34 @@ export function Clients() {
       reload();
     } catch (e: any) {
       setData((list) => (list ? list.filter((c) => c.id !== id) : list));
-      // дубль номера — окно с кнопкой «Открыть карточку» (решение владельца)
+      /*
+       * Дубль номера не останавливает работу (решение владельца): заявку из
+       * формы заводим существующему клиенту отдельным заказом со своим
+       * адресом и площадью — у клиента бывает несколько квартир. Карточку
+       * не меняем; уведомление выходит справа сверху.
+       */
       const dupId = e?.response?.data?.clientId as string | undefined;
       if (dupId) {
-        const открыть = await dialog.confirm({
-          title: 'Клиент уже есть',
-          message:
-            e?.response?.data?.message ?? 'Клиент с этим номером уже заведён',
-          confirmText: 'Открыть карточку',
-          cancelText: 'Закрыть',
-        });
-        if (открыть) navigate(`/clients/${dupId}`);
+        if (order) {
+          try {
+            await api.post<Order>('/orders', {
+              clientId: dupId,
+              source: payload.source,
+              managerId: payload.managerId,
+              ...order,
+            });
+            toast.success('Клиент уже есть — заявка добавлена в его карточку');
+            reload();
+          } catch {
+            toast.error(
+              'Клиент уже есть, но заявку создать не удалось — попробуйте ещё раз',
+            );
+          }
+          return;
+        }
+        toast.info(
+          e?.response?.data?.message ?? 'Клиент с этим номером уже заведён',
+        );
         return;
       }
       toast.error(e?.response?.data?.message || 'Не удалось создать клиента');

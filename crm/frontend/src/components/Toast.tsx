@@ -19,12 +19,15 @@ interface ToastApi {
   push: (message: string, type?: ToastType) => void;
   success: (message: string) => void;
   error: (message: string) => void;
+  /** нейтральное уведомление — не успех и не ошибка («клиент уже есть») */
+  info: (message: string) => void;
 }
 
 const Ctx = createContext<ToastApi>({
   push: () => {},
   success: () => {},
   error: () => {},
+  info: () => {},
 });
 
 export const useToast = () => useContext(Ctx);
@@ -57,12 +60,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     push,
     success: (m) => push(m, 'success'),
     error: (m) => push(m, 'error'),
+    info: (m) => push(m, 'info'),
   };
 
   return (
     <Ctx.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+      {/* правый верхний угол, рядом с колокольчиком, — решение владельца */}
+      <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
         {items.map((t) => {
           const Icon =
             t.type === 'error' ? AlertCircle : t.type === 'success' ? CheckCircle2 : Info;

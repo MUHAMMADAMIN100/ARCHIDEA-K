@@ -1393,32 +1393,52 @@ export function Funnel() {
                     : cols,
                 );
                 /*
-                 * Дубль номера: вместо тоста-тупика — окно с кнопкой, из
-                 * которого карточка существующего клиента открывается сразу
-                 * (решение владельца). «Назад к форме» возвращает набранное.
+                 * Дубль номера больше не останавливает работу (решение
+                 * владельца). Клиент уже заведён — заявку из формы создаём
+                 * прямо ему, отдельным заказом со своим адресом и площадью:
+                 * у клиента бывает несколько квартир, и новый заказ не должен
+                 * путаться с прежними. Карточку клиента не меняем. Выходит
+                 * уведомление справа сверху, работа в воронке продолжается.
                  */
                 const dupId = e?.response?.data?.clientId as string | undefined;
                 if (dupId) {
-                  const открыть = await dialog.confirm({
-                    title: 'Клиент уже есть',
-                    message:
-                      e?.response?.data?.message ??
-                      'Клиент с этим номером уже заведён',
-                    confirmText: 'Открыть карточку',
-                    cancelText: 'Назад к форме',
-                  });
-                  if (открыть) {
-                    navigate(`/clients/${dupId}`);
-                    return;
+                  if (order) {
+                    try {
+                      await withMutation(() =>
+                        api.post('/orders', {
+                          clientId: dupId,
+                          source: payload.source,
+                          managerId: payload.managerId,
+                          ...order,
+                          address: order.address ?? payload.address,
+                        }),
+                      );
+                      toast.success(
+                        'Клиент уже есть — заявка добавлена в его карточку',
+                      );
+                      reload();
+                      return;
+                    } catch {
+                      setDraft({ payload, managerName, order });
+                      setShowAddClient(true);
+                      toast.error(
+                        'Клиент уже есть, но заявку создать не удалось — попробуйте ещё раз',
+                      );
+                      return;
+                    }
                   }
+                  // заявку не просили — просто говорим, что клиент уже есть
+                  toast.info(
+                    e?.response?.data?.message ??
+                      'Клиент с этим номером уже заведён',
+                  );
+                  return;
                 }
                 setDraft({ payload, managerName, order });
                 setShowAddClient(true);
-                if (!dupId) {
-                  toast.error(
-                    e?.response?.data?.message || 'Не удалось создать клиента',
-                  );
-                }
+                toast.error(
+                  e?.response?.data?.message || 'Не удалось создать клиента',
+                );
               }
             })();
           }}
