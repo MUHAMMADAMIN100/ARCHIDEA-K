@@ -211,12 +211,28 @@ export function Clients() {
       if (dupId) {
         if (order) {
           try {
-            await api.post<Order>('/orders', {
-              clientId: dupId,
-              source: payload.source,
-              managerId: payload.managerId,
-              ...order,
-            });
+            const created = (
+              await api.post<Order>('/orders', {
+                clientId: dupId,
+                source: payload.source,
+                managerId: payload.managerId,
+                ...order,
+              })
+            ).data;
+            // заявка сразу видна в кэше воронки — как при обычном создании
+            mutateCache<BoardColumn[]>('/orders/board', (cols) =>
+              cols.map((c) =>
+                c.stage === 'NEW'
+                  ? {
+                      ...c,
+                      orders: [created, ...c.orders],
+                      amount:
+                        (c.amount ?? 0) +
+                        (created.finalPrice ?? created.estimatedPrice ?? 0),
+                    }
+                  : c,
+              ),
+            );
             toast.success('Клиент уже есть — заявка добавлена в его карточку');
             reload();
           } catch {

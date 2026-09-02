@@ -1403,6 +1403,67 @@ export function Funnel() {
                 const dupId = e?.response?.data?.clientId as string | undefined;
                 if (dupId) {
                   if (order) {
+                    /*
+                     * Карточка встаёт в «Новую заявку» МГНОВЕННО, до ответа
+                     * сервера, — как при обычном создании, только с
+                     * настоящим именем существующего клиента из ответа о
+                     * дубле. Живой канал следом подменит её настоящей.
+                     */
+                    const имяКлиента =
+                      (e?.response?.data?.clientName as string | undefined) ??
+                      payload.fullName;
+                    const dupTempId = tempId();
+                    setData((cols) =>
+                      cols
+                        ? cols.map((c) =>
+                            c.stage === 'NEW'
+                              ? {
+                                  ...c,
+                                  orders: [
+                                    {
+                                      id: dupTempId,
+                                      clientId: dupId,
+                                      managerId: payload.managerId,
+                                      stage: 'NEW',
+                                      source: payload.source,
+                                      cleaningType: order.cleaningType,
+                                      serviceKey: order.serviceKey ?? null,
+                                      dirtLevel: order.dirtLevel ?? null,
+                                      area: order.area,
+                                      seats: order.seats ?? null,
+                                      address: order.address ?? payload.address,
+                                      estimatedPrice: order.estimatedPrice,
+                                      finalPrice: order.finalPrice ?? null,
+                                      isLarge: isLargeOrder({
+                                        finalPrice: order.finalPrice ?? null,
+                                        estimatedPrice: order.estimatedPrice,
+                                      }),
+                                      createdAt: nowISO(),
+                                      client: {
+                                        id: dupId,
+                                        fullName: имяКлиента,
+                                        phone: payload.phone,
+                                        tags: [],
+                                      },
+                                      manager: managerName
+                                        ? {
+                                            id: payload.managerId ?? '',
+                                            fullName: managerName,
+                                          }
+                                        : undefined,
+                                      cleaners: [],
+                                    } as Order,
+                                    ...c.orders,
+                                  ],
+                                  amount: (c.amount ?? 0) + price,
+                                }
+                              : c,
+                          )
+                        : cols,
+                    );
+                    toast.success(
+                      `Клиент уже есть — заявка добавлена в карточку «${имяКлиента}»`,
+                    );
                     try {
                       await withMutation(() =>
                         api.post('/orders', {
@@ -1413,12 +1474,28 @@ export function Funnel() {
                           address: order.address ?? payload.address,
                         }),
                       );
-                      toast.success(
-                        'Клиент уже есть — заявка добавлена в его карточку',
-                      );
                       reload();
                       return;
                     } catch {
+                      // сервер отказал — мгновенную карточку убираем честно
+                      setData((cols) =>
+                        cols
+                          ? cols.map((c) =>
+                              c.stage === 'NEW'
+                                ? {
+                                    ...c,
+                                    orders: c.orders.filter(
+                                      (o) => o.id !== dupTempId,
+                                    ),
+                                    amount: Math.max(
+                                      0,
+                                      (c.amount ?? 0) - price,
+                                    ),
+                                  }
+                                : c,
+                            )
+                          : cols,
+                      );
                       setDraft({ payload, managerName, order });
                       setShowAddClient(true);
                       toast.error(

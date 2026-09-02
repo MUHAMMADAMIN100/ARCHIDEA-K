@@ -305,13 +305,18 @@ export class ClientsService {
       }
       if (existing) {
         const owner = existing.manager?.fullName;
-        // clientId в теле ошибки — сайт показывает кнопку «Открыть карточку»
+        /*
+         * clientId и clientName в теле ошибки: воронка при дубле сама
+         * заводит заявку существующему клиенту и мгновенно рисует его
+         * карточку — для этого ей нужно настоящее имя, а не набранное.
+         */
         throw new ConflictException({
           message:
             `Клиент с этим номером уже есть — «${existing.fullName}»` +
             (owner ? `, ответственный ${owner}` : '') +
-            '. Новую заявку заведите из его карточки',
+            '. Заявка уйдёт в его карточку',
           clientId: existing.id,
+          clientName: existing.fullName,
         });
       }
     }
