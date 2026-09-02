@@ -75,6 +75,8 @@ export interface NewOrderInput {
   address?: string;
   /** Свои доп. услуги строками — как в карточке заказа; в счёт идут отмеченные */
   customExtras?: { title: string; price: number; checked: boolean }[];
+  /** Скидка этой заявки, сомони — сервер вычтет её из суммы */
+  discount?: number;
   /** Пожелания клиента при обращении — полная форма (воронка) */
   preferredDate?: string;
   preferredTime?: string;
@@ -762,7 +764,13 @@ export function AddClientModal({
     (sum, r) => sum + (r.checked ? extraTotal(r) : 0),
     0,
   );
-  const computed = units * unitPrice + moreSum + extrasSum;
+  /*
+   * Скидка вычитается прямо в форме (просьба владельца): раньше «Общая
+   * сумма» её не знала — человек вписывал скидку, а цифра не менялась,
+   * и в заявку уходила цена без скидки.
+   */
+  const скидкаН = Math.max(0, Math.round(Number(discount) || 0));
+  const computed = Math.max(0, units * unitPrice + moreSum + extrasSum - скидкаН);
 
   useEffect(() => {
     if (!manualPrice) setPrice(computed ? String(computed) : '');
@@ -840,6 +848,12 @@ export function AddClientModal({
           seats: isFurniture ? toInt(seats) : undefined,
           estimatedPrice: toInt(price),
           pricePerSqm: unitPrice || undefined,
+          /*
+           * Скидка уходит прямо в заявку. Раньше она сохранялась только в
+           * карточке клиента, и заказ существующему клиенту (занятый номер)
+           * создавался вовсе без неё — скидка «не работала».
+           */
+          discount: скидкаН || undefined,
           address: address.trim(),
           preferredDate: preferredDate || undefined,
           preferredTime: preferredTime || undefined,
@@ -1445,12 +1459,18 @@ export function AddClientModal({
                               {Math.round(Number(r.price) || 0)} сомони
                             </span>
                           ))}
-                        {(moreSum > 0 || extrasSum > 0) && (
+                        {скидкаН > 0 && (
+                          <span className="block">
+                            Скидка: −{скидкаН} сомони
+                          </span>
+                        )}
+                        {(moreSum > 0 || extrasSum > 0 || скидкаН > 0) && (
                           <span className="block font-semibold text-navy-800">
                             Итого: {[units * unitPrice, moreSum, extrasSum]
                               .filter((n) => n > 0)
-                              .join(' + ')}{' '}
-                            = {computed} сомони
+                              .join(' + ')}
+                            {скидкаН > 0 ? ` − ${скидкаН}` : ''} = {computed}{' '}
+                            сомони
                           </span>
                         )}
                       </span>
