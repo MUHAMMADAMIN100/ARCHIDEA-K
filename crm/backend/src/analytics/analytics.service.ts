@@ -251,11 +251,13 @@ export class AnalyticsService {
         ]);
 
       /*
-       * Чистый доход (решение владельца): выручка периода минус ВСЕ расходы
-       * из книги «Доходы и расходы» за тот же период — зарплата, премии,
-       * материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее.
-       * Выручка одна и та же, что на плитке рядом, поэтому на странице
-       * видна арифметика: выручка − расходы = чистый.
+       * Чистый доход (решение владельца): выручка периода минус ЗП клинеров
+       * (начислено по сменам — вычитается ниже, когда посчитаны разрезы)
+       * минус ВСЕ расходы из книги «Доходы и расходы» за тот же период —
+       * зарплата и премии сотрудников, материалы, транспорт, аренда,
+       * коммуналка, реклама, налоги, прочее. Зарплату сотрудников отдельно
+       * НЕ вычитаем — она уже внутри расходов книги, иначе списалась бы
+       * дважды. Клинерскую зарплату в книгу не заносят — она из смен.
        */
       result.revenue = {
         day: day.revenue,
@@ -312,6 +314,13 @@ export class AnalyticsService {
       // ЗП клинеров = все ставки по выездам периода, включая разовых клинеров
       if (result.payroll && seesFinance(user)) {
         result.payroll.cleanersAccrued = rows.brigades.reduce((s, r) => s + r.accrued, 0);
+        /*
+         * Начисленное клинерам — тоже расход компании (решение владельца):
+         * без него «чистый доход» был завышен ровно на зарплату бригад.
+         */
+        if (result.revenue) {
+          result.revenue.net -= result.payroll.cleanersAccrued;
+        }
       }
       /*
        * Два разных уровня доступа к цифрам, и путать их нельзя.
@@ -1046,15 +1055,34 @@ export class AnalyticsService {
       if (buckets.has(key)) spent.set(key, (spent.get(key) ?? 0) + e.amount);
     }
 
+    /*
+     * ЗП клинеров по дням — из оплаченных смен: то же правило, что у плиток
+     * «Чистый доход» и «ЗП клинеров». Без этого график показывал чистый
+     * доход без зарплаты бригад и не сходился с плиткой над ним.
+     */
+    const начислено = new Map<string, number>();
+    const смены = await this.prisma.shift.findMany({
+      where: { date: { gte: start } },
+      select: { rate: true, date: true },
+    });
+    for (const s of смены) {
+      const key = dayKey(s.date);
+      if (buckets.has(key)) {
+        начислено.set(key, (начислено.get(key) ?? 0) + s.rate);
+      }
+    }
+
     return order.map((key) => {
       const revenue = buckets.get(key) ?? 0;
       const expense = spent.get(key) ?? 0;
+      const cleaners = начислено.get(key) ?? 0;
       return {
         date: key.slice(5), // «07-28» — как ожидает график
         day: key, // полная дата — по ней открывается расшифровка столбика
         revenue,
         expense,
-        net: revenue - expense,
+        cleaners,
+        net: revenue - expense - cleaners,
       };
     });
   }

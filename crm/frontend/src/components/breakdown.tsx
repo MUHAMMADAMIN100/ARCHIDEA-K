@@ -202,7 +202,7 @@ export function EntriesDrillModal({
   /** только эти статьи (например, Зарплата и Премии) */
   categories?: string[];
   /** арифметика чистого дохода — сверху окна */
-  summary?: { revenue: number; expenses: number; net: number };
+  summary?: { revenue: number; expenses: number; cleaners?: number; net: number };
   onClose: () => void;
 }) {
   const q = new URLSearchParams({ kind: 'EXPENSE', take: '500' });
@@ -219,6 +219,16 @@ export function EntriesDrillModal({
   const stats = summary
     ? [
         { label: 'Выручка', value: formatPrice(summary.revenue), tone: 'success' as const },
+        // ЗП клинеров начисляется по сменам, в книге её нет — отдельной строкой
+        ...(summary.cleaners
+          ? [
+              {
+                label: 'ЗП клинеров',
+                value: `−${formatPrice(summary.cleaners)}`,
+                tone: 'danger' as const,
+              },
+            ]
+          : []),
         { label: 'Расходы', value: `−${formatPrice(summary.expenses)}`, tone: 'danger' as const },
         {
           label: 'Чистый доход',

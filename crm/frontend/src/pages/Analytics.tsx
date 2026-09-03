@@ -391,9 +391,11 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 }
               />
               {/*
-                Чистый доход: выручка минус все расходы из книги за период.
-                Рисуется только когда сервер уже отдаёт цифру — сайт и сервер
-                выкатываются порознь.
+                Чистый доход: выручка минус ЗП клинеров (по сменам) минус все
+                расходы из книги за период. Зарплату сотрудников отдельно не
+                вычитаем — она уже внутри расходов книги. Рисуется только
+                когда сервер уже отдаёт цифру — сайт и сервер выкатываются
+                порознь.
               */}
               {data.revenue.net != null && (
                 <StatTile
@@ -402,7 +404,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   format={formatPrice}
                   icon={TrendingUp}
                   accent={data.revenue.net >= 0 ? 'green' : 'red'}
-                  hint={`выручка − расходы ${formatPrice(data.revenue.expenses)}`}
+                  hint={
+                    data.payroll
+                      ? `выручка − ЗП клинеров ${formatPrice(
+                          data.payroll.cleanersAccrued,
+                        )} − расходы ${formatPrice(data.revenue.expenses)}`
+                      : `выручка − расходы ${formatPrice(data.revenue.expenses)}`
+                  }
                   title="Выручка минус расходы: из чего сложился чистый доход"
                   testId="плитка-чистый"
                   onClick={() =>
@@ -1265,6 +1273,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 ? {
                     revenue: data.revenue.period,
                     expenses: data.revenue.expenses,
+                    cleaners: data.payroll?.cleanersAccrued,
                     net: data.revenue.net,
                   }
                 : undefined
@@ -1386,7 +1395,9 @@ function RevenueDayTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: { payload?: { revenue: number; expense: number; net: number } }[];
+  payload?: {
+    payload?: { revenue: number; expense: number; cleaners?: number; net: number };
+  }[];
   label?: string;
 }) {
   const d = payload?.[0]?.payload;
@@ -1402,6 +1413,12 @@ function RevenueDayTooltip({
         <span className="text-navy-600">Расходы</span>
         <span className="tabular-nums text-red-700">{formatPrice(d.expense)}</span>
       </div>
+      {(d.cleaners ?? 0) > 0 && (
+        <div className="flex justify-between gap-4">
+          <span className="text-navy-600">ЗП клинеров</span>
+          <span className="tabular-nums text-amber-700">{formatPrice(d.cleaners ?? 0)}</span>
+        </div>
+      )}
       <div className="flex justify-between gap-4 font-semibold">
         <span className="text-navy-600">Чистый доход</span>
         <span className="tabular-nums text-emerald-700">{formatPrice(Math.max(0, d.net))}</span>
