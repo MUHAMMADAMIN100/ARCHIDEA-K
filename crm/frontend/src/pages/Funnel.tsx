@@ -1218,15 +1218,26 @@ export function Funnel() {
             занимает ровно остаток экрана, и строка под ней вернула бы
             прокрутку всей странице.
           */}
-          <div
-            ref={dotsRef}
-            aria-hidden="true"
-            className="pointer-events-none absolute -bottom-3 left-0 right-0 flex items-center justify-center gap-1.5 sm:hidden"
-          >
-            {board.map((col) => (
-              <span key={col.stage} className="swipe-dot" />
-            ))}
-          </div>
+          {/*
+            Точки и стрелки — одной «липкой» строкой у нижнего края экрана
+            (просьба владельца). Раньше они были absolute без позиционированного
+            родителя и цеплялись к ПЕРВОМУ экрану страницы: на телефоне страница
+            прокручивается (фильтры в четыре строки), и после прокрутки они
+            оказывались посреди экрана поверх карточек. sticky держит строку у
+            низа окна, пока доска на экране, а в конце страницы она встаёт на
+            своё место — у низа доски. Отрицательный отступ сверху не добавляет
+            странице высоты: строка ложится на нижний край доски, как раньше.
+          */}
+          <div className="pointer-events-none sticky bottom-2 z-10 -mt-9 flex h-9 items-center justify-center">
+            <div
+              ref={dotsRef}
+              aria-hidden="true"
+              className="flex items-center gap-1.5 sm:hidden"
+            >
+              {board.map((col) => (
+                <span key={col.stage} className="swipe-dot" />
+              ))}
+            </div>
 
           {/*
             Стрелки прокрутки доски — в правом нижнем углу (ТЗ 2.4).
@@ -1234,7 +1245,7 @@ export function Funnel() {
             приходилось тянуться вверх через весь экран, хотя листают доску,
             держа палец внизу. Здесь же они не спорят с точками — те по центру.
           */}
-          <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center gap-1">
+          <div className="pointer-events-none absolute right-2 flex items-center gap-1">
             <button
               ref={prevBtnRef}
               onClick={() => scrollBoard(-1)}
@@ -1253,6 +1264,7 @@ export function Funnel() {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
           </div>
         </div>
       </DragDropContext>
