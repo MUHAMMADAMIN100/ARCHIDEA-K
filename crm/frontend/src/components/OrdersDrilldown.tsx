@@ -45,6 +45,11 @@ export function OrdersDrilldownModal({
    */
   if (!from && !to) query.set('period', 'all');
 
+  /*
+   * Срез «скидки» (просьба владельца): кому и сколько дали — колонка
+   * «Скидка», сумма «было → стало» и итог по скидкам, а не по заказам.
+   */
+  const скидки = metric === 'discounts';
   const url = `/analytics/drilldown?${query.toString()}`;
   const { data, loading, error, reload } = useFetch<AnalyticsDrilldown>(url, {
     deps: [metric, drillKey, from, to],
@@ -58,11 +63,20 @@ export function OrdersDrilldownModal({
         <>
           <DetailStats
             items={[
-              { label: 'Заказов', value: data?.count ?? '…' },
+              { label: скидки ? 'Заказов со скидкой' : 'Заказов', value: data?.count ?? '…' },
+              ...(showMoney && скидки
+                ? [
+                    {
+                      label: 'Скидок на сумму',
+                      value: data ? formatPrice(data.discountSum ?? 0) : '…',
+                      tone: 'danger' as const,
+                    },
+                  ]
+                : []),
               ...(showMoney
                 ? [
                     {
-                      label: 'На сумму',
+                      label: скидки ? 'Сумма заказов' : 'На сумму',
                       value: data ? formatPrice(data.sum) : '…',
                       tone: 'success' as const,
                     },
@@ -119,6 +133,20 @@ export function OrdersDrilldownModal({
                   <span className="text-navy-600">{o.manager?.fullName ?? '—'}</span>
                 ),
               },
+              ...(showMoney && скидки
+                ? [
+                    {
+                      key: 'discount',
+                      header: 'Скидка',
+                      align: 'right' as const,
+                      cell: (o: AnalyticsDrilldown['orders'][number]) => (
+                        <span className="font-semibold tabular-nums text-amber-700">
+                          −{formatPrice(o.discount ?? 0)}
+                        </span>
+                      ),
+                    },
+                  ]
+                : []),
               ...(showMoney
                 ? [
                     {
@@ -126,7 +154,15 @@ export function OrdersDrilldownModal({
                       header: 'Сумма',
                       align: 'right' as const,
                       cell: (o: AnalyticsDrilldown['orders'][number]) =>
-                        o.price > 0 ? (
+                        скидки && (o.discount ?? 0) > 0 ? (
+                          <span className="whitespace-nowrap tabular-nums">
+                            <span className="text-navy-500 line-through">
+                              {formatPrice(o.priceBefore ?? o.price + (o.discount ?? 0))}
+                            </span>
+                            {' → '}
+                            <span className="font-semibold">{formatPrice(o.price)}</span>
+                          </span>
+                        ) : o.price > 0 ? (
                           formatPrice(o.price)
                         ) : (
                           <span
@@ -142,14 +178,31 @@ export function OrdersDrilldownModal({
             ]}
             footer={
               data && data.orders.length > 0 && showMoney ? (
-                <tr className="border-t border-navy-100 font-bold text-navy-900">
-                  <td className="px-3 py-2" colSpan={4}>
-                    Итого по срезу
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-green-700">
-                    {formatPrice(data.sum)}
-                  </td>
-                </tr>
+                скидки ? (
+                  <tr className="border-t border-navy-100 font-bold text-navy-900">
+                    <td className="px-3 py-2" colSpan={4}>
+                      Итого скидок
+                    </td>
+                    <td
+                      className="px-3 py-2 text-right tabular-nums text-amber-700"
+                      data-testid="итого-скидок"
+                    >
+                      −{formatPrice(data.discountSum ?? 0)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-green-700">
+                      {formatPrice(data.sum)}
+                    </td>
+                  </tr>
+                ) : (
+                  <tr className="border-t border-navy-100 font-bold text-navy-900">
+                    <td className="px-3 py-2" colSpan={4}>
+                      Итого по срезу
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-green-700">
+                      {formatPrice(data.sum)}
+                    </td>
+                  </tr>
+                )
               ) : undefined
             }
           />

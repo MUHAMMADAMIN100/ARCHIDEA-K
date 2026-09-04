@@ -1092,6 +1092,10 @@ export interface DrilldownOrder {
   estimatedPrice: number;
   finalPrice?: number | null;
   price: number;
+  /** скидка по заказу, сомони — для окна «Скидки за период» */
+  discount?: number;
+  /** цена до скидки: «было → стало» */
+  priceBefore?: number;
   typeLabel: string;
   sourceLabel: string;
   client: { id: string; fullName: string; phone: string };
@@ -1104,6 +1108,8 @@ export interface AnalyticsDrilldown {
   key: string | null;
   count: number;
   sum: number;
+  /** общая сумма скидок по срезу */
+  discountSum?: number;
   orders: DrilldownOrder[];
 }
 

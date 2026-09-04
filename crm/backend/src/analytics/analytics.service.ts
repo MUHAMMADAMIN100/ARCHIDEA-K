@@ -677,7 +677,7 @@ export class AnalyticsService {
      * дырой, через которую менеджер увидит выручку компании или чужую
      * загруженность в обход `full()`.
      */
-    const MONEY = ['revenuePeriod', 'revenueMoment', 'revenueDay', 'unpriced', 'noCloseDate'];
+    const MONEY = ['revenuePeriod', 'revenueMoment', 'revenueDay', 'unpriced', 'noCloseDate', 'discounts'];
     const ALL_STAFF = [
       'managerActive',
       'managerPaid',
@@ -800,6 +800,19 @@ export class AnalyticsService {
         break;
       case 'conversionTotal':
         where = periodScope;
+        break;
+      /*
+       * Скидки за период (просьба владельца): только оплаченные заказы, где
+       * скидка больше нуля, — кому и сколько дали. Условие периода то же,
+       * что у плитки «Скидки» (breakdowns): stage PAID + closedAt в диапазоне.
+       */
+      case 'discounts':
+        where = {
+          ...scope,
+          stage: FunnelStage.PAID,
+          ...(hasRange ? { closedAt: range } : {}),
+          discount: { gt: 0 },
+        };
         break;
       /*
        * Карточки дашборда. Они показывают положение дел СЕЙЧАС, а не за период,
@@ -995,6 +1008,7 @@ export class AnalyticsService {
         area: true,
         estimatedPrice: true,
         finalPrice: true,
+        discount: true,
         client: { select: { id: true, fullName: true, phone: true } },
         manager: { select: { id: true, fullName: true } },
       },
@@ -1007,8 +1021,12 @@ export class AnalyticsService {
       key: key ?? null,
       count: orders.length,
       sum: orders.reduce((s, o) => s + priceOf(o), 0),
+      // общая сумма скидок по срезу — для окна «Скидки за период»
+      discountSum: orders.reduce((s, o) => s + (o.discount ?? 0), 0),
       orders: orders.map((o) => ({
         ...o,
+        // цена до скидки: итог к оплате плюс скидка — «было → стало»
+        priceBefore: priceOf(o) + (o.discount ?? 0),
         typeLabel: TYPE_LABEL[o.cleaningType] ?? o.cleaningType,
         sourceLabel: SOURCE_LABEL[o.source] ?? o.source,
         price: priceOf(o),

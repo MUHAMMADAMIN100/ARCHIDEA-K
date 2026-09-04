@@ -569,7 +569,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   setDrill({
                     title: 'Скидки за период',
                     subtitle: rangeLabel,
-                    metric: 'revenuePeriod',
+                    metric: 'discounts',
                   })
                 }
               />
