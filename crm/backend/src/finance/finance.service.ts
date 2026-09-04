@@ -190,7 +190,12 @@ export class FinanceService {
         .sort((a, b) => b.amount - a.amount),
       series: [...byMonth.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, v]) => ({ date: month, income: v.income, expense: v.expense })),
+        // подпись месяца по-русски: «08.2026», а не «2026-08» (просьба владельца)
+        .map(([month, v]) => ({
+          date: `${month.slice(5, 7)}.${month.slice(0, 4)}`,
+          income: v.income,
+          expense: v.expense,
+        })),
     };
   }
 

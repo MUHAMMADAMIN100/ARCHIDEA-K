@@ -1077,7 +1077,8 @@ export class AnalyticsService {
       const expense = spent.get(key) ?? 0;
       const cleaners = начислено.get(key) ?? 0;
       return {
-        date: key.slice(5), // «07-28» — как ожидает график
+        // подпись оси по-русски, день.месяц: «28.07» (просьба владельца)
+        date: `${key.slice(8, 10)}.${key.slice(5, 7)}`,
         day: key, // полная дата — по ней открывается расшифровка столбика
         revenue,
         expense,
