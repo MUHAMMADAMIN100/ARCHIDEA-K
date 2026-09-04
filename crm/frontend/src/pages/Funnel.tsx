@@ -475,6 +475,20 @@ export function Funnel() {
     if (!el) return;
     const measure = () => {
       /*
+       * На телефоне высоту НЕ меряем (просьба владельца: «трясётся»).
+       *
+       * Замер шёл на каждое событие прокрутки: доска мерила расстояние до
+       * верха экрана и подгоняла высоту под остаток. При прокрутке страницы
+       * вниз это расстояние менялось с каждым пикселем, высота прыгала, и
+       * страница дёргалась; в Safari к этому добавлялась плавающая адресная
+       * строка. Узкому экрану высоту задаёт CSS от малой высоты окна (svh),
+       * которая от адресной строки не зависит, — см. класс доски.
+       */
+      if (window.matchMedia?.('(max-width: 639.98px)').matches) {
+        setBoardHeight(undefined);
+        return;
+      }
+      /*
        * top берём относительно окна, без прибавки прокрутки: высота считается
        * от места доски на экране до нижнего края окна. Раньше здесь
        * складывались две системы координат — документная и оконная, — и
@@ -962,7 +976,7 @@ export function Funnel() {
           <div
             ref={boardRef}
             style={boardHeight ? { height: boardHeight } : undefined}
-            className="board-scroll flex snap-x snap-mandatory gap-3 pr-4 sm:snap-none sm:gap-4 sm:pr-0"
+            className="board-scroll flex h-[calc(100svh-7.5rem)] snap-x snap-mandatory gap-3 pr-4 sm:h-auto sm:snap-none sm:gap-4 sm:pr-0"
           >
             {board.map((col) => {
               /*
