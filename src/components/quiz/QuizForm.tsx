@@ -166,7 +166,10 @@ export function QuizForm() {
         label={
           isFurniture
             ? `${selectedType?.title ?? 'Мебель'} · ${calc.seats} мест`
-            : `${selectedType?.title ?? 'Уборка'} · ${calc.area} м²`
+            : breakdown.minimumApplied
+              ? // объект меньше порога — клиент видит, почему сумма не «площадь × цена»
+                `${selectedType?.title ?? 'Уборка'} · ${calc.area} м² · минимальная цена`
+              : `${selectedType?.title ?? 'Уборка'} · ${calc.area} м²`
         }
         value={formatPrice(breakdown.base)}
       />

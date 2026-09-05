@@ -1,5 +1,5 @@
 import { DirtLevel } from '@prisma/client';
-import { unitPrice } from '../orders/order-pricing';
+import { unitPrice, workTotalOf } from '../orders/order-pricing';
 import type { ProposalItemInput } from './template-render';
 
 /**
@@ -46,6 +46,9 @@ interface TariffSource {
   includedWorks?: string[];
   /** Выработка одного человека за смену — из неё считается срок работ */
   outputPerDay?: number | null;
+  /** Минимальная цена и порог объёма — объект меньше порога стоит фиксированно */
+  minPrice?: number | null;
+  minArea?: number | null;
 }
 
 /**
@@ -119,15 +122,27 @@ export function itemsFromOrder(
     order.pricePerSqm ?? (tariff ? unitPrice(tariff, order.dirtLevel) : 0);
 
   if (volume > 0 && perUnit > 0) {
+    /*
+     * Та же формула, что у заказа: объект меньше порога стоит минимальную
+     * цену. Позиция с минимумом идёт БЕЗ цены за единицу: itemAmount
+     * пересчитывает «объём × цена», и «40 м² × 27 = 1500» в КП выглядело
+     * бы как ошибка в арифметике. Клиент видит «40 м² = 1500 сомони» и
+     * пояснение, откуда сумма.
+     */
+    const work = workTotalOf(volume, perUnit, tariff);
+    const plan = planNote(volume, tariff?.outputPerDay);
+    const minimumNote = work.minimumApplied
+      ? `Минимальная стоимость заказа до ${tariff?.minArea} ${tariff?.unit ?? 'м²'}.`
+      : null;
     items.push({
       section: SECTION_WORK,
       title: tariff?.title ?? 'Уборка',
       unit: tariff?.unit ?? 'м²',
       volume,
-      unitPrice: perUnit,
-      amount: volume * perUnit,
+      unitPrice: work.minimumApplied ? null : perUnit,
+      amount: work.total,
       includes: tariff?.includedWorks ?? null,
-      note: planNote(volume, tariff?.outputPerDay),
+      note: [minimumNote, plan].filter(Boolean).join(' ') || null,
     });
   }
 

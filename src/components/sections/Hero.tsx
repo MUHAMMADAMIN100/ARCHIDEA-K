@@ -15,8 +15,9 @@ const STATS = [
 
 export function Hero() {
   const pricing = usePricing();
+  // одна цена услуги — та же, по которой считает CRM
   const minPrice =
-    pricing.types.find((t) => t.id === 'general')?.prices.light ?? 25;
+    pricing.types.find((t) => t.id === 'general')?.price ?? 27;
 
   return (
     <section

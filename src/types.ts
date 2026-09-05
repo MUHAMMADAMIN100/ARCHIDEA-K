@@ -49,4 +49,6 @@ export interface PriceBreakdown {
   base: number;
   extras: { title: string; qty: number; sum: number }[];
   total: number;
+  /** Объект меньше порога — работы стоят минимальную цену услуги */
+  minimumApplied: boolean;
 }

@@ -64,6 +64,7 @@ import {
   formatVolume,
   serviceTitle,
 } from '../lib/labels';
+import { workTotalOf } from '../lib/pricing';
 import {
   formatPhone,
   isValidPersonName,
@@ -884,7 +885,9 @@ function AddOrderModal({
     };
   });
   const moreSum = moreRows.reduce((sum, r) => sum + r.total, 0);
-  const computed = units * unitPrice + moreSum;
+  // объект меньше порога — минимальная цена услуги, как на сервере
+  const mainWork = workTotalOf(units, unitPrice, tariff);
+  const computed = mainWork.total + moreSum;
 
   useEffect(() => {
     if (!manualPrice) setEstimatedPrice(computed ? String(computed) : '');
@@ -1084,8 +1087,10 @@ function AddOrderModal({
                   /* расчёт по строкам: видно, из чего сложился итог */
                   <span className="block">
                     <span className="block">
-                      {isFurniture ? 'Мест' : 'Площадь'}: {units} × {unitPrice} ={' '}
-                      {units * unitPrice} сомони
+                      {mainWork.minimumApplied
+                        ? // объект меньше порога — подпись честно называет минимум
+                          `Площадь: ${units} м² — меньше ${tariff?.minArea} м², минимальная цена ${mainWork.total} сомони`
+                        : `${isFurniture ? 'Мест' : 'Площадь'}: ${units} × ${unitPrice} = ${mainWork.total} сомони`}
                     </span>
                     {moreRows
                       .filter((r) => r.qtyN > 0)
@@ -1096,7 +1101,7 @@ function AddOrderModal({
                       ))}
                     {moreSum > 0 && (
                       <span className="block font-semibold text-navy-800">
-                        Итого: {units * unitPrice} + {moreSum} = {computed} сомони
+                        Итого: {mainWork.total} + {moreSum} = {computed} сомони
                       </span>
                     )}
                   </span>

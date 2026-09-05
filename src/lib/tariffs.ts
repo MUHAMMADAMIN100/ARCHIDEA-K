@@ -102,6 +102,8 @@ async function fetchLive(): Promise<Pricing | null> {
         priceMedium: number;
         priceHeavy: number;
         pricePerSqm?: number | null;
+        minPrice?: number | null;
+        minArea?: number | null;
       }[];
       extras?: {
         key: string;
@@ -119,19 +121,24 @@ async function fetchLive(): Promise<Pricing | null> {
       .map((row) => {
         const id = KEY_TO_ID[row.key] ?? row.key.toLowerCase();
         const base = STATIC_BY_ID.get(id);
-        const medium = Number(row.priceMedium) || Number(row.pricePerSqm) || 0;
-        const light = Number(row.priceLight) || medium;
-        const heavy = Number(row.priceHeavy) || medium;
-        if (!(medium > 0 || light > 0)) return null; // цена не задана — не показываем
+        /*
+         * Одна цена — та же, по которой считает CRM (priceMedium; см.
+         * order-pricing.ts, unitPrice). Степень загрязнения на неё не влияет.
+         */
+        const price =
+          Number(row.priceMedium) ||
+          Number(row.pricePerSqm) ||
+          Number(row.priceLight) ||
+          0;
+        if (!(price > 0)) return null; // цена не задана — не показываем
         const perSeat = (row.unit ?? 'м²') !== 'м²';
         return {
           id,
           title: row.title || base?.title || id,
-          prices: {
-            light: light > 0 ? light : medium,
-            medium: medium > 0 ? medium : light,
-            heavy: heavy > 0 ? heavy : medium || light,
-          },
+          price,
+          // минимум и порог приходят из карточки услуги в CRM
+          minPrice: Math.max(0, Number(row.minPrice) || 0),
+          minArea: Math.max(0, Number(row.minArea) || 0),
           perSeat,
           description: row.description || base?.description || '',
           popular: base?.popular,

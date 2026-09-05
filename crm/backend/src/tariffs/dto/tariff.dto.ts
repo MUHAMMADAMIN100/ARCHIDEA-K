@@ -107,6 +107,21 @@ export class CreateTariffDto {
   @Max(100000)
   outputPerDay?: number;
 
+  /**
+   * Минимальная цена заказа и порог объёма (решение владельца): объект
+   * МЕНЬШЕ порога стоит ровно minPrice. Ноль в любом из полей — правила нет.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_PRICE)
+  minPrice?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  minArea?: number;
 }
 
 export class UpdateTariffDto {
@@ -193,6 +208,21 @@ export class UpdateTariffDto {
   @Max(100000)
   outputPerDay?: number;
 
+  /**
+   * Минимальная цена заказа и порог объёма (решение владельца): объект
+   * МЕНЬШЕ порога стоит ровно minPrice. Ноль в любом из полей — правила нет.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_PRICE)
+  minPrice?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  minArea?: number;
 }
 
 export class CreateExtraDto {

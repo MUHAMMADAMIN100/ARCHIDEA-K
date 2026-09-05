@@ -19,6 +19,13 @@ export interface PricingTariff {
   priceMedium: number;
   priceHeavy: number;
   pricePerSqm: number;
+  /**
+   * Минимальная цена основной работы и порог объёма (решение владельца):
+   * заказ МЕНЬШЕ minArea единиц стоит ровно minPrice, от порога — объём × цена.
+   * Необязательны: у услуги без порога правило не действует.
+   */
+  minPrice?: number | null;
+  minArea?: number | null;
 }
 
 export interface PricingInput {
@@ -91,8 +98,15 @@ export interface PricingResult {
   unit: string;
   /** Цена за единицу, из которой сложилась сумма */
   pricePerUnit: number;
-  /** Сумма основных работ: units × pricePerUnit */
+  /** Сумма основных работ: units × pricePerUnit, либо минимальная цена */
   workTotal: number;
+  /**
+   * Сработал минимум: объект меньше порога, и работы стоят фиксированно.
+   * Нужен интерфейсу — подписать «минимальная цена» вместо «40 × 27».
+   */
+  minimumApplied: boolean;
+  /** Минимальная цена услуги, если правило сработало (иначе 0) */
+  minPrice: number;
   /** Сумма выбранных доп. услуг */
   extrasTotal: number;
   /** Стоимость до скидки: работы + доп. услуги */
@@ -164,6 +178,52 @@ export function billableUnits(
 }
 
 /**
+ * Действует ли минимальная цена для этого объёма.
+ *
+ * Правило владельца (сентябрь 2026): объект МЕНЬШЕ порога стоит фиксированно,
+ * сколько бы ни было метров, — а от порога и выше считается объём × цена.
+ * Именно строгое «меньше»: 50 м² при пороге 50 — уже по ставке. Владелец
+ * знает, что 55 м² × 27 = 1485 выходит дешевле 49 м² за 1500, и принял это.
+ *
+ * Нулевой объём под правило не попадает: пустая карточка не должна
+ * показывать 1500 сомони, пока площадь не вписали.
+ */
+export function minimumApplies(
+  units: number,
+  tariff: PricingTariff | null | undefined,
+): boolean {
+  const minPrice = Math.round(Number(tariff?.minPrice) || 0);
+  const minArea = Math.round(Number(tariff?.minArea) || 0);
+  return minPrice > 0 && minArea > 0 && units > 0 && units < minArea;
+}
+
+/**
+ * Стоимость основной работы: объём × цена за единицу, либо минимальная цена,
+ * если объект меньше порога.
+ *
+ * Единственное место с этим правилом — по нему считают и карточка заказа,
+ * и приём заявок с сайта, и смета КП. Ручная цена за единицу минимум НЕ
+ * отменяет: минимум — про сумму заказа, а не про ставку. Кому нужна другая
+ * сумма, вписывает итог руками («Сумма задана вручную»).
+ */
+export function workTotalOf(
+  units: number,
+  pricePerUnit: number,
+  tariff: PricingTariff | null | undefined,
+): { total: number; minimumApplied: boolean; minPrice: number } {
+  if (minimumApplies(units, tariff)) {
+    const minPrice = Math.round(Number(tariff?.minPrice) || 0);
+    return { total: minPrice, minimumApplied: true, minPrice };
+  }
+  // ограничиваем сверху, чтобы опечатка в площади не переполнила Int
+  return {
+    total: Math.min(units * pricePerUnit, 2_000_000_000),
+    minimumApplied: false,
+    minPrice: 0,
+  };
+}
+
+/**
  * Итоговый расчёт. Если менеджер задал цену за единицу вручную — берём её,
  * иначе подставляем из услуги.
  */
@@ -179,10 +239,10 @@ export function calculatePrice(
       ? Math.round(manual)
       : unitPrice(tariff, input.dirtLevel);
 
-  // ограничиваем сверху, чтобы опечатка в площади не переполнила Int
-  const mainWork = Math.min(units * pricePerUnit, 2_000_000_000);
+  // основная работа: объём × цена, либо минимальная цена (объект меньше порога)
+  const main = workTotalOf(units, pricePerUnit, tariff);
   const addWork = Math.max(0, Math.round(Number(input.additionalWork) || 0));
-  const workTotal = Math.min(mainWork + addWork, 2_000_000_000);
+  const workTotal = Math.min(main.total + addWork, 2_000_000_000);
   /*
    * Доп. услуги считаются из СТРОК заказа. Справочник остаётся входным
    * каналом: заявка с сайта приходит списком ключей, и он превращается в
@@ -208,6 +268,8 @@ export function calculatePrice(
     unit: tariff?.unit ?? 'м²',
     pricePerUnit,
     workTotal,
+    minimumApplied: main.minimumApplied,
+    minPrice: main.minPrice,
     extrasTotal: extras,
     subtotal,
     discount,

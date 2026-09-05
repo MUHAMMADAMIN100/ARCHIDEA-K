@@ -33,6 +33,9 @@ const TARIFF_DEFAULTS: {
   hasLevels: boolean;
   unit: string;
   sortOrder: number;
+  /** Минимальная цена и порог: объект меньше порога стоит фиксированно */
+  minPrice: number;
+  minArea: number;
 }[] = [
   {
     key: CleaningType.GENERAL,
@@ -43,6 +46,8 @@ const TARIFF_DEFAULTS: {
     hasLevels: true,
     unit: 'м²',
     sortOrder: 0,
+    minPrice: 1500,
+    minArea: 50,
   },
   {
     key: CleaningType.POST_RENOVATION,
@@ -53,6 +58,8 @@ const TARIFF_DEFAULTS: {
     hasLevels: true,
     unit: 'м²',
     sortOrder: 1,
+    minPrice: 1500,
+    minArea: 50,
   },
   {
     key: CleaningType.FURNITURE,
@@ -63,6 +70,9 @@ const TARIFF_DEFAULTS: {
     hasLevels: false,
     unit: 'место',
     sortOrder: 2,
+    // считается местами — под минимум по площади не попадает
+    minPrice: 0,
+    minArea: 0,
   },
 ];
 
@@ -136,6 +146,8 @@ export class TariffsService implements OnModuleInit {
               hasLevels: d.hasLevels,
               unit: d.unit,
               sortOrder: d.sortOrder,
+              minPrice: d.minPrice,
+              minArea: d.minArea,
               isSystem: true,
             },
           });
@@ -288,6 +300,9 @@ export class TariffsService implements OnModuleInit {
         includedWorks: cleanWorks(dto.includedWorks),
         excludedWorks: cleanWorks(dto.excludedWorks),
         outputPerDay: dto.outputPerDay || null,
+        // минимум по объёму: ноль в любом поле — правила нет
+        minPrice: this.num(dto.minPrice ?? 0),
+        minArea: Math.min(this.num(dto.minArea ?? 0), 100000),
       },
     });
 
@@ -324,6 +339,11 @@ export class TariffsService implements OnModuleInit {
     }
     if (dto.outputPerDay !== undefined) {
       data.outputPerDay = dto.outputPerDay || null;
+    }
+    // минимум по объёму: ноль в любом поле выключает правило
+    if (dto.minPrice !== undefined) data.minPrice = this.num(dto.minPrice);
+    if (dto.minArea !== undefined) {
+      data.minArea = Math.min(this.num(dto.minArea), 100000);
     }
 
     // У базовой услуги единицу измерения менять нельзя: на неё опирается
@@ -387,6 +407,9 @@ export class TariffsService implements OnModuleInit {
         'includedWorks',
         'excludedWorks',
         'outputPerDay',
+        // минимум и порог меняют цену заказов — правка обязана быть в истории
+        'minPrice',
+        'minArea',
       ]),
     });
     return after;

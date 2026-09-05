@@ -429,6 +429,16 @@ export function Tariffs() {
                 карточки в ряду до одинаковой высоты, а этот блок съедает
                 разницу — кнопки во всех карточках оказываются на одной линии.
               */}
+              {/* Минимум читается прямо с карточки; меняется в «Редактировать» */}
+              {!!t.minPrice && !!t.minArea && (
+                <p className="mt-3 rounded-lg bg-navy-50 px-3 py-2 text-xs text-navy-600">
+                  Объект меньше {t.minArea} {t.unit} —{' '}
+                  <span className="font-semibold tabular-nums text-navy-800">
+                    {t.minPrice.toLocaleString('ru-RU')} сомони
+                  </span>
+                </p>
+              )}
+
               <div className="flex-1" />
 
               <button
@@ -834,6 +844,16 @@ function TariffModal({
   const [outputPerDay, setOutputPerDay] = useState(
     tariff?.outputPerDay != null ? String(tariff.outputPerDay) : '',
   );
+  /*
+   * Минимальная цена и порог (решение владельца): объект МЕНЬШЕ порога
+   * стоит фиксированно. Пусто или ноль в любом поле — правила нет.
+   */
+  const [minPrice, setMinPrice] = useState(
+    tariff?.minPrice ? String(tariff.minPrice) : '',
+  );
+  const [minArea, setMinArea] = useState(
+    tariff?.minArea ? String(tariff.minArea) : '',
+  );
   const [saving, setSaving] = useState(false);
 
   const canSubmit = title.trim().length >= 2;
@@ -855,6 +875,9 @@ function TariffModal({
       includedWorks: splitWorks(included),
       excludedWorks: splitWorks(excluded),
       outputPerDay: outputPerDay ? toInt(outputPerDay) : 0,
+      // ноль отправляем явно: пустое поле должно СНИМАТЬ минимум, а не «не менять»
+      minPrice: toInt(minPrice),
+      minArea: toInt(minArea),
     };
     /*
      * Окно закрывается сразу, запрос уходит фоном — как и везде в системе.
@@ -991,6 +1014,41 @@ function TariffModal({
                 срок не рассчитывается.
               </p>
             </div>
+
+            {/*
+              Минимальная цена (решение владельца, сентябрь 2026): объект
+              меньше порога стоит фиксированно — 1500 сомони до 50 м². Оба
+              поля живут здесь, чтобы руководитель менял их без программиста;
+              сайт берёт их отсюда же.
+            */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Минимальная цена, сомони</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="input"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(sanitize(e.target.value))}
+                  placeholder="Например: 1500"
+                />
+              </div>
+              <div>
+                <label className="label">Порог, {unit || 'м²'}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="input"
+                  value={minArea}
+                  onChange={(e) => setMinArea(sanitize(e.target.value))}
+                  placeholder="Например: 50"
+                />
+              </div>
+            </div>
+            <p className="-mt-1 text-xs text-navy-600">
+              Объект меньше порога стоит минимальную цену, от порога — объём × цена.
+              Пусто в любом поле — правило не действует.
+            </p>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm text-navy-700">
               <input

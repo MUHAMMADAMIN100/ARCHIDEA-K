@@ -1,17 +1,31 @@
 import {
   CLEANING_TYPES,
   EXTRA_SERVICES,
-  MIN_ORDER_PRICE,
   type CleaningType,
   type ExtraService,
 } from '../config/pricing';
 import type { CalculatorState, PriceBreakdown } from '../types';
 
 /**
+ * Действует ли минимальная цена услуги для этого объёма.
+ *
+ * Правило владельца (сентябрь 2026): объект МЕНЬШЕ порога стоит
+ * фиксированно, сколько бы ни было метров; от порога — площадь × цена.
+ * Строгое «меньше»: 50 м² при пороге 50 — уже по ставке. Та же формула
+ * стоит в CRM (order-pricing.ts) — сайт и CRM называют одну сумму.
+ */
+export function minimumApplies(units: number, type: CleaningType): boolean {
+  const minPrice = Math.round(Number(type.minPrice) || 0);
+  const minArea = Math.round(Number(type.minArea) || 0);
+  return minPrice > 0 && minArea > 0 && units > 0 && units < minArea;
+}
+
+/**
  * Главная функция расчёта стоимости.
- * Уборка: площадь × ставка (по типу и степени загрязнения) + доп.услуги.
- * Мягкая мебель: посадочные места × цена за место (без доп.услуг).
- * Применяется минимальная стоимость заказа.
+ * Уборка: площадь × цена услуги + доп. услуги; объект меньше порога —
+ * минимальная цена услуги вместо «площадь × цена». Степень загрязнения на
+ * сумму не влияет — это подсказка бригаде.
+ * Мягкая мебель: посадочные места × цена за место (без доп. услуг).
  * types/extras можно передать живые (из CRM) — по умолчанию резервные.
  */
 export function calculatePrice(
@@ -23,14 +37,19 @@ export function calculatePrice(
   const isFurniture = !!type?.perSeat;
 
   let base = 0;
+  let minimumApplied = false;
   if (type) {
     if (isFurniture) {
       const seats = Number.isFinite(state.seats) ? Math.max(0, state.seats) : 0;
-      base = Math.round(seats * type.prices.light);
+      base = Math.round(seats * type.price);
     } else {
-      const rate = type.prices[state.dirtLevel] ?? type.prices.light;
       const area = Number.isFinite(state.area) ? Math.max(0, state.area) : 0;
-      base = Math.round(area * rate);
+      if (minimumApplies(area, type)) {
+        base = Math.round(Number(type.minPrice) || 0);
+        minimumApplied = true;
+      } else {
+        base = Math.round(area * type.price);
+      }
     }
   }
 
@@ -53,8 +72,11 @@ export function calculatePrice(
   }
 
   const extrasSum = extras.reduce((acc, e) => acc + e.sum, 0);
-  const rawTotal = base + extrasSum;
-  const total = rawTotal > 0 ? Math.max(rawTotal, MIN_ORDER_PRICE) : 0;
+  /*
+   * Общего минимума заказа больше нет: минимум живёт у услуги и уже учтён
+   * в base. Доп. услуги прибавляются сверху — как и в CRM.
+   */
+  const total = base + extrasSum;
 
-  return { base, extras, total };
+  return { base, extras, total, minimumApplied };
 }

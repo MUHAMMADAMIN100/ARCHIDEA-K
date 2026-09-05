@@ -5,7 +5,9 @@ import {
   billableUnits,
   calculatePrice,
   extrasTotal,
+  minimumApplies,
   unitPrice,
+  workTotalOf,
 } from './order-pricing';
 
 /**
@@ -319,5 +321,140 @@ describe('Заказ без основной услуги', () => {
       CATALOGUE,
     );
     expect(r.workTotal).toBe(3000);
+  });
+});
+
+describe('Минимальная цена заказа (решение владельца, сентябрь 2026)', () => {
+  /*
+   * Объект МЕНЬШЕ 50 м² стоит ровно 1500, от 50 м² — площадь × ставка.
+   * Владелец выбрал строгий порог и знает, что 55 м² × 27 = 1485 выходит
+   * дешевле 49 м² за 1500 — это его решение, тест его закрепляет.
+   */
+  const WITH_MIN: PricingTariff = { ...CLEANING, minPrice: 1500, minArea: 50 };
+  const RENOVATION: PricingTariff = {
+    key: 'POST_RENOVATION',
+    unit: 'м²',
+    hasLevels: true,
+    priceLight: 30,
+    priceMedium: 32,
+    priceHeavy: 35,
+    pricePerSqm: 32,
+    minPrice: 1500,
+    minArea: 50,
+  };
+
+  it('30 м² — минимум 1500, а не 810', () => {
+    const r = calculatePrice({ area: 30 }, WITH_MIN);
+    expect(r.workTotal).toBe(1500);
+    expect(r.total).toBe(1500);
+    expect(r.minimumApplied).toBe(true);
+    expect(r.minPrice).toBe(1500);
+  });
+
+  it('49 м² — ещё минимум', () => {
+    expect(calculatePrice({ area: 49 }, WITH_MIN).total).toBe(1500);
+  });
+
+  it('ровно 50 м² — уже по ставке: 1350 (строгое «меньше», решение владельца)', () => {
+    const r = calculatePrice({ area: 50 }, WITH_MIN);
+    expect(r.total).toBe(1350);
+    expect(r.minimumApplied).toBe(false);
+    expect(r.minPrice).toBe(0);
+  });
+
+  it('55 м² — 1485, дешевле минимума: так решил владелец', () => {
+    expect(calculatePrice({ area: 55 }, WITH_MIN).total).toBe(1485);
+  });
+
+  it('100 м² — как раньше, 2700', () => {
+    expect(calculatePrice({ area: 100 }, WITH_MIN).total).toBe(2700);
+  });
+
+  it('после ремонта 40 м² — тот же минимум 1500, а не 1280', () => {
+    expect(calculatePrice({ area: 40 }, RENOVATION).total).toBe(1500);
+  });
+
+  it('степень загрязнения минимум не трогает', () => {
+    for (const level of [DirtLevel.LIGHT, DirtLevel.MEDIUM, DirtLevel.HEAVY]) {
+      expect(calculatePrice({ area: 30, dirtLevel: level }, WITH_MIN).total).toBe(1500);
+    }
+  });
+
+  it('пустая площадь — 0, а не 1500: карточка без метров не должна показывать минимум', () => {
+    expect(calculatePrice({ area: 0 }, WITH_MIN).total).toBe(0);
+    expect(calculatePrice({ area: null }, WITH_MIN).total).toBe(0);
+    expect(calculatePrice({}, WITH_MIN).minimumApplied).toBe(false);
+  });
+
+  it('мебель считается местами — под минимум по площади не попадает', () => {
+    const r = calculatePrice({ serviceKey: 'FURNITURE', seats: 3 }, FURNITURE);
+    expect(r.total).toBe(210);
+    expect(r.minimumApplied).toBe(false);
+  });
+
+  it('услуга без порога — старое правило, площадь × ставка', () => {
+    expect(calculatePrice({ area: 30 }, CLEANING).total).toBe(810);
+    expect(calculatePrice({ area: 30 }, { ...CLEANING, minPrice: 1500, minArea: 0 }).total).toBe(810);
+    expect(calculatePrice({ area: 30 }, { ...CLEANING, minPrice: 0, minArea: 50 }).total).toBe(810);
+  });
+
+  it('ручная цена за м² минимум не отменяет: 40 × 30 = 1200 → всё равно 1500', () => {
+    // минимум — про сумму заказа, а не про ставку; другую сумму вписывают итогом
+    const r = calculatePrice({ area: 40, pricePerSqm: 30 }, WITH_MIN);
+    expect(r.total).toBe(1500);
+    expect(r.pricePerUnit).toBe(30);
+  });
+
+  it('ручная ставка выше порога считается как раньше: 60 × 30 = 1800', () => {
+    expect(calculatePrice({ area: 60, pricePerSqm: 30 }, WITH_MIN).total).toBe(1800);
+  });
+
+  it('доп. услуги прибавляются к минимуму сверху', () => {
+    const r = calculatePrice(
+      {
+        area: 30,
+        customExtras: [{ title: 'Окна', price: 150, checked: true }],
+      },
+      WITH_MIN,
+    );
+    expect(r.workTotal).toBe(1500);
+    expect(r.extrasTotal).toBe(150);
+    expect(r.total).toBe(1650);
+  });
+
+  it('дополнительная основная услуга тоже сверху минимума', () => {
+    const r = calculatePrice({ area: 30, additionalWork: 320 }, WITH_MIN);
+    expect(r.workTotal).toBe(1820);
+    expect(r.minimumApplied).toBe(true);
+  });
+
+  it('скидка вычитается после минимума и не уводит в минус', () => {
+    expect(calculatePrice({ area: 30, discount: 300 }, WITH_MIN).total).toBe(1200);
+    const r = calculatePrice({ area: 30, discount: 2000 }, WITH_MIN);
+    expect(r.discount).toBe(1500);
+    expect(r.total).toBe(0);
+  });
+
+  it('заказ без основной услуги — минимума нет: только доп. услуги', () => {
+    const r = calculatePrice(
+      {
+        serviceKey: null,
+        area: 30,
+        customExtras: [{ title: 'Матрас', price: 200, checked: true }],
+      },
+      WITH_MIN,
+    );
+    expect(r.workTotal).toBe(0);
+    expect(r.total).toBe(200);
+    expect(r.minimumApplied).toBe(false);
+  });
+
+  it('workTotalOf — единое правило для карточки, КП и сайта', () => {
+    expect(workTotalOf(30, 27, WITH_MIN)).toEqual({ total: 1500, minimumApplied: true, minPrice: 1500 });
+    expect(workTotalOf(50, 27, WITH_MIN)).toEqual({ total: 1350, minimumApplied: false, minPrice: 0 });
+    expect(workTotalOf(30, 27, null)).toEqual({ total: 810, minimumApplied: false, minPrice: 0 });
+    expect(minimumApplies(49, WITH_MIN)).toBe(true);
+    expect(minimumApplies(50, WITH_MIN)).toBe(false);
+    expect(minimumApplies(0, WITH_MIN)).toBe(false);
   });
 });

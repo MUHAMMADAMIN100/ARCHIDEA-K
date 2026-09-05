@@ -6,7 +6,7 @@ import {
   IconIron,
   IconCheck,
 } from '../ui/icons';
-import { DIRT_LEVELS, CURRENCY, MIN_ORDER_PRICE } from '../../config/pricing';
+import { DIRT_LEVELS, CURRENCY } from '../../config/pricing';
 import type { Pricing } from '../../lib/tariffs';
 import { formatPrice } from '../../lib/format';
 import type { CalculatorState } from '../../types';
@@ -75,9 +75,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                 {t.title}
               </span>
               <span className="quiz-option-meta mt-0.5 block">
-                {t.perSeat
-                  ? `${t.prices.light} ${CURRENCY}/место`
-                  : `от ${t.prices.light} ${CURRENCY}/м²`}
+                {`${t.price} ${CURRENCY}/${t.perSeat ? 'место' : 'м²'}`}
               </span>
             </button>
           ))}
@@ -144,7 +142,12 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
           </div>
 
           <div>
-            <FieldLabel required hint="Влияет на цену за м²">
+            {/*
+              Степень — подсказка бригаде, на цену не влияет (решение
+              владельца): раньше сайт называл 25 за «лёгкую», а CRM считала
+              27, и разницу объясняли по телефону.
+            */}
+            <FieldLabel required hint="Поможет бригаде подготовиться, на цену не влияет">
               Степень загрязнения
             </FieldLabel>
             <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
@@ -154,11 +157,7 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
                   active={state.dirtLevel === d.id}
                   onClick={() => onChange({ ...state, dirtLevel: d.id })}
                   title={d.title}
-                  subtitle={
-                    type
-                      ? `${type.prices[d.id]} ${CURRENCY}/м² · ${d.hint}`
-                      : d.hint
-                  }
+                  subtitle={d.hint}
                 />
               ))}
             </div>
@@ -244,7 +243,10 @@ export function CalculatorStep({ state, onChange, pricing }: Props) {
       )}
 
       <p className="quiz-hint">
-        Сумма предварительная. Минимум — {formatPrice(MIN_ORDER_PRICE)}.
+        Сумма предварительная.
+        {!isFurniture && type?.minPrice && type?.minArea
+          ? ` Объект до ${type.minArea} м² — ${formatPrice(type.minPrice)}.`
+          : ''}
       </p>
     </div>
   );

@@ -652,6 +652,12 @@ export interface Tariff {
   excludedWorks?: string[];
   /** Выработка: сколько единиц успевает один человек за смену */
   outputPerDay?: number | null;
+  /**
+   * Минимальная цена и порог объёма (решение владельца): объект МЕНЬШЕ
+   * minArea единиц стоит ровно minPrice. Ноль в любом поле — правила нет.
+   */
+  minPrice?: number;
+  minArea?: number;
   isActive?: boolean;
   sortOrder?: number;
 }

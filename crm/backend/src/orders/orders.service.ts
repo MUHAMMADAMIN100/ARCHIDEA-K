@@ -336,6 +336,9 @@ export class OrdersService {
         priceMedium: true,
         priceHeavy: true,
         pricePerSqm: true,
+        // минимальная цена и порог: объект меньше порога стоит фиксированно
+        minPrice: true,
+        minArea: true,
       },
     });
   }

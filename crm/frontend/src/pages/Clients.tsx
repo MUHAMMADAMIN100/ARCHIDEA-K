@@ -32,6 +32,7 @@ import {
   formatDate,
   formatPrice,
 } from '../lib/labels';
+import { workTotalOf } from '../lib/pricing';
 import { formatPhone } from '../lib/contact';
 import { DatePicker } from '../components/DatePicker';
 import { TimePicker } from '../components/TimePicker';
@@ -770,7 +771,12 @@ export function AddClientModal({
    * и в заявку уходила цена без скидки.
    */
   const скидкаН = Math.max(0, Math.round(Number(discount) || 0));
-  const computed = Math.max(0, units * unitPrice + moreSum + extrasSum - скидкаН);
+  // объект меньше порога — минимальная цена услуги, как на сервере
+  const mainWork = workTotalOf(units, unitPrice, tariff);
+  const computed = Math.max(
+    0,
+    mainWork.total + moreSum + extrasSum - скидкаН,
+  );
 
   useEffect(() => {
     if (!manualPrice) setPrice(computed ? String(computed) : '');
@@ -1437,8 +1443,10 @@ export function AddClientModal({
                        */
                       <span className="block">
                         <span className="block">
-                          {isFurniture ? 'Мест' : 'Площадь'}: {units} ×{' '}
-                          {unitPrice} = {units * unitPrice} сомони
+                          {mainWork.minimumApplied
+                            ? // объект меньше порога — подпись честно называет минимум
+                              `Площадь: ${units} м² — меньше ${tariff?.minArea} м², минимальная цена ${mainWork.total} сомони`
+                            : `${isFurniture ? 'Мест' : 'Площадь'}: ${units} × ${unitPrice} = ${mainWork.total} сомони`}
                         </span>
                         {moreRows
                           .filter((r) => r.qtyN > 0)
@@ -1466,7 +1474,7 @@ export function AddClientModal({
                         )}
                         {(moreSum > 0 || extrasSum > 0 || скидкаН > 0) && (
                           <span className="block font-semibold text-navy-800">
-                            Итого: {[units * unitPrice, moreSum, extrasSum]
+                            Итого: {[mainWork.total, moreSum, extrasSum]
                               .filter((n) => n > 0)
                               .join(' + ')}
                             {скидкаН > 0 ? ` − ${скидкаН}` : ''} = {computed}{' '}

@@ -11,7 +11,12 @@
 
 export const CURRENCY = 'сомони';
 
-/** Степень загрязнения — влияет на цену за м² */
+/**
+ * Степень загрязнения — подсказка бригаде, на цену НЕ влияет (решение
+ * владельца, сентябрь 2026). Раньше у услуги было три ставки по степени, и
+ * сайт называл клиенту 25, а CRM считала 27 — расхождение объясняли по
+ * телефону. Теперь у услуги одна цена, и сайт с CRM называют одну сумму.
+ */
 export type DirtLevel = 'light' | 'medium' | 'heavy';
 
 export const DIRT_LEVELS: { id: DirtLevel; title: string; hint: string }[] = [
@@ -29,8 +34,15 @@ export interface CleaningType {
    */
   id: string;
   title: string;
-  /** Цены по степени загрязнения (для мебели все три равны) */
-  prices: Record<DirtLevel, number>;
+  /** Цена за единицу: за м² или за место. Одна — степень на неё не влияет */
+  price: number;
+  /**
+   * Минимальная цена и порог объёма (решение владельца): объект МЕНЬШЕ
+   * minArea единиц стоит ровно minPrice, от порога — объём × цена.
+   * Нет полей или нули — правила у услуги нет (мойка мебели).
+   */
+  minPrice?: number;
+  minArea?: number;
   /** true — цена за посадочное место (мягкая мебель), не за м² */
   perSeat?: boolean;
   description: string;
@@ -41,7 +53,9 @@ export const CLEANING_TYPES: CleaningType[] = [
   {
     id: 'general',
     title: 'Генеральная',
-    prices: { light: 25, medium: 27, heavy: 29 },
+    price: 27,
+    minPrice: 1500,
+    minArea: 50,
     description:
       'Основательная уборка всей заявленной площади — абсолютная чистота даже в самых труднодоступных местах.',
     popular: true,
@@ -49,14 +63,16 @@ export const CLEANING_TYPES: CleaningType[] = [
   {
     id: 'post_renovation',
     title: 'После ремонта',
-    prices: { light: 30, medium: 32, heavy: 35 },
+    price: 32,
+    minPrice: 1500,
+    minArea: 50,
     description:
       'Уборка от строительного мусора и послестроительных остатков, подготовка помещения к жизни.',
   },
   {
     id: 'furniture',
     title: 'Мойка мягкой мебели',
-    prices: { light: 70, medium: 70, heavy: 70 },
+    price: 70,
     perSeat: true,
     description:
       'Чистка мягкой мебели от пятен, устранение запахов и возвращение первозданного вида.',
@@ -105,8 +121,11 @@ export const EXTRA_SERVICES: ExtraService[] = [
   },
 ];
 
-/** Минимальная стоимость заказа (защита от слишком маленькой суммы) */
-export const MIN_ORDER_PRICE = 150;
+/*
+ * Общего минимума заказа больше нет: минимальная цена задаётся у каждой
+ * услуги (minPrice/minArea) и приходит из CRM. Прежние 150 сомони были
+ * защитой от опечатки, а не ценой — и с CRM не сходились.
+ */
 
 /** Значения по умолчанию для калькулятора */
 export const DEFAULTS = {

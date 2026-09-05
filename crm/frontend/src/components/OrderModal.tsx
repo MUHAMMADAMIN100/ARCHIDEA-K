@@ -44,6 +44,7 @@ import {
   formatDate,
   NO_SERVICE,
 } from '../lib/labels';
+import { workTotalOf } from '../lib/pricing';
 import type {
   Cleaner,
   CleaningType,
@@ -348,8 +349,16 @@ export function OrderModal({
   });
   const addSum = addRows.reduce((sum, r) => sum + r.total, 0);
 
-  const workSum =
-    Math.round(Number(pricePerSqm) || 0) * unitsNow + addSum;
+  /*
+   * Основная работа: объём × цена, либо минимальная цена услуги, если объект
+   * меньше порога (решение владельца) — то же правило, что на сервере.
+   */
+  const mainWork = workTotalOf(
+    unitsNow,
+    Math.round(Number(pricePerSqm) || 0),
+    selectedTariff,
+  );
+  const workSum = mainWork.total + addSum;
   /*
    * Сколько уже получено — сумма взносов (ТЗ 3.1).
    *
@@ -1442,8 +1451,10 @@ export function OrderModal({
                     pricePerSqm !== '' &&
                     unitsNow > 0 && (
                       <p className="mt-1 text-xs text-navy-600">
-                        {unitsNow} {unitLabel} × {pricePerSqm} ={' '}
-                        {formatPrice(Math.round(Number(pricePerSqm) * unitsNow))}
+                        {mainWork.minimumApplied
+                          ? // объект меньше порога: честно пишем, откуда сумма
+                            `${unitsNow} ${unitLabel} — меньше ${selectedTariff?.minArea} ${unitLabel}, минимальная цена ${formatPrice(mainWork.total)}`
+                          : `${unitsNow} ${unitLabel} × ${pricePerSqm} = ${formatPrice(mainWork.total)}`}
                         {addSum > 0 && ` + услуги ${formatPrice(addSum)}`}
                         {extrasSum > 0 && ` + доп. ${formatPrice(extrasSum)}`}
                       </p>

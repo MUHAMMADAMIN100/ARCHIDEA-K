@@ -2,7 +2,7 @@ import { Reveal } from '../ui/Reveal';
 import { MobileHScroll } from '../ui/MobileHScroll';
 import { Img } from '../ui/Img';
 import { IconCheck, IconArrowRight } from '../ui/icons';
-import { DIRT_LEVELS, CURRENCY } from '../../config/pricing';
+import { CURRENCY } from '../../config/pricing';
 import { usePricing } from '../../lib/tariffs';
 import { scrollToId } from '../../lib/scroll';
 import type { CleaningType } from '../../config/pricing';
@@ -147,28 +147,24 @@ function ServiceCard({ type }: { type: CleaningType }) {
         <h3 className="section-h3">{type.title}</h3>
 
         <div className="mt-3 flex items-end gap-1.5">
-          {!type.perSeat && (
-            <span className="mb-1 text-sm text-navy-400">от</span>
-          )}
-          <span className="price-md">{type.prices.light}</span>
+          <span className="price-md">{type.price}</span>
           <span className="mb-1 text-sm text-navy-500">
             {CURRENCY} / {type.perSeat ? 'место' : 'м²'}
           </span>
         </div>
 
-        {!type.perSeat && (
-          <div className="mt-4 space-y-2 rounded-xl bg-mist px-3.5 py-3 text-xs">
-            {DIRT_LEVELS.map((d) => (
-              <div
-                key={d.id}
-                className="flex items-center justify-between gap-2"
-              >
-                <span className="text-navy-500">{d.title} степень</span>
-                <span className="font-semibold tabular-nums text-navy-800">
-                  {type.prices[d.id]} {CURRENCY}/м²
-                </span>
-              </div>
-            ))}
+        {/*
+          Раньше здесь стояли три цены по степени загрязнения. Теперь цена
+          одна (степень — подсказка бригаде), а показать стоит другое:
+          минимальную цену — иначе клиент с 30 м² насчитает 810 и удивится
+          1500 в заявке.
+        */}
+        {!type.perSeat && !!type.minPrice && !!type.minArea && (
+          <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-mist px-3.5 py-3 text-xs">
+            <span className="text-navy-500">Объект до {type.minArea} м²</span>
+            <span className="font-semibold tabular-nums text-navy-800">
+              {type.minPrice.toLocaleString('ru-RU')} {CURRENCY}
+            </span>
           </div>
         )}
 
