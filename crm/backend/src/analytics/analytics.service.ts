@@ -311,7 +311,7 @@ export class AnalyticsService {
           )
         : undefined;
       const rows = await this.breakdowns(periodScope, paidInRange, dayRange);
-      // ЗП клинеров = все ставки по выездам периода, включая разовых клинеров
+      // ЗП клинеров = ставки по выездам ОПЛАЧЕННЫХ заказов периода, включая разовых
       if (result.payroll && seesFinance(user)) {
         result.payroll.cleanersAccrued = rows.brigades.reduce((s, r) => s + r.accrued, 0);
         /*
@@ -431,8 +431,15 @@ export class AnalyticsService {
           },
         }),
         this.prisma.shiftGroup.findMany({
-          // дата выезда хранится днём-снапшотом (полночь UTC) — свой диапазон
-          where: { ...NOT_DELETED, ...(dayRange ? { date: dayRange } : {}) },
+          /*
+           * Только выезды ОПЛАЧЕННЫХ заказов периода — по дате оплаты, как
+           * выручка (решение владельца). Раньше брались все выезды по дню
+           * выезда, включая заказы «в работе» и запланированные: «ЗП
+           * клинеров» 6 900 при четырёх оплаченных заказах, и чистый доход
+           * уходил в минус на стыке месяцев. Теперь выручка и зарплата
+           * всегда об одних и тех же заказах.
+           */
+          where: { ...NOT_DELETED, order: paidInRange },
           select: {
             id: true,
             brigadeId: true,
@@ -716,7 +723,12 @@ export class AnalyticsService {
       const groups = await this.prisma.shiftGroup.findMany({
         where: {
           ...NOT_DELETED,
-          ...(dayRange ? { date: dayRange } : {}),
+          // выезды оплаченных заказов периода — как и сама плитка «ЗП клинеров»
+          order: {
+            ...scope,
+            stage: FunnelStage.PAID,
+            ...(hasRange ? { closedAt: range } : {}),
+          },
           ...(metric === 'brigadeVisits'
             ? { brigadeId: key === 'none' ? null : key }
             : { members: { some: { cleanerId: key } } }),
@@ -1079,14 +1091,25 @@ export class AnalyticsService {
      * доход без зарплаты бригад и не сходился с плиткой над ним.
      */
     const начислено = new Map<string, number>();
-    const смены = await this.prisma.shift.findMany({
-      where: { date: { gte: start } },
-      select: { rate: true, date: true },
+    const выезды = await this.prisma.shiftGroup.findMany({
+      where: {
+        ...NOT_DELETED,
+        order: { ...scope, stage: FunnelStage.PAID, closedAt: { gte: start } },
+      },
+      select: {
+        order: { select: { closedAt: true } },
+        members: { select: { rate: true } },
+      },
     });
-    for (const s of смены) {
-      const key = dayKey(s.date);
+    for (const g of выезды) {
+      if (!g.order?.closedAt) continue;
+      // день оплаты заказа — тот же, в который легла его выручка
+      const key = dayKey(g.order.closedAt);
       if (buckets.has(key)) {
-        начислено.set(key, (начислено.get(key) ?? 0) + s.rate);
+        начислено.set(
+          key,
+          (начислено.get(key) ?? 0) + g.members.reduce((sum, m) => sum + m.rate, 0),
+        );
       }
     }
 
