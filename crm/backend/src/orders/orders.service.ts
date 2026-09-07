@@ -1352,10 +1352,13 @@ export class OrdersService {
      * уведомления) делает changeStage — единственное место с этой логикой.
      */
     if (stageRequested) {
-      return this.changeStage(user, id, {
-        stage: dto.stage as FunnelStage,
-        rejectionReason: dto.rejectionReason,
-      });
+      return this.changeStage(
+        user,
+        id,
+        { stage: dto.stage as FunnelStage, rejectionReason: dto.rejectionReason },
+        // заказ только что записан этой же функцией — перечитывать незачем
+        after,
+      );
     }
 
     return after;
@@ -1478,9 +1481,21 @@ export class OrdersService {
     }
   }
 
-  /** Перевод по воронке + побочные эффекты */
-  async changeStage(user: AuthUser, id: string, dto: ChangeStageDto) {
-    const order = await this.getOne(user, id);
+  /**
+   * Перевод по воронке + побочные эффекты.
+   *
+   * preloaded — заказ, который вызывающая сторона только что прочитала или
+   * записала (update() зовёт нас сразу после своей транзакции). Повторное
+   * чтение карточки со всеми связями — это десяток обращений к базе, на
+   * удалённой базе секунда; незачем платить её дважды за одно сохранение.
+   */
+  async changeStage(
+    user: AuthUser,
+    id: string,
+    dto: ChangeStageDto,
+    preloaded?: Awaited<ReturnType<OrdersService['getOne']>>,
+  ) {
+    const order = preloaded ?? (await this.getOne(user, id));
 
     // все запреты перехода — в одном месте, общем с update()
     this.assertStageChange(user, order, dto);
