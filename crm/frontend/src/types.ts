@@ -141,6 +141,9 @@ export function userSeesReports(u?: AuthUser | null): boolean {
   // у управляющего ведомости — часть работы: он ведёт выезды и выплаты
   // бригадам и отправляет отчёты руководству
   if (u.role === 'SUPERVISOR') return true;
+  // менеджеру ведомости не положены вовсе — только по личной галочке
+  // руководителя (решение владельца); то же правило на сервере
+  if (u.role === 'MANAGER') return u.canSeeReports === true;
   return !u.noFinance || u.canSeeReports === true;
 }
 

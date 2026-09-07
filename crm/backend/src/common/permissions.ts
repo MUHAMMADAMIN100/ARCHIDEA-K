@@ -200,6 +200,12 @@ export function seesReports(user: AuthUser | null | undefined): boolean {
   // Ведомости — часть работы управляющего: он отвечает за выезды и выплаты
   // бригадам, и отправляет отчёты руководству. Роль даёт их сама.
   if (user.role === Role.SUPERVISOR) return true;
+  /*
+   * Менеджеру ведомости не положены вовсе (решение владельца): ни своих,
+   * ни чужих, ни уведомлений о них. Единственное исключение — личная
+   * галочка «Доступ к ведомостям», которую ставит руководитель.
+   */
+  if (user.role === Role.MANAGER) return user.canSeeReports === true;
   return !financeBanned(user) || user.canSeeReports === true;
 }
 

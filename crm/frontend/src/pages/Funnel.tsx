@@ -24,6 +24,7 @@ import {
 } from './Clients';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { userSeesReports } from '../types';
 import {
   STAGE_COLOR,
   STAGE_LABEL,
@@ -138,10 +139,13 @@ const STAGE_BORDER: Record<FunnelStage, string> = {
 function OrderCardBody({
   o,
   isTouch,
+  showReports,
   onChange,
 }: {
   o: Order;
   isTouch: boolean;
+  /** отметки «Отчёт: черновик» видит тот, кому открыты ведомости */
+  showReports: boolean;
   onChange: (orderId: string, newStage: FunnelStage) => void;
 }) {
   const idx = PIPELINE.indexOf(o.stage);
@@ -207,7 +211,7 @@ function OrderCardBody({
         </div>
       )}
       {/* состояние ведомости: по закрытым заказам владелец отчитывается ими */}
-      {reportMark(o) && (
+      {showReports && reportMark(o) && (
         <div
           className={`mt-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${reportMark(o)!.className}`}
         >
@@ -384,6 +388,8 @@ export function Funnel() {
   const dialog = useDialog();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // ведомости и всё, что о них напоминает, — не для менеджера
+  const seesReports = userSeesReports(user);
   // фильтр по менеджеру — только для тех, кто видит всю компанию
   const canFilter = userSeesAll(user);
   const [managerFilter, setManagerFilter] = useState<string>('ALL');
@@ -989,7 +995,9 @@ export function Funnel() {
               // долг по этапу: сумма остатков заказов, где оплата ещё не полная
               const debt = col.orders.reduce((sum, o) => sum + orderDebt(o), 0);
               // закрытые заказы без отправленной ведомости — «сколько осталось»
-              const noReport = col.orders.filter(reportPending).length;
+              const noReport = seesReports
+                ? col.orders.filter(reportPending).length
+                : 0;
               const isDue = col.stage === 'DONE';
               return (
               <div
@@ -1126,6 +1134,7 @@ export function Funnel() {
                         <OrderCardBody
                           o={o}
                           isTouch={isTouch}
+                          showReports={seesReports}
                           onChange={changeStage}
                         />
                       </div>
@@ -1192,6 +1201,7 @@ export function Funnel() {
                               <OrderCardBody
                                 o={o}
                                 isTouch={isTouch}
+                                showReports={seesReports}
                                 onChange={changeStage}
                               />
                             </div>

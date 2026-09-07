@@ -1529,9 +1529,12 @@ export class OrdersService {
      * Вне транзакции: сбой уведомления не должен откатывать смену этапа.
      */
     if (draftReport) {
-      const target = updated.managerId ?? user.id;
-      await this.notifications.notify({
-        userId: target,
+      /*
+       * Черновик ведомости — дело управляющего, а не менеджера заказа
+       * (решение владельца): менеджерам ведомости не видны, и уведомление
+       * о них им ни к чему.
+       */
+      await this.notifications.notifySupervisors({
         type: NotificationType.REPORT_DRAFT_READY,
         title: 'Готов черновик платёжной ведомости',
         message: `${updated.client.fullName} · ${updated.finalPrice ?? updated.estimatedPrice} сомони — проверьте и отправьте основателю`,

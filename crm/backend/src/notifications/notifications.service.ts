@@ -69,6 +69,29 @@ export class NotificationsService {
   }
 
   /** Уведомить всех руководителей (например, о крупном заказе) */
+  /**
+   * Всем активным управляющим — например, «готов черновик ведомости»:
+   * ведомости ведёт управляющий, менеджеру заказа они не показываются
+   * (решение владельца).
+   */
+  async notifySupervisors(params: {
+    type: NotificationType;
+    title: string;
+    message: string;
+    orderId?: string;
+    clientId?: string;
+  }) {
+    if (!ALLOWED.has(params.type)) return;
+    const supervisors = await this.prisma.user.findMany({
+      where: { role: Role.SUPERVISOR, isActive: true },
+      select: { id: true },
+    });
+    if (!supervisors.length) return;
+    await this.prisma.notification.createMany({
+      data: supervisors.map((s) => ({ userId: s.id, ...params })),
+    });
+  }
+
   async notifyDirectors(params: {
     type: NotificationType;
     title: string;
