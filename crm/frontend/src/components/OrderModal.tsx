@@ -45,6 +45,7 @@ import {
   NO_SERVICE,
 } from '../lib/labels';
 import { workTotalOf } from '../lib/pricing';
+import { useBackgroundSave } from '../lib/save';
 import type {
   Cleaner,
   CleaningType,
@@ -143,6 +144,7 @@ export function OrderModal({
   onDeleted,
 }: Props) {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const dialog = useDialog();
   const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
@@ -771,9 +773,27 @@ export function OrderModal({
     onOptimistic?.(order.id, patch);
     onClose();
 
-    // 2) Запросы уходят в фоне; при ошибке — откат через reload + тост
-    try {
-      await api.patch(`/orders/${order.id}`, {
+    /*
+     * 2) ОДИН запрос со всем, что трогали: поля, команда, этап.
+     *
+     * Раньше сохранение было цепочкой из трёх-четырёх запросов подряд (поля →
+     * команда → этап → клиент), по 3–6 секунд каждый, а окно уже было
+     * закрыто. На медленной сети первый запрос обрывался по таймауту — и
+     * команда с этапом не уходили вовсе: у заказа «Фархунда» в истории не
+     * оказалось ни одной записи о команде, выезд стоял с нулём человек.
+     *
+     * Теперь сервер принимает команду и этап в том же PATCH и пишет всё одной
+     * транзакцией. Запрос уходит фоном с автоповтором; окончательный отказ —
+     * плашка «Повторить», которая не исчезает сама (см. lib/save.ts).
+     *
+     * Уходят ТОЛЬКО тронутые группы полей. Пока карточка слала весь бланк,
+     * она затирала чужие правки: в истории заказов видно «preferences:
+     * null → ""» от сохранения одной лишь даты.
+     */
+    const pricingTouched = touched('pricing');
+    const body: Record<string, unknown> = {};
+    if (pricingTouched) {
+      Object.assign(body, {
         cleaningType: cleaningTypeFor(serviceKey || order.cleaningType),
         // пустая строка = «без основной услуги»; undefined сервер понял бы
         // как «поле не трогали» и оставил бы прежнюю услугу
@@ -781,82 +801,101 @@ export function OrderModal({
         dirtLevel: newDirt,
         area: newArea,
         ...(isSeatsUnit ? { seats: newSeats ?? 0 } : {}),
-        address: editAddress || undefined,
         ...(newPricePerSqm != null ? { pricePerSqm: newPricePerSqm } : {}),
         /*
-         * Итог отправляем ТОЛЬКО когда менеджер вписал сумму руками.
-         *
-         * Поле finalPrice в форме хранит стоимость работ: при смене площади
-         * оно пересчитывается как «цена за единицу × объём». Пока оно уходило
-         * на сервер безусловно, любая правка площади затирала итог этой
-         * цифрой — доп. услуги и скидка из суммы исчезали. Заказ на 150 м²
-         * с шестью окнами дешевел на 300 сомони от одного изменения площади.
-         *
-         * В остальных случаях сумму считает сервер: у него и справочник цен,
-         * и доп. услуги, и скидка.
+         * Итог отправляем ТОЛЬКО когда менеджер вписал сумму руками — в
+         * остальных случаях сумму считает сервер: у него и справочник цен,
+         * и доп. услуги, и скидка. Иначе правка площади затирала бы итог
+         * цифрой «цена × объём» без допов и скидки.
          */
         ...(isManualPrice && newFinalPrice != null
           ? { finalPrice: newFinalPrice }
           : {}),
         isManualPrice,
-        preferences: trimmedPrefs,
-        // состав по дням: явные записи для дней со 2-го; один день — пусто
-        dayTeams: Array.from({ length: Math.max(0, cleaningDays - 1) }, (_, i) => ({
-          day: i + 2,
-          cleanerIds: rosterOf(i + 2),
-        })),
-        customExtras: extraRows
-          .filter((r) => r.title.trim())
-          .map((r) => ({
-            title: r.title.trim(),
-            price: Math.max(0, Math.round(Number(r.price) || 0)),
-            checked: r.checked,
-          })),
-        discount: discountSum,
-        // данные заявки — правятся прямо в карточке
+      });
+    }
+    if (touched('address')) body.address = editAddress || undefined;
+    if (touched('preferences')) body.preferences = trimmedPrefs;
+    if (touched('extras')) {
+      body.customExtras = extraRows
+        .filter((r) => r.title.trim())
+        .map((r) => ({
+          title: r.title.trim(),
+          price: Math.max(0, Math.round(Number(r.price) || 0)),
+          checked: r.checked,
+        }));
+    }
+    if (touched('discount')) body.discount = discountSum;
+    if (touched('request')) {
+      // данные заявки — правятся прямо в карточке
+      Object.assign(body, {
         source: editSource,
         sourceDetail: editSourceDetail.trim(),
-        guestCleaners: guests
-          .map((g) => ({
-            fullName: g.fullName.trim(),
-            rate: Math.max(0, Math.round(Number(g.rate) || 0)),
-          }))
-          .filter((g) => g.fullName.length > 1),
-        additionalServices: addRows
-          .filter((r) => r.qtyN > 0)
-          .map((r) => ({
-            key: r.key,
-            qty: r.qtyN,
-            pricePerUnit: r.priceN,
-          })),
         comment: editComment.trim(),
         ...(editManagerId ? { managerId: editManagerId } : {}),
         ...(editCreatedAt ? { createdAt: editCreatedAt } : {}),
         ...(editEstimated !== '' ? { estimatedPrice: toInt(editEstimated) } : {}),
         preferredDate: editPreferredDate,
         preferredTime: editPreferredTime,
-        /*
-         * Даты уборки — в ОСНОВНОМ запросе, обе, и только когда их трогали.
-         *
-         * Раньше они уходили отдельным запросом, и последний день в него не
-         * попадал вовсе: экранная копия показывала «11 — 12 августа, 2 дня»,
-         * а сервер получал только дату начала. Повторное открытие карточки
-         * честно показывало то, что сохранилось, — поле пустело.
-         * Нетронутые даты не отправляем совсем: на медленной сети карточка
-         * открывается раньше данных заказа, поля в этот момент пустые, и
-         * безусловная отправка стирала бы даты любой другой правкой.
-         * Последний день без первого не бывает — при пустой дате начала
-         * очищается и он.
-         */
-        ...(datesTouched
-          ? {
-              scheduledDate: scheduledWithTime || null,
-              scheduledEndDate: scheduledWithTime
-                ? scheduledEndDate || null
-                : null,
-            }
-          : {}),
       });
+    }
+    if (touched('guests')) {
+      body.guestCleaners = guests
+        .map((g) => ({
+          fullName: g.fullName.trim(),
+          rate: Math.max(0, Math.round(Number(g.rate) || 0)),
+        }))
+        .filter((g) => g.fullName.length > 1);
+    }
+    if (touched('addServices')) {
+      body.additionalServices = addRows
+        .filter((r) => r.qtyN > 0)
+        .map((r) => ({ key: r.key, qty: r.qtyN, pricePerUnit: r.priceN }));
+    }
+    /*
+     * Даты уборки — обе и только когда их трогали. Последний день без
+     * первого не бывает — при пустой дате начала очищается и он.
+     */
+    if (datesTouched) {
+      body.scheduledDate = scheduledWithTime || null;
+      body.scheduledEndDate = scheduledWithTime
+        ? scheduledEndDate || null
+        : null;
+    }
+    // состав по дням зависит от команды и числа дней — едет вместе с ними
+    if (cleanersChangedFlag || touched('dayTeams') || datesTouched) {
+      body.dayTeams = Array.from(
+        { length: Math.max(0, cleaningDays - 1) },
+        (_, i) => ({ day: i + 2, cleanerIds: rosterOf(i + 2) }),
+      );
+    }
+    if (cleanersChangedFlag) body.cleanerIds = selectedCleaners;
+    if (stage !== order.stage) {
+      body.stage = stage;
+      if (stage === 'REJECTED') body.rejectionReason = rejectionReason;
+    } else if (stage === 'REJECTED' && touched('stage')) {
+      // заказ уже в «Отказе» — правится только причина
+      body.rejectionReason = rejectionReason;
+    }
+
+    const hasOrderChanges = Object.keys(body).length > 0;
+    const orderSave = hasOrderChanges
+      ? backgroundSave({
+          request: () => api.patch(`/orders/${order.id}`, body),
+          failMessage: 'Не удалось сохранить заказ',
+          onDone: () => {
+            /*
+             * Смена этапа порождает записи в других разделах: осмотр — выезд
+             * в «Сменах», оплата — черновик ведомости. Их кэш надо забыть,
+             * иначе при переходе туда человек увидит прежнее состояние.
+             */
+            invalidateOrderRelated();
+            onUpdated();
+          },
+          onFail: () => onUpdated(), // откат к серверному состоянию
+        })
+      : Promise.resolve(true);
+    {
       /*
        * ФИО, телефон и статус принадлежат клиенту, а не заказу.
        *
@@ -865,46 +904,25 @@ export function OrderModal({
        * цепочкой из четырёх запросов подряд — на медленной связи карточка
        * обновлялась через пару секунд.
        */
-      const clientRequest = clientTouched
-        ? api.patch(`/clients/${order.clientId}`, {
-            fullName: clientName.trim(),
-            phone: normalizePhone(clientPhone) ?? clientPhone,
-            extraPhones: clientExtraPhones
-              .map((p) => normalizePhone(p))
-              .filter((p): p is string => !!p),
-            tags: clientTags,
+      const clientSave = clientTouched
+        ? backgroundSave({
+            request: () =>
+              api.patch(`/clients/${order.clientId}`, {
+                fullName: clientName.trim(),
+                phone: normalizePhone(clientPhone) ?? clientPhone,
+                extraPhones: clientExtraPhones
+                  .map((p) => normalizePhone(p))
+                  .filter((p): p is string => !!p),
+                tags: clientTags,
+              }),
+            failMessage: 'Не удалось сохранить данные клиента',
+            onDone: () => onUpdated(),
+            onFail: () => onUpdated(),
           })
-        : null;
-      if (cleanersChangedFlag) {
-        await api.patch(`/orders/${order.id}/cleaners`, {
-          cleanerIds: selectedCleaners,
-        });
-      }
-      if (stage !== order.stage || stage === 'REJECTED') {
-        await api.patch(`/orders/${order.id}/stage`, {
-          stage,
-          rejectionReason: stage === 'REJECTED' ? rejectionReason : undefined,
-          scheduledDate: scheduledWithTime || undefined,
-          // последний день едет вместе с датой — иначе смена этапа сохраняла
-          // бы период уборки наполовину
-          scheduledEndDate:
-            (scheduledWithTime && scheduledEndDate) || undefined,
-        });
-      }
-      // отдельный запрос с датой больше не нужен: обе даты уборки уходят в
-      // основном PATCH выше — и заполнение, и очистка
-      /*
-       * Смена этапа порождает записи в других разделах: осмотр — выезд в
-       * «Сменах», оплата — черновик ведомости. Их кэш надо забыть, иначе при
-       * переходе туда человек увидит прежнее состояние до фонового обновления.
-       */
-      // дожидаемся карточки клиента вместе с остальным — она шла параллельно
-      if (clientRequest) await clientRequest;
-      invalidateOrderRelated();
-      onUpdated();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить заказ');
-      onUpdated(); // откат к серверному состоянию
+        : Promise.resolve(true);
+      await Promise.all([orderSave, clientSave]);
+      // ничего не трогали — просто сверяемся с сервером
+      if (!hasOrderChanges && !clientTouched) onUpdated();
     }
   };
 

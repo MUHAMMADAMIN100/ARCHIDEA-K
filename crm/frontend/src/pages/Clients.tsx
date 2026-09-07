@@ -241,6 +241,7 @@ export function Clients() {
           } catch {
             toast.error(
               'Клиент уже есть, но заявку создать не удалось — попробуйте ещё раз',
+              { sticky: true },
             );
           }
           return;
@@ -250,7 +251,10 @@ export function Clients() {
         );
         return;
       }
-      toast.error(e?.response?.data?.message || 'Не удалось создать клиента');
+      // окно уже закрыто — отказ обязан провисеть, пока человек его не увидит
+      toast.error(e?.response?.data?.message || 'Не удалось создать клиента', {
+        sticky: true,
+      });
     }
   };
 

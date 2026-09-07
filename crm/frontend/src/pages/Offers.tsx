@@ -14,6 +14,7 @@ import { api } from '../api/client';
 import { useFetch, invalidate, deleteRecord, removeFrom } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { useDialog } from '../components/Dialog';
 import { PageHeader, Modal, Badge, EmptyState, Skeleton, ErrorState } from '../components/ui';
 import { ScrollArea } from '../components/ScrollArea';
@@ -1128,6 +1129,7 @@ function TemplateModal({
   const [isDefault, setIsDefault] = useState(template?.isDefault ?? false);
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [saving, setSaving] = useState(false);
+  const backgroundSave = useBackgroundSave();
 
   const submit = async () => {
     if (!name.trim() || !body.trim()) return;
@@ -1141,15 +1143,19 @@ function TemplateModal({
       isDefault,
       isActive,
     };
-    // окно закрывается сразу, запрос уходит фоном
+    // окно закрывается сразу, запрос уходит фоном — по единому правилу
+    // (lib/save.ts): автоповтор для правки, плашка «Повторить» при отказе
     toast.success(template ? 'Шаблон обновлён' : 'Шаблон создан');
     onSaved();
-    const request = template
-      ? api.patch(`/proposal-templates/${template.id}`, payload)
-      : api.post('/proposal-templates', payload);
-    request.catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить шаблон');
-      onSaved();
+    void backgroundSave({
+      request: () =>
+        template
+          ? api.patch(`/proposal-templates/${template.id}`, payload)
+          : api.post('/proposal-templates', payload),
+      retries: template ? 2 : 0,
+      failMessage: 'Не удалось сохранить шаблон',
+      onDone: () => onSaved(),
+      onFail: () => onSaved(),
     });
   };
 

@@ -43,6 +43,7 @@ import {
   PricingTariff,
   unitPrice,
 } from './order-pricing';
+import { touchesVisits } from './order-update-scope';
 import {
   AssignCleanersDto,
   ChangeStageDto,
@@ -985,6 +986,17 @@ export class OrdersService {
       }
     }
     if (dto.managerId && seesAll(user)) data.managerId = dto.managerId;
+    /*
+     * Причина отказа у заказа, который УЖЕ в «Отказе»: этап не меняется,
+     * changeStage не вызывается, а причину поправить надо — иначе она
+     * сохранялась бы только вместе с переводом на этап.
+     */
+    if (
+      dto.rejectionReason !== undefined &&
+      (dto.stage ?? before.stage) === FunnelStage.REJECTED
+    ) {
+      data.rejectionReason = dto.rejectionReason.trim() || null;
+    }
 
     // ── Пересчёт суммы (ТЗ 5) ──
     /*
@@ -1002,9 +1014,17 @@ export class OrdersService {
       data.area = 0;
       data.seats = null;
     }
-    const [tariff, extrasList] = await Promise.all([
+    /*
+     * Независимые чтения — параллельно: услуга, справочник допов и проверка
+     * клинеров не зависят друг от друга, а на удалённой базе каждое
+     * обращение стоит заметных миллисекунд.
+     */
+    const [tariff, extrasList, cleanerIds] = await Promise.all([
       this.tariffFor(serviceKey),
       this.extrasCatalogue(),
+      dto.cleanerIds !== undefined
+        ? this.resolveCleaners(dto.cleanerIds)
+        : Promise.resolve(undefined),
     ]);
     const nextCustomExtras: CustomExtra[] | undefined =
       dto.customExtras !== undefined
@@ -1181,12 +1201,65 @@ export class OrdersService {
       }
     }
 
+    /*
+     * Этап проверяем ДО записи полей: «кто делал уборку», «клиент должен…»,
+     * причина отказа. Иначе поля бы сохранились, а этап — нет, и человек
+     * получал бы половину своей правки. Проверка идёт по состоянию ПОСЛЕ
+     * правки: команда и разовые берутся из запроса, если их меняли.
+     */
+    const stageRequested =
+      dto.stage !== undefined && dto.stage !== before.stage;
+    if (stageRequested) {
+      this.assertStageChange(
+        user,
+        {
+          stage: before.stage,
+          cleaners:
+            cleanerIds !== undefined
+              ? cleanerIds.map((cid) => ({ id: cid }))
+              : before.cleaners,
+          guestCleaners:
+            dto.guestCleaners !== undefined
+              ? dto.guestCleaners
+              : before.guestCleaners,
+          finalPrice: effectivePrice,
+          estimatedPrice: before.estimatedPrice,
+          paidAmount: before.paidAmount,
+        },
+        { stage: dto.stage as FunnelStage, rejectionReason: dto.rejectionReason },
+      );
+    }
+
+    // команда заказа — тем же запросом и той же транзакцией, что и поля
+    if (cleanerIds !== undefined) {
+      (data as Prisma.OrderUpdateInput).cleaners = {
+        set: cleanerIds.map((cid) => ({ id: cid })),
+      };
+    }
+    const teamBefore =
+      (before.cleaners ?? []).map((c) => c.fullName).join(', ') || '—';
+
     const after = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
         where: { id },
         data,
         include: orderDetailInclude,
       });
+
+      if (cleanerIds !== undefined) {
+        const teamAfter =
+          updated.cleaners.map((c) => c.fullName).join(', ') || '—';
+        if (teamBefore !== teamAfter) {
+          await this.audit.log(tx, {
+            user,
+            entity: 'ORDER',
+            entityId: updated.id,
+            entityTitle: this.titleOf(updated),
+            action: AuditAction.UPDATE,
+            summary: `Команда на заказе: ${teamBefore} → ${teamAfter}`,
+          });
+        }
+      }
 
       /*
        * Заказ уже оплачен — доход в книге обязан следовать за его суммой.
@@ -1213,8 +1286,15 @@ export class OrdersService {
         );
       }
 
-      // адрес, даты, менеджер — открытые выезды заказа следуют за карточкой
-      await this.shiftGroups.syncFromOrder(tx, updated.id, user);
+      /*
+       * Адрес, даты, команда, менеджер — открытые выезды заказа следуют за
+       * карточкой. Но только когда эти поля трогали: синхронизация — ещё
+       * с десяток обращений к базе, и делать её при правке одного
+       * комментария значит держать человека лишние секунды.
+       */
+      if (touchesVisits(dto as Record<string, unknown>)) {
+        await this.shiftGroups.syncFromOrder(tx, updated.id, user);
+      }
 
       await this.audit.log(tx, {
         user,
@@ -1263,6 +1343,19 @@ export class OrdersService {
       (before.comment ?? '') !== (after.comment ?? '')
     ) {
       await this.rememberComment(after.clientId, after.comment);
+    }
+
+    /*
+     * Этап — тем же запросом. Его проверки уже пройдены выше, поэтому здесь
+     * он не может отказать по причинам, о которых человек не узнал бы до
+     * записи полей. Побочные эффекты этапа (ведомость, выезды, доход,
+     * уведомления) делает changeStage — единственное место с этой логикой.
+     */
+    if (stageRequested) {
+      return this.changeStage(user, id, {
+        stage: dto.stage as FunnelStage,
+        rejectionReason: dto.rejectionReason,
+      });
     }
 
     return after;
@@ -1326,13 +1419,71 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Можно ли перевести заказ на этап — все запреты в одном месте.
+   *
+   * Вызывается и из changeStage, и из update(): карточка сохраняет поля,
+   * команду и этап одним запросом, и отказ этапа должен прозвучать ДО того,
+   * как поля записаны. Иначе человек получал бы половину своей правки.
+   */
+  private assertStageChange(
+    user: AuthUser,
+    order: {
+      stage: FunnelStage;
+      cleaners: { id: string }[];
+      guestCleaners: unknown;
+      finalPrice: number | null;
+      estimatedPrice: number | null;
+      paidAmount: number | null;
+    },
+    dto: { stage: FunnelStage; rejectionReason?: string },
+  ): void {
+    if (dto.stage === FunnelStage.REJECTED && !dto.rejectionReason?.trim()) {
+      throw new BadRequestException('Укажите причину отказа');
+    }
+    /*
+     * Оплаченный заказ с этапа не двигается (решение владельца). Исключение
+     * одно: руководитель может вернуть заказ, если оплату отметили по ошибке.
+     */
+    if (order.stage === FunnelStage.PAID && dto.stage !== FunnelStage.PAID) {
+      if (!seesFinance(user)) {
+        throw new ForbiddenException(
+          'Заказ оплачен и закрыт. Вернуть его в работу может только руководитель — из карточки заказа',
+        );
+      }
+    }
+    /*
+     * «Оплачено» начисляет зарплату само (решение владельца), поэтому без
+     * людей в карточке этап закрыт. Считаются и штатные, и разовые.
+     */
+    if (dto.stage === FunnelStage.PAID && order.stage !== FunnelStage.PAID) {
+      const штатных = order.cleaners?.length ?? 0;
+      const разовых = guestsOf(order.guestCleaners).length;
+      if (штатных + разовых === 0) {
+        throw new BadRequestException(
+          'Укажите, кто делал уборку: выберите клинеров или впишите разового сотрудника в карточке заказа — иначе зарплата не начислится',
+        );
+      }
+    }
+    // «Оплачено» — только после полного расчёта с клиентом
+    if (dto.stage === FunnelStage.PAID) {
+      const total = order.finalPrice ?? order.estimatedPrice ?? 0;
+      const due = Math.max(0, total - (order.paidAmount ?? 0));
+      if (due > 0) {
+        throw new BadRequestException(
+          `Нельзя закрыть заказ: клиент должен ${due} из ${total} сомони. ` +
+            'Внесите оплату в карточке заказа.',
+        );
+      }
+    }
+  }
+
   /** Перевод по воронке + побочные эффекты */
   async changeStage(user: AuthUser, id: string, dto: ChangeStageDto) {
     const order = await this.getOne(user, id);
 
-    if (dto.stage === FunnelStage.REJECTED && !dto.rejectionReason?.trim()) {
-      throw new BadRequestException('Укажите причину отказа');
-    }
+    // все запреты перехода — в одном месте, общем с update()
+    this.assertStageChange(user, order, dto);
 
     /*
      * «Оплачено / Закрыто» — только после полного расчёта с клиентом.

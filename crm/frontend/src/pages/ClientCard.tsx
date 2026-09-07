@@ -28,6 +28,7 @@ import {
   EmptyState,
 } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { useDialog } from '../components/Dialog';
 import { OrderModal } from '../components/OrderModal';
 import { InterestPicker } from '../components/InterestPicker';
@@ -94,6 +95,7 @@ export function ClientCard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const dialog = useDialog();
   /*
    * Клиент, только что созданный, до ответа сервера живёт под временным
@@ -169,12 +171,12 @@ export function ClientCard() {
    */
   const patchClient = async (patch: Partial<Client>) => {
     setData((c) => (c ? { ...c, ...patch } : c));
-    try {
-      await api.patch(`/clients/${id}`, patch);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить');
-      reload();
-    }
+    // единое правило фонового сохранения: автоповтор + плашка «Повторить»
+    await backgroundSave({
+      request: () => api.patch(`/clients/${id}`, patch),
+      failMessage: 'Не удалось сохранить',
+      onFail: () => reload(),
+    });
   };
 
   // «2026-08-05T09:30» из даты перезвона — для календаря и списка времени
@@ -336,11 +338,10 @@ export function ClientCard() {
     setData((c) => (c ? { ...c, preferences: next } : c));
     setPreferences(null);
     toast.success('Предпочтения сохранены');
-    api.patch(`/clients/${id}`, { preferences: next }).catch((e: any) => {
-      toast.error(
-        e?.response?.data?.message || 'Не удалось сохранить — изменения отменены',
-      );
-      reload();
+    void backgroundSave({
+      request: () => api.patch(`/clients/${id}`, { preferences: next }),
+      failMessage: 'Не удалось сохранить — изменения отменены',
+      onFail: () => reload(),
     });
   };
 
@@ -1184,6 +1185,7 @@ function EditClientModal({
   onSaved: (patch: Partial<Client>) => void;
 }) {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const [fullName, setFullName] = useState(client.fullName);
   const [phone, setPhone] = useState(client.phone);
   const [extraPhones, setExtraPhones] = useState<string[]>(
@@ -1215,8 +1217,9 @@ function EditClientModal({
     onSaved(patch as Partial<Client>);
     onClose();
     toast.success('Данные клиента обновлены');
-    api.patch(`/clients/${client.id}`, patch).catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить');
+    void backgroundSave({
+      request: () => api.patch(`/clients/${client.id}`, patch),
+      failMessage: 'Не удалось сохранить',
     });
   };
 

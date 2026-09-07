@@ -24,6 +24,7 @@ import { useAuth } from '../auth/AuthContext';
 import { userSeesFinance } from '../types';
 import { Skeleton, PageHeader, Modal, Badge, ErrorState } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { useDialog } from '../components/Dialog';
 import { Tabs } from '../components/common';
 import { HistoryPanel } from '../components/HistoryPanel';
@@ -91,6 +92,7 @@ type ExtraModalState = { item: ExtraService | null } | null;
 
 export function Tariffs() {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const dialog = useDialog();
   const { user } = useAuth();
   // /tariffs/manage — полный список, включая скрытые (для страницы управления);
@@ -200,17 +202,17 @@ export function Tariffs() {
       [t.key]: { light: String(light), medium: String(medium), heavy: String(heavy) },
     }));
     toast.success('Цены обновлены');
-    api
-      .patch(`/tariffs/tariff/${t.key}`, {
-        priceLight: light,
-        priceMedium: medium,
-        priceHeavy: heavy,
-        pricePerSqm: medium, // совместимость со старым бэкендом на время деплоя
-      })
-      .catch(() => {
-        toast.error('Не удалось сохранить цены');
-        reload(); // вернуть серверные значения
-      });
+    void backgroundSave({
+      request: () =>
+        api.patch(`/tariffs/tariff/${t.key}`, {
+          priceLight: light,
+          priceMedium: medium,
+          priceHeavy: heavy,
+          pricePerSqm: medium, // совместимость со старым бэкендом на время деплоя
+        }),
+      failMessage: 'Не удалось сохранить цены',
+      onFail: () => reload(), // вернуть серверные значения
+    });
   };
 
   const saveExtra = (key: string) => {
@@ -228,9 +230,10 @@ export function Tariffs() {
     );
     setExtraPrices((prev) => ({ ...prev, [key]: String(price) }));
     toast.success('Цена обновлена');
-    api.patch(`/tariffs/extra/${key}`, { price }).catch(() => {
-      toast.error('Не удалось сохранить цену');
-      reload();
+    void backgroundSave({
+      request: () => api.patch(`/tariffs/extra/${key}`, { price }),
+      failMessage: 'Не удалось сохранить цену',
+      onFail: () => reload(),
     });
   };
 
@@ -819,6 +822,7 @@ function TariffModal({
   onSaved: () => void;
 }) {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const isEdit = !!tariff;
   const [tab, setTab] = useState<ServiceTab>('edit');
   const [title, setTitle] = useState(tariff?.title ?? '');
@@ -886,17 +890,21 @@ function TariffModal({
      */
     toast.success(isEdit ? 'Услуга обновлена' : 'Услуга добавлена');
     onSaved();
-    const request =
-      isEdit && tariff
-        ? api.patch(`/tariffs/tariff/${tariff.key}`, {
-            // у базовой услуги ключ и единицу измерения бэкенд менять не даёт
-            ...payload,
-            unit: tariff.isSystem ? undefined : payload.unit,
-          })
-        : api.post('/tariffs/tariff', payload);
-    request.catch((e: any) => {
-      toast.error(e?.response?.data?.message || 'Не удалось сохранить услугу');
-      onSaved();
+    // единое правило фонового сохранения (lib/save.ts): автоповтор для
+    // правки, без автоповтора для создания, плашка «Повторить» при отказе
+    void backgroundSave({
+      request: () =>
+        isEdit && tariff
+          ? api.patch(`/tariffs/tariff/${tariff.key}`, {
+              // у базовой услуги ключ и единицу измерения бэкенд менять не даёт
+              ...payload,
+              unit: tariff.isSystem ? undefined : payload.unit,
+            })
+          : api.post('/tariffs/tariff', payload),
+      retries: isEdit ? 2 : 0,
+      failMessage: 'Не удалось сохранить услугу',
+      onDone: () => onSaved(),
+      onFail: () => onSaved(),
     });
   };
 

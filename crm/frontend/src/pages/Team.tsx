@@ -14,6 +14,7 @@ import {
 import { api } from '../api/client';
 import { useFetch, deleteRecord } from '../api/hooks';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { PhoneInput } from '../components/ContactFields';
 import { formatPhone, sanitizePersonName } from '../lib/contact';
 import { useDialog } from '../components/Dialog';
@@ -32,6 +33,7 @@ import type { Brigade, Cleaner, Manager, Order } from '../types';
 
 export function Team() {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const dialog = useDialog();
   const { user } = useAuth();
   const isDirector = user?.role === 'DIRECTOR';
@@ -183,13 +185,13 @@ export function Team() {
       );
       // корректно переносим между бригадами (или убираем при «Без бригады»)
       setBrigades((bs) => placeInBrigade(bs, patched));
-      api
-        .patch(`/cleaners/${existing.id}`, payload)
-        .then(() => reloadAll())
-        .catch((e: any) => {
-          toast.error(e?.response?.data?.message || 'Не удалось сохранить');
-          reloadAll();
-        });
+      // единое правило фонового сохранения: автоповтор + плашка «Повторить»
+      void backgroundSave({
+        request: () => api.patch(`/cleaners/${existing.id}`, payload),
+        failMessage: 'Не удалось сохранить',
+        onDone: () => reloadAll(),
+        onFail: () => reloadAll(),
+      });
     } else {
       const optimistic: Cleaner = {
         id: tempId(),
@@ -202,11 +204,13 @@ export function Team() {
       setCleaners((list) => (list ? [...list, optimistic] : [optimistic]));
       // если выбрана бригада — показываем клинера в ней сразу
       setBrigades((bs) => placeInBrigade(bs, optimistic));
-      api
-        .post('/cleaners', payload)
-        .then(() => reloadAll())
-        .catch((e: any) => {
-          toast.error(e?.response?.data?.message || 'Не удалось сохранить');
+      // создание — без автоповтора (иначе дубль), но с плашкой «Повторить»
+      void backgroundSave({
+        request: () => api.post('/cleaners', payload),
+        retries: 0,
+        failMessage: 'Не удалось сохранить',
+        onDone: () => reloadAll(),
+        onFail: () => {
           setCleaners((list) =>
             list ? list.filter((c) => c.id !== optimistic.id) : list,
           );
@@ -218,7 +222,8 @@ export function Team() {
                 }))
               : bs,
           );
-        });
+        },
+      });
     }
   };
 

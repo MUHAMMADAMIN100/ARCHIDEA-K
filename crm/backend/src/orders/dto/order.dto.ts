@@ -241,6 +241,22 @@ export class UpdateOrderDto {
   @IsOptional() @IsString() createdAt?: string;
   @IsOptional() @IsString() preferredDate?: string;
   @IsOptional() @IsString() @MaxLength(20) preferredTime?: string;
+
+  /*
+   * Команда и этап — в ТОМ ЖЕ запросе, что и поля карточки.
+   *
+   * Раньше карточка сохранялась цепочкой из трёх запросов (поля → команда →
+   * этап), и на медленной сети цепочка рвалась после первого: поля
+   * записывались, а команда и этап — нет. Один запрос — одна транзакция:
+   * либо сохраняется всё, либо ничего, с понятной причиной.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  cleanerIds?: string[];
+  @IsOptional() @IsEnum(FunnelStage) stage?: FunnelStage;
+  @IsOptional() @IsString() @MaxLength(1000) rejectionReason?: string;
 }
 
 export class ChangeStageDto {

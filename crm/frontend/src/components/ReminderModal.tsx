@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { ClientPicker } from './ClientPicker';
 import { Modal } from './ui';
 import { useToast } from './Toast';
+import { useBackgroundSave } from '../lib/save';
 import { UserPicker } from './common';
 import { DatePicker } from './DatePicker';
 import { TimePicker } from './TimePicker';
@@ -65,6 +66,7 @@ export function ReminderModal({
 }: ReminderModalProps) {
   const { user } = useAuth();
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const canAssign = userSeesAll(user);
   const isEdit = !!reminder;
 
@@ -142,32 +144,40 @@ export function ReminderModal({
      * увидеть закрытое окно, незачем. Если сервер откажет — скажем об этом
      * сообщением, напоминание просто не появится в списке.
      */
-    onClose();
-    toast.success(isEdit ? 'Напоминание поставлено' : 'Напоминание поставлено');
-    try {
-      let saved: Reminder;
-      if (isEdit && reminder) {
-        saved = (await api.patch<Reminder>(`/reminders/${reminder.id}`, payload))
-          .data;
-      } else {
-        const target = clientId ?? pickedId;
-        if (!target) throw new Error('Не выбран клиент для напоминания');
-        saved = (
-          await api.post<Reminder>('/reminders', {
-            ...payload,
-            clientId: target,
-            orderId: orderId ?? undefined,
-          })
-        ).data;
-      }
-      onSaved?.(saved);
-    } catch (e: any) {
-      toast.error(
-        e?.response?.data?.message || 'Не удалось сохранить напоминание',
-      );
-    } finally {
+    const target = clientId ?? pickedId;
+    if (!isEdit && !target) {
       setSaving(false);
+      toast.error('Не выбран клиент для напоминания');
+      return;
     }
+    onClose();
+    toast.success('Напоминание поставлено');
+    /*
+     * Единое правило сохранения в фоне (lib/save.ts): автоповтор при обрыве
+     * сети для правки, для создания — без автоповтора (иначе дубль), и
+     * плашка «Повторить», которая не исчезает сама.
+     */
+    let saved: Reminder | null = null;
+    await backgroundSave({
+      request: async () => {
+        saved =
+          isEdit && reminder
+            ? (await api.patch<Reminder>(`/reminders/${reminder.id}`, payload)).data
+            : (
+                await api.post<Reminder>('/reminders', {
+                  ...payload,
+                  clientId: target,
+                  orderId: orderId ?? undefined,
+                })
+              ).data;
+      },
+      retries: isEdit ? 2 : 0,
+      failMessage: 'Не удалось сохранить напоминание',
+      onDone: () => {
+        if (saved) onSaved?.(saved);
+      },
+    });
+    setSaving(false);
   };
 
   return (

@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, FolderClosed } from 'lucide-react';
 import { api } from '../api/client';
 import { invalidateOrderRelated, useFetch, withMutation } from '../api/hooks';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { useDialog } from '../components/Dialog';
 import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
@@ -377,6 +378,7 @@ function BoardSkeleton() {
 
 export function Funnel() {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   /*
    * Открываем раздел с самого верха. Браузер помнит прокрутку предыдущей
    * страницы, и на телефоне воронка нередко открывалась уже пролистанной —
@@ -783,24 +785,28 @@ export function Funnel() {
 
     applyPatch(orderId, { stage: newStage, rejectionReason });
     inFlightRef.current += 1;
-    try {
-      await api.patch(`/orders/${orderId}/stage`, {
-        stage: newStage,
-        rejectionReason,
-      });
+    /*
+     * Единое правило фонового сохранения (lib/save.ts): автоповтор при
+     * обрыве сети, плашка «Повторить» при окончательном отказе. Повтор
+     * безопасен: перевод на тот же этап второй раз ничего не дублирует.
+     */
+    await backgroundSave({
+      request: () =>
+        api.patch(`/orders/${orderId}/stage`, {
+          stage: newStage,
+          rejectionReason,
+        }),
+      failMessage: 'Не удалось сменить этап',
       /*
        * Смена этапа порождает записи в других разделах: осмотр — выезд в
        * «Сменах», оплата — черновик ведомости и запись дохода. Забываем их
        * кэш, чтобы при переходе туда данные загрузились заново, а не показали
        * состояние до перетаскивания.
        */
-      invalidateOrderRelated();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Не удалось сменить этап');
-      reload(); // вернуть серверное состояние
-    } finally {
-      inFlightRef.current -= 1;
-    }
+      onDone: () => invalidateOrderRelated(),
+      onFail: () => reload(), // вернуть серверное состояние
+    });
+    inFlightRef.current -= 1;
   };
 
   const onDragStart = () => {

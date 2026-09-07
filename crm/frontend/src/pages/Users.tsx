@@ -11,6 +11,7 @@ import {
   PasswordInput,
 } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { useDialog } from '../components/Dialog';
 import { useAuth } from '../auth/AuthContext';
 import { tempId, withRetry } from '../lib/util';
@@ -19,6 +20,7 @@ import type { Manager, Role } from '../types';
 
 export function UsersPage() {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const dialog = useDialog();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -49,12 +51,11 @@ export function UsersPage() {
     setData((u) =>
       u ? u.map((x) => (x.id === id ? { ...x, isActive } : x)) : u,
     );
-    try {
-      await api.patch(`/users/${id}/active`, { isActive });
-    } catch {
-      toast.error('Не удалось изменить статус сотрудника');
-      reload();
-    }
+    await backgroundSave({
+      request: () => api.patch(`/users/${id}/active`, { isActive }),
+      failMessage: 'Не удалось изменить статус сотрудника',
+      onFail: () => reload(),
+    });
   };
 
   // оптимистично: сотрудник появляется сразу
@@ -73,13 +74,14 @@ export function UsersPage() {
       isActive: true,
     };
     setData((u) => (u ? [...u, optimistic] : [optimistic]));
-    api
-      .post('/users', payload)
-      .then(() => reload())
-      .catch((e) => {
-        toast.error(e?.response?.data?.message || 'Не удалось создать сотрудника');
-        setData((u) => (u ? u.filter((x) => x.id !== id) : u));
-      });
+    // создание — без автоповтора (иначе дубль), но с плашкой «Повторить»
+    void backgroundSave({
+      request: () => api.post('/users', payload),
+      retries: 0,
+      failMessage: 'Не удалось создать сотрудника',
+      onDone: () => reload(),
+      onFail: () => setData((u) => (u ? u.filter((x) => x.id !== id) : u)),
+    });
   };
 
   return (

@@ -30,6 +30,7 @@ import {
 } from '../components/ui';
 import { ScrollArea } from '../components/ScrollArea';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { NameInput, PhoneInput } from '../components/ContactFields';
 import { formatDate, formatPrice, STAGE_LABEL, STAGE_COLOR } from '../lib/labels';
 import { monthRange } from '../lib/date';
@@ -73,6 +74,7 @@ export function UserDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const { user: viewer } = useAuth();
   const { data, loading, error, reload, setData } = useFetch<UserDetailData>(
     `/users/${id}`,
@@ -117,15 +119,17 @@ export function UserDetail() {
           }
         : d,
     );
-    api
-      .patch(`/users/${id}`, payload)
-      .then(() => reload())
-      .catch((e: any) => {
-        toast.error(e?.response?.data?.message || 'Не удалось сохранить');
+    // единое правило фонового сохранения: автоповтор + плашка «Повторить»
+    void backgroundSave({
+      request: () => api.patch(`/users/${id}`, payload),
+      failMessage: 'Не удалось сохранить',
+      onDone: () => reload(),
+      onFail: () => {
         // откат напрямую к снапшоту — корректен даже когда GET недоступен
         setData(prev ?? null);
         reload();
-      });
+      },
+    });
   };
   const [showEdit, setShowEdit] = useState(false);
   const [list, setList] = useState<{ type: string; title: string } | null>(null);

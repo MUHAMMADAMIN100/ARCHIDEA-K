@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { SkeletonList, PageHeader, Modal, EmptyState, ErrorState, Badge } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useBackgroundSave } from '../lib/save';
 import { useDialog } from '../components/Dialog';
 import { DatePicker } from '../components/DatePicker';
 import { TimePicker } from '../components/TimePicker';
@@ -873,6 +874,7 @@ function OrderPicker({
 
 function PayrollSummarySection() {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const [monthAnchor, setMonthAnchor] = useState(() => todayISO());
   const { from, to } = useMemo(() => monthRange(monthAnchor), [monthAnchor]);
   const label = useMemo(
@@ -904,12 +906,13 @@ function PayrollSummarySection() {
 
   const quickFine = (payload: { cleanerId: string; amount: number; reason: string; date: string }) => {
     toast.success('Штраф назначен');
-    api
-      .post('/payroll/fines', payload)
-      .then(() => reload())
-      .catch((e: any) => {
-        toast.error(e?.response?.data?.message || 'Не удалось назначить штраф');
-      });
+    // создание — без автоповтора (иначе дубль), но с плашкой «Повторить»
+    void backgroundSave({
+      request: () => api.post('/payroll/fines', payload),
+      retries: 0,
+      failMessage: 'Не удалось назначить штраф',
+      onDone: () => reload(),
+    });
   };
 
   const shiftMonthAnchor = (delta: number) => setMonthAnchor((m) => shiftMonth(m, delta));
@@ -1488,6 +1491,7 @@ function PayrollBreakdownModal({
 
 function FinesSection() {
   const toast = useToast();
+  const backgroundSave = useBackgroundSave();
   const dialog = useDialog();
   const [period, setPeriod] = useState<Period>(() => monthRange());
   const {
@@ -1534,13 +1538,15 @@ function FinesSection() {
     };
     setFines((list) => (list ? [optimistic, ...list] : [optimistic]));
     toast.success('Штраф назначен');
-    api
-      .post('/payroll/fines', payload)
-      .then(() => reload())
-      .catch((e: any) => {
-        toast.error(e?.response?.data?.message || 'Не удалось назначить штраф');
-        setFines((list) => (list ? list.filter((x) => x.id !== optimistic.id) : list));
-      });
+    // создание — без автоповтора (иначе дубль), но с плашкой «Повторить»
+    void backgroundSave({
+      request: () => api.post('/payroll/fines', payload),
+      retries: 0,
+      failMessage: 'Не удалось назначить штраф',
+      onDone: () => reload(),
+      onFail: () =>
+        setFines((list) => (list ? list.filter((x) => x.id !== optimistic.id) : list)),
+    });
   };
 
   return (
