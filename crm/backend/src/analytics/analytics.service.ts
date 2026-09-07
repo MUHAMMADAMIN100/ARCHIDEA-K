@@ -741,12 +741,25 @@ export class AnalyticsService {
           status: true,
           brigadeName: true,
           managerName: true,
+          // от какого клиента выезд и сколько стоил заказ (просьба владельца)
+          order: {
+            select: {
+              finalPrice: true,
+              estimatedPrice: true,
+              client: { select: { fullName: true, phone: true } },
+            },
+          },
           members: {
             select: { cleanerId: true, fullName: true, rate: true, role: true },
           },
         },
         orderBy: { date: 'desc' },
         take: 300,
+      });
+      const клиент = (g: (typeof groups)[number]) => ({
+        clientName: g.order?.client?.fullName ?? null,
+        clientPhone: g.order?.client?.phone ?? null,
+        orderPrice: showMoney && g.order ? priceOf(g.order) : null,
       });
       const showMoney = seesFinance(user);
       if (metric === 'brigadeVisits') {
@@ -761,6 +774,7 @@ export class AnalyticsService {
             startTime: g.startTime,
             status: g.status,
             managerName: g.managerName,
+            ...клиент(g),
             members: g.members.map((m) => m.fullName),
             shifts: g.members.length,
             accrued: showMoney
@@ -779,6 +793,7 @@ export class AnalyticsService {
           startTime: g.startTime,
           status: g.status,
           brigadeName: g.brigadeName,
+          ...клиент(g),
           role: me?.role ?? null,
           rate: showMoney ? (me?.rate ?? null) : null,
         };

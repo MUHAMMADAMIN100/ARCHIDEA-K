@@ -62,6 +62,7 @@ import {
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
 import { formatPrice, SHIFT_GROUP_STATUS_LABEL } from '../lib/labels';
 import { formatDateTz, monthRange } from '../lib/date';
+import { formatPhone } from '../lib/contact';
 import { userSeesAll } from '../types';
 import type { AnalyticsFull, ShiftGroupStatus } from '../types';
 
@@ -1452,6 +1453,10 @@ interface WorkDrillRow {
   role?: string | null;
   rate?: number | null;
   accrued?: number | null;
+  /** от какого клиента выезд: имя, телефон, сумма заказа */
+  clientName?: string | null;
+  clientPhone?: string | null;
+  orderPrice?: number | null;
 }
 
 /**
@@ -1539,6 +1544,21 @@ function WorkDrillModal({
                     {r.startTime && (
                       <div className="text-xs text-navy-600">{r.startTime}</div>
                     )}
+                  </div>
+                ),
+              },
+              {
+                key: 'client',
+                header: 'Клиент',
+                cell: (r: WorkDrillRow) => (
+                  <div>
+                    <div className="font-medium text-navy-900">{r.clientName ?? '—'}</div>
+                    <div className="text-xs text-navy-600">
+                      {r.clientPhone ? formatPhone(r.clientPhone) : ''}
+                      {r.orderPrice != null
+                        ? `${r.clientPhone ? ' · ' : ''}${formatPrice(r.orderPrice)}`
+                        : ''}
+                    </div>
                   </div>
                 ),
               },
