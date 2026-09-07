@@ -551,7 +551,35 @@ export class ShiftGroupsService {
         created += 1;
         continue;
       }
-      if (visit.status === ShiftGroupStatus.CLOSED) continue;
+      if (visit.status === ShiftGroupStatus.CLOSED) {
+        /*
+         * Закрытый выезд: штат и начисленные смены не трогаем — они уже в
+         * архиве и в выплатах. Но разовых вписывают и ПОСЛЕ оплаты, а
+         * карточка заказа и аналитика считают их из карточки; чтобы
+         * «Смены и выезды» показывали те же цифры, разовых на закрытом
+         * выезде обновляем по карточке (решение владельца: цифры везде
+         * одинаковые). Только на дне, который несёт гостей.
+         */
+        /*
+         * guestDayIndex для закрытых выездов отвечает −1 («не трогать»), поэтому
+         * день гостей здесь свой: тот закрытый выезд, где разовые уже были,
+         * иначе — первый выезд заказа.
+         */
+        const несётЗакрытый = existing.findIndex((v) =>
+          v.members.some((m) => !m.cleanerId),
+        );
+        if (индекс === (несётЗакрытый >= 0 ? несётЗакрытый : 0)) {
+          await tx.shiftGroupMember.deleteMany({
+            where: { groupId: visit.id, isGuest: true },
+          });
+          if (team.guests.length) {
+            await tx.shiftGroupMember.createMany({
+              data: team.guests.map((m) => ({ ...m, groupId: visit.id })),
+            });
+          }
+        }
+        continue;
+      }
 
       /*
        * Состав приводим к карточке заказа.

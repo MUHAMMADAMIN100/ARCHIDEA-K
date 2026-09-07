@@ -15,6 +15,7 @@ import {
   seesAll,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
+import { guestsOf } from '../common/order-guests';
 import { seesFinance } from '../common/permissions';
 import {
   dayKey,
@@ -60,6 +61,38 @@ export type AnalyticsPeriod =
  */
 function priceOf(o: { finalPrice: number | null; estimatedPrice: number }) {
   return o.finalPrice ?? o.estimatedPrice ?? 0;
+}
+
+/**
+ * Начисление по выезду так, как его считает карточка заказа («Итого
+ * клинерам»): штат — по участникам выезда, разовые — из карточки заказа.
+ *
+ * Разовых в участниках выезда может не быть: их вписали после закрытия
+ * выезда, а закрытый выезд синхронизация не трогает. Карточка при этом
+ * показывала 840, аналитика — 560 (решение владельца: цифры везде должны
+ * быть одинаковыми). Разовые заказа считаются ОДИН раз — на первом его
+ * выезде в списке (выезды приходят по дате).
+ */
+type ВыездСГостями = {
+  orderId: string | null;
+  members: { rate: number; isGuest: boolean; fullName: string }[];
+  order?: { guestCleaners?: unknown } | null;
+};
+function начислениеВыезда(
+  g: ВыездСГостями,
+  учтено: Set<string>,
+): { accrued: number; shifts: number; names: string[] } {
+  const staff = g.members.filter((m) => !m.isGuest);
+  const первыйВыездЗаказа = !!g.orderId && !учтено.has(g.orderId);
+  if (g.orderId) учтено.add(g.orderId);
+  const guests = первыйВыездЗаказа ? guestsOf(g.order?.guestCleaners) : [];
+  return {
+    accrued:
+      staff.reduce((sum, m) => sum + m.rate, 0) +
+      guests.reduce((sum, x) => sum + x.rate, 0),
+    shifts: staff.length + guests.length,
+    names: [...staff.map((m) => m.fullName), ...guests.map((x) => x.fullName)],
+  };
 }
 
 @Injectable()
@@ -440,11 +473,16 @@ export class AnalyticsService {
            * всегда об одних и тех же заказах.
            */
           where: { ...NOT_DELETED, order: paidInRange },
+          orderBy: { date: 'asc' },
           select: {
             id: true,
+            orderId: true,
             brigadeId: true,
             brigadeName: true,
-            members: { select: { cleanerId: true, fullName: true, rate: true } },
+            order: { select: { guestCleaners: true } },
+            members: {
+              select: { cleanerId: true, fullName: true, rate: true, isGuest: true },
+            },
           },
         }),
       ]);
@@ -543,7 +581,9 @@ export class AnalyticsService {
       string,
       { id: string; name: string; shifts: number; accrued: number }
     >();
+    const гостиУчтены = new Set<string>();
     for (const g of shiftGroups) {
+      const итог = начислениеВыезда(g, гостиУчтены);
       const key = g.brigadeId ?? 'none';
       const info = brigades.find((b) => b.id === g.brigadeId);
       const row =
@@ -557,8 +597,8 @@ export class AnalyticsService {
           accrued: 0,
         };
       row.visits += 1;
-      row.shifts += g.members.length;
-      row.accrued += g.members.reduce((sum, m) => sum + m.rate, 0);
+      row.shifts += итог.shifts;
+      row.accrued += итог.accrued;
       byBrigade.set(key, row);
 
       for (const m of g.members) {
@@ -742,20 +782,26 @@ export class AnalyticsService {
           brigadeName: true,
           managerName: true,
           // от какого клиента выезд и сколько стоил заказ (просьба владельца)
+          orderId: true,
           order: {
             select: {
               finalPrice: true,
               estimatedPrice: true,
+              guestCleaners: true,
               client: { select: { fullName: true, phone: true } },
             },
           },
           members: {
-            select: { cleanerId: true, fullName: true, rate: true, role: true },
+            select: { cleanerId: true, fullName: true, rate: true, role: true, isGuest: true },
           },
         },
-        orderBy: { date: 'desc' },
+        orderBy: { date: 'asc' },
         take: 300,
       });
+      // разовые — из карточки заказа, один раз на заказ (см. начислениеВыезда)
+      const гостиУчтены = new Set<string>();
+      const итогПоВыезду = new Map(groups.map((g) => [g.id, начислениеВыезда(g, гостиУчтены)]));
+      groups.reverse(); // показываем от свежих к старым, как раньше
       const клиент = (g: (typeof groups)[number]) => ({
         clientName: g.order?.client?.fullName ?? null,
         clientPhone: g.order?.client?.phone ?? null,
@@ -775,11 +821,9 @@ export class AnalyticsService {
             status: g.status,
             managerName: g.managerName,
             ...клиент(g),
-            members: g.members.map((m) => m.fullName),
-            shifts: g.members.length,
-            accrued: showMoney
-              ? g.members.reduce((sum, m) => sum + m.rate, 0)
-              : null,
+            members: итогПоВыезду.get(g.id)!.names,
+            shifts: итогПоВыезду.get(g.id)!.shifts,
+            accrued: showMoney ? итогПоВыезду.get(g.id)!.accrued : null,
           })),
         };
       }
@@ -1111,20 +1155,21 @@ export class AnalyticsService {
         ...NOT_DELETED,
         order: { ...scope, stage: FunnelStage.PAID, closedAt: { gte: start } },
       },
+      orderBy: { date: 'asc' },
       select: {
-        order: { select: { closedAt: true } },
-        members: { select: { rate: true } },
+        orderId: true,
+        order: { select: { closedAt: true, guestCleaners: true } },
+        members: { select: { rate: true, isGuest: true, fullName: true } },
       },
     });
+    const гостиУчтены = new Set<string>();
     for (const g of выезды) {
+      const итог = начислениеВыезда(g, гостиУчтены);
       if (!g.order?.closedAt) continue;
       // день оплаты заказа — тот же, в который легла его выручка
       const key = dayKey(g.order.closedAt);
       if (buckets.has(key)) {
-        начислено.set(
-          key,
-          (начислено.get(key) ?? 0) + g.members.reduce((sum, m) => sum + m.rate, 0),
-        );
+        начислено.set(key, (начислено.get(key) ?? 0) + итог.accrued);
       }
     }
 
