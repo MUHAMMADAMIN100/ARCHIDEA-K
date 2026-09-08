@@ -49,9 +49,14 @@ export class CleanersController {
 
   private assertRateAllowed(user: AuthUser, rate?: number) {
     if (rate === undefined) return;
-    if (user.role !== Role.DIRECTOR) {
+    /*
+     * Ставку меняют руководитель и управляющий (решение владельца): он ведёт
+     * команду, выезды и выплаты. Раньше сайт показывал ему поле ставки, а
+     * сервер отвечал отказом — «Клинер добавлен» и следом ошибка.
+     */
+    if (user.role !== Role.DIRECTOR && user.role !== Role.SUPERVISOR) {
       throw new ForbiddenException(
-        'Ставку выплаты может менять только руководитель',
+        'Ставку выплаты может менять руководитель или управляющий',
       );
     }
   }
