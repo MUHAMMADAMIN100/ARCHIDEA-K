@@ -441,6 +441,26 @@ export function Funnel() {
     box.scrollBy({ left: dir * step, behavior: 'smooth' });
   };
 
+  /**
+   * Прыжок к этапу по нажатию на точку внизу.
+   *
+   * Нужен не для красоты: жест у самого края экрана браузер забирает себе под
+   * «назад», и вернуться свайпом к первым этапам с дальнего конца доски
+   * получается не всегда. Нажатие на точку работает всегда и коротко — одно
+   * касание вместо шести свайпов через всю воронку.
+   *
+   * Сдвиг считаем от края доски, а не по offsetLeft: у колонки «К оплате»
+   * на большом экране своя позиция (sticky), и offsetLeft там врал бы.
+   */
+  const scrollToStage = (index: number) => {
+    const box = boardRef.current;
+    const col = box?.children[index] as HTMLElement | undefined;
+    if (!box || !col) return;
+    const shift =
+      col.getBoundingClientRect().left - box.getBoundingClientRect().left;
+    box.scrollTo({ left: box.scrollLeft + shift, behavior: 'smooth' });
+  };
+
   /*
    * Период воронки — по ДАТЕ ОФОРМЛЕНИЯ заявки (решение владельца).
    * По умолчанию текущий месяц: раньше это правило было зашито намертво,
@@ -582,6 +602,125 @@ export function Funnel() {
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure);
       ro.disconnect();
+    };
+  }, [data]);
+
+  /*
+   * Свайп, начатый у самого края экрана, двигает доску, а не уводит назад.
+   *
+   * Полосу шириной с палец вдоль обоих краёв браузер держит под свой жест
+   * «назад»/«вперёд», и странице такое движение не достаётся вовсе: доска
+   * стояла на месте. Именно оттуда жалоба «не получается вернуться к началу
+   * воронки» — к первым этапам тянут от левого края, и как раз этот жест
+   * пропадал. Ни одна настройка CSS такое не отменяет, поэтому в краевой
+   * полосе ведём прокрутку сами.
+   *
+   * Вмешиваемся ТОЛЬКО у краёв: в середине доски родное листание лучше —
+   * у него есть инерция, которую руками не повторить.
+   *
+   * Направление выбирается один раз за жест и по первому же заметному
+   * движению: горизонталь забираем себе, вертикаль оставляем колонке с
+   * карточками, иначе список внутри этапа перестал бы листаться. Пока палец
+   * стоит на месте, не мешаем вовсе — нажатие на карточку должно открывать
+   * заказ, как и раньше.
+   */
+  useEffect(() => {
+    const box = boardRef.current;
+    if (!box) return;
+    if (!window.matchMedia?.('(max-width: 639.98px)').matches) return;
+
+    /** Ширина краевой полосы, которую забирает себе браузер */
+    const EDGE = 44;
+    /** Насколько палец должен сдвинуться, чтобы стало ясно направление */
+    const SLOP = 8;
+
+    let startX = 0;
+    let startY = 0;
+    let fromLeft = 0;
+    let mode: 'idle' | 'board' | 'column' = 'idle';
+
+    const onStart = (e: TouchEvent) => {
+      mode = 'idle';
+      if (e.touches.length !== 1) return;
+      /*
+       * Поверх доски открыто окно — карточка заказа или боковое меню. Доску
+       * под ним не листаем и уж точно не отменяем жест: внутри окна свои
+       * списки, и они должны прокручиваться. Признак берём тот же, каким
+       * окно останавливает прокрутку страницы.
+       */
+      if (document.body.style.overflow === 'hidden') return;
+      const t = e.touches[0];
+      const nearEdge = t.clientX <= EDGE || t.clientX >= window.innerWidth - EDGE;
+      if (!nearEdge) return; // середина доски — пусть листает сам браузер
+      /*
+       * По вертикали касание должно попадать в доску, по горизонтали — не
+       * обязательно: у раздела есть боковой отступ, и палец у самого края
+       * экрана ложится РЯДОМ с доской, а не на неё. Раньше слушали саму
+       * доску, и такое касание до неё просто не доходило — то самое
+       * «свайп влево не работает».
+       */
+      const r = box.getBoundingClientRect();
+      if (t.clientY < r.top || t.clientY > r.bottom) return;
+      startX = t.clientX;
+      startY = t.clientY;
+      fromLeft = box.scrollLeft;
+      mode = 'column'; // направление ещё не выбрано, см. onMove
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (mode === 'idle' || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (mode === 'column') {
+        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
+        if (Math.abs(dy) >= Math.abs(dx)) {
+          mode = 'idle'; // это прокрутка карточек — не наше дело
+          return;
+        }
+        mode = 'board';
+      }
+      // отменяем жест браузера и двигаем доску ровно за пальцем
+      e.preventDefault();
+      box.scrollLeft = fromLeft - dx;
+    };
+
+    const onEnd = () => {
+      if (mode !== 'board') {
+        mode = 'idle';
+        return;
+      }
+      mode = 'idle';
+      /*
+       * Мягко подводим к ближайшему этапу: палец останавливается где угодно,
+       * а колонка должна встать ровно — иначе на экране всегда половинки
+       * двух этапов. Родное прилипание здесь не срабатывает: прокрутку вёл
+       * не браузер, а мы.
+       */
+      const first = box.firstElementChild as HTMLElement | null;
+      const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
+      const step = first ? first.getBoundingClientRect().width + gap : 0;
+      if (step <= 0) return;
+      const target = Math.round(box.scrollLeft / step) * step;
+      box.scrollTo({ left: target, behavior: 'smooth' });
+    };
+
+    /*
+     * Слушаем документ, а не доску: касание у края экрана приходится на
+     * отступ раздела рядом с доской, и обработчик на самой доске его не
+     * увидел бы. Чужие жесты не трогаем — onStart отсеивает всё, что
+     * началось не в краевой полосе на высоте доски.
+     */
+    document.addEventListener('touchstart', onStart, { passive: true });
+    // passive: false обязателен — иначе preventDefault не отменит жест браузера
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd, { passive: true });
+    document.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onEnd);
     };
   }, [data]);
 
@@ -1011,7 +1150,7 @@ export function Funnel() {
           <div
             ref={boardRef}
             style={boardHeight ? { height: boardHeight } : undefined}
-            className="board-scroll flex h-[calc(100svh-7.5rem)] snap-x snap-mandatory gap-3 pr-4 sm:h-auto sm:snap-none sm:gap-4 sm:pr-0"
+            className="board-scroll flex h-[calc(100svh-7.5rem)] snap-x snap-proximity gap-3 pr-4 sm:h-auto sm:snap-none sm:gap-4 sm:pr-0"
           >
             {board.map((col) => {
               /*
@@ -1275,13 +1414,30 @@ export function Funnel() {
             странице высоты: строка ложится на нижний край доски, как раньше.
           */}
           <div className="pointer-events-none sticky bottom-2 z-10 -mt-9 flex h-9 items-center justify-center">
+            {/*
+              Точки — не только показатель положения, но и кнопки: нажатие
+              переносит к своему этапу. Появились потому, что свайп у самого
+              края экрана браузер забирает под «назад», и вернуться жестом к
+              началу воронки с дальнего конца доски выходит не всегда.
+
+              Кнопкой служит сама точка, а не обёртка: подсветку текущей
+              ставит sync() прямо детям этого блока (data-active), и лишний
+              слой сломал бы её. Палец попадает благодаря невидимой площадке
+              вокруг точки — см. .swipe-dot в index.css.
+            */}
             <div
               ref={dotsRef}
-              aria-hidden="true"
-              className="flex items-center gap-1.5 sm:hidden"
+              className="pointer-events-auto flex items-center gap-2 sm:hidden"
             >
-              {board.map((col) => (
-                <span key={col.stage} className="swipe-dot" />
+              {board.map((col, i) => (
+                <button
+                  key={col.stage}
+                  type="button"
+                  className="swipe-dot"
+                  onClick={() => scrollToStage(i)}
+                  aria-label={`Перейти к этапу «${col.label}»`}
+                  title={col.label}
+                />
               ))}
             </div>
 
