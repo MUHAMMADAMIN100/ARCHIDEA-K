@@ -143,6 +143,7 @@ export function Clients() {
       sourceDetail?: string;
       address?: string;
       tags?: ClientTag[];
+      notes?: string;
     },
     managerName: string | null,
     order: NewOrderInput | null,
@@ -507,6 +508,8 @@ export interface ClientDraftPayload {
   sourceDetail?: string;
   address?: string;
   tags?: ClientTag[];
+  /** Комментарий из формы — идёт в заметки карточки клиента */
+  notes?: string;
 }
 
 export function AddClientModal({
@@ -544,10 +547,18 @@ export function AddClientModal({
   full?: boolean;
 }) {
   const [fullName, setFullName] = useState(initial?.payload.fullName ?? '');
-  // пожелания клиента (полная форма): «клиент просил» и его комментарий
+  // пожелания клиента (полная форма): «клиент просил»
   const [preferredDate, setPreferredDate] = useState(initial?.order?.preferredDate ?? '');
   const [preferredTime, setPreferredTime] = useState(initial?.order?.preferredTime ?? '');
-  const [orderComment, setOrderComment] = useState(initial?.order?.comment ?? '');
+  /*
+   * Комментарий — одно поле на всю форму (решение владельца): записывается в
+   * заметки карточки клиента, а если следом создаётся заявка — и в её
+   * комментарий. Раньше поле жило только внутри блока заявки в воронке, а
+   * в разделе «Клиенты» его не было вовсе.
+   */
+  const [comment, setComment] = useState(
+    initial?.payload.notes ?? initial?.order?.comment ?? '',
+  );
   const [phone, setPhone] = useState(initial?.payload.phone ?? '');
   // запасные номера «на всякий случай» (ТЗ 1.1)
   /*
@@ -867,7 +878,7 @@ export function AddClientModal({
           address: address.trim(),
           preferredDate: preferredDate || undefined,
           preferredTime: preferredTime || undefined,
-          comment: orderComment.trim() || undefined,
+          comment: comment.trim() || undefined,
           /*
            * Итог НЕ отправляем: его считает сервер, и только он знает про
            * постоянную скидку клиента. Пока форма слала свою цифру, скидка
@@ -887,6 +898,7 @@ export function AddClientModal({
         sourceDetail: sourceDetail.trim() || undefined,
         address: address.trim(),
         tags,
+        notes: comment.trim() || undefined,
       },
       managerName,
       order,
@@ -1045,35 +1057,24 @@ export function AddClientModal({
               форме (воронка): в справочнике клиентов эти поля не нужны.
             */}
             {full && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="label">Клиент просил — дата</label>
-                    <DatePicker
-                      placeholder="дд.мм.гггг"
-                      value={preferredDate}
-                      onChange={setPreferredDate}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Клиент просил — время</label>
-                    <TimePicker
-                      value={preferredTime}
-                      onChange={setPreferredTime}
-                      ariaLabel="Клиент просил — время"
-                    />
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Комментарий клиента</label>
-                  <textarea
-                    className="input min-h-[56px]"
-                    value={orderComment}
-                    onChange={(e) => setOrderComment(e.target.value)}
-                    placeholder="что написал или сказал клиент при обращении"
+                  <label className="label">Клиент просил — дата</label>
+                  <DatePicker
+                    placeholder="дд.мм.гггг"
+                    value={preferredDate}
+                    onChange={setPreferredDate}
                   />
                 </div>
-              </>
+                <div>
+                  <label className="label">Клиент просил — время</label>
+                  <TimePicker
+                    value={preferredTime}
+                    onChange={setPreferredTime}
+                    ariaLabel="Клиент просил — время"
+                  />
+                </div>
+              </div>
             )}
             <div>
               <label className="label">Услуга</label>
@@ -1516,6 +1517,22 @@ export function AddClientModal({
             />
           </div>
         )}
+
+        {/*
+          Комментарий — внизу формы, перед кнопками (решение владельца), и
+          виден всегда: и в воронке, и в разделе «Клиенты». Попадает в заметки
+          карточки клиента; при создании заявки — ещё и в её комментарий.
+        */}
+        <div>
+          <label className="label">Комментарий</label>
+          <textarea
+            className="input min-h-[56px]"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="что написал или сказал клиент при обращении"
+            aria-label="Комментарий"
+          />
+        </div>
 
         {/*
           Причина, по которой кнопка неактивна, — прямо над ней.

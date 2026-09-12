@@ -22,7 +22,7 @@ import {
 } from '../common/decorators/current-user.decorator';
 import { can } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
-import { formatDate, parseDate } from '../common/time/dushanbe';
+import { formatDate, momentRange, parseDate } from '../common/time/dushanbe';
 import {
   ChangeProposalStatusDto,
   CreateProposalDto,
@@ -343,12 +343,12 @@ export class ProposalsService {
     if (q.status) where.status = q.status;
     if (seesAll(user) && q.managerId) where.client = { managerId: q.managerId };
 
-    if (q.from || q.to) {
-      const range: Prisma.DateTimeFilter = {};
-      if (q.from) range.gte = new Date(`${q.from}T00:00:00.000Z`);
-      if (q.to) range.lte = new Date(`${q.to}T23:59:59.999Z`);
-      where.createdAt = range;
-    }
+    /*
+     * Период — по Душанбе, как во всех остальных списках. Раньше границы
+     * брались по UTC, и КП, составленное первого числа до пяти утра,
+     * числилось прошлым месяцем.
+     */
+    if (q.from || q.to) where.createdAt = momentRange(q.from, q.to);
 
     return this.prisma.proposal.findMany({
       where,

@@ -535,15 +535,17 @@ export class ClientsService {
    * всех. Отдаём только то, что нужно отметке: кого, когда и чей клиент.
    */
   async callbacks(user: AuthUser, from?: string, to?: string) {
-    const range: Prisma.DateTimeFilter = {};
-    if (from) range.gte = new Date(`${from}T00:00:00.000Z`);
-    if (to) range.lte = new Date(`${to}T23:59:59.999Z`);
-
+    /*
+     * Границы периода — по Душанбе, как во всём остальном приложении.
+     * Пока они считались по UTC, перезвон, назначенный на 02:00 первого
+     * числа, попадал в календарь предыдущим днём: сутки по Гринвичу
+     * начинаются на пять часов позже местных.
+     */
     return this.prisma.client.findMany({
       where: {
         ...NOT_DELETED,
         ...(seesAll(user) ? {} : { managerId: user.id }),
-        callbackAt: from || to ? range : { not: null },
+        callbackAt: from || to ? momentRange(from, to) : { not: null },
       },
       select: {
         id: true,
