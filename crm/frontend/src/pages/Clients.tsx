@@ -1321,80 +1321,97 @@ export function AddClientModal({
                       }
                       aria-label="Название доп. услуги"
                     />
+                    {/*
+                      Цена и количество — своим рядом, во всю ширину.
+                      Пока цена, количество, сумма, галочка и корзина стояли
+                      одной строкой, на узком экране они не помещались и
+                      вылезали за рамку карточки.
+                    */}
                     <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      className="input input-sm w-20 shrink-0"
-                      value={r.price}
-                      placeholder="Цена"
-                      onChange={(ev) =>
-                        setExtraRows((prev) =>
-                          prev.map((x, j) =>
-                            j === i ? { ...x, price: ev.target.value } : x,
-                          ),
-                        )
-                      }
-                      aria-label="Цена доп. услуги"
-                    />
+                      <input
+                        type="number"
+                        min={0}
+                        className="input input-sm w-full min-w-0"
+                        value={r.price}
+                        placeholder="Цена"
+                        onChange={(ev) =>
+                          setExtraRows((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, price: ev.target.value } : x,
+                            ),
+                          )
+                        }
+                        aria-label="Цена доп. услуги"
+                      />
+                      {/*
+                        Количество мест. Пока пусто — строка в сумму не идёт:
+                        «Химчистка мягкой мебели» стоит в форме заранее, но
+                        деньги за неё добавятся только когда впишут число.
+                      */}
+                      <input
+                        type="number"
+                        min={0}
+                        className="input input-sm w-full min-w-0"
+                        value={r.qty}
+                        placeholder="Кол-во"
+                        onChange={(ev) =>
+                          setExtraRows((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, qty: ev.target.value } : x,
+                            ),
+                          )
+                        }
+                        aria-label="Количество"
+                        title="Сколько мест или штук"
+                      />
+                    </div>
                     {/*
-                      Количество мест. Пока пусто — строка в сумму не идёт:
-                      «Химчистка мягкой мебели» стоит в форме заранее, но
-                      деньги за неё добавятся только когда впишут число.
+                      Итог строки слева, отметка «в счёт» и корзина справа.
+                      Сумма стоит на месте всегда, даже когда её ещё нет:
+                      раньше она появлялась вместе с количеством и раздвигала
+                      строку прямо под пальцем.
                     */}
-                    <input
-                      type="number"
-                      min={0}
-                      className="input input-sm w-16 shrink-0"
-                      value={r.qty}
-                      placeholder="Кол-во"
-                      onChange={(ev) =>
-                        setExtraRows((prev) =>
-                          prev.map((x, j) =>
-                            j === i ? { ...x, qty: ev.target.value } : x,
-                          ),
-                        )
-                      }
-                      aria-label="Количество"
-                      title="Сколько мест или штук"
-                    />
-                    {/*
-                      Сумма строки стоит на месте всегда, даже когда её ещё
-                      нет. Раньше она появлялась вместе с количеством и
-                      раздвигала строку: вписываешь число — и блок «Доп.
-                      услуги» прыгает прямо под пальцем.
-                    */}
-                    <span
-                      className="ml-auto w-24 shrink-0 truncate text-right text-xs font-semibold tabular-nums text-navy-700"
-                      title={extraTotal(r) > 0 ? formatPrice(extraTotal(r)) : ''}
-                    >
-                      {extraTotal(r) > 0 ? `= ${formatPrice(extraTotal(r))}` : '—'}
-                    </span>
-                    {/* галочка: включить строку в сумму заявки */}
-                    <input
-                      type="checkbox"
-                      checked={r.checked}
-                      onChange={(ev) =>
-                        setExtraRows((prev) =>
-                          prev.map((x, j) =>
-                            j === i ? { ...x, checked: ev.target.checked } : x,
-                          ),
-                        )
-                      }
-                      className="h-4 w-4 shrink-0 accent-brand-600"
-                      aria-label="Включить в сумму заявки"
-                      title="Включить в сумму заявки"
-                    />
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-lg p-1 text-navy-400 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Удалить услугу"
-                      onClick={() =>
-                        setExtraRows((prev) => prev.filter((_, j) => j !== i))
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className="min-w-0 truncate text-xs font-semibold tabular-nums text-navy-700"
+                        title={extraTotal(r) > 0 ? formatPrice(extraTotal(r)) : ''}
+                      >
+                        {extraTotal(r) > 0 ? `= ${formatPrice(extraTotal(r))}` : '—'}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {/*
+                          Галочка с подписью: в квадратик в четыре миллиметра
+                          пальцем не попасть, а по метке нажимается вся надпись.
+                        */}
+                        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-navy-600">
+                          <input
+                            type="checkbox"
+                            checked={r.checked}
+                            onChange={(ev) =>
+                              setExtraRows((prev) =>
+                                prev.map((x, j) =>
+                                  j === i
+                                    ? { ...x, checked: ev.target.checked }
+                                    : x,
+                                ),
+                              )
+                            }
+                            className="h-4 w-4 shrink-0 accent-brand-600"
+                            aria-label="Включить в сумму заявки"
+                          />
+                          В счёт
+                        </label>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Удалить услугу"
+                          onClick={() =>
+                            setExtraRows((prev) => prev.filter((_, j) => j !== i))
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

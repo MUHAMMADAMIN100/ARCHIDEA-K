@@ -517,11 +517,15 @@ export function Funnel() {
        * оказывались за краем.
        *
        * Положение доски берём от верха ДОКУМЕНТА (rect.top + scrollY): такое
-       * значение не меняется при прокрутке, поэтому замер больше не трясёт
-       * страницу — ровно та жалоба, из-за которой замер на телефоне когда-то
-       * выключили. Единицу svh считает сам браузер: она не зависит от
-       * плавающей адресной строки Safari, поэтому доска не прыгает, когда та
-       * появляется и исчезает.
+       * значение не меняется при прокрутке, поэтому замер не трясёт страницу —
+       * ровно та жалоба, из-за которой замер на телефоне когда-то выключили.
+       *
+       * Высоту экрана считает сам браузер единицей dvh — «сколько видно
+       * сейчас». Именно сейчас, а не в худшем случае: со svh доска всегда
+       * строилась под развёрнутую адресную строку Safari, и стоило той
+       * уехать при прокрутке, как внизу оставалась серая полоса в сотню
+       * пикселей. dvh меняется вместе с панелями браузера, и доска
+       * заканчивается ровно у нижнего края в обоих состояниях.
        */
       const main = el.closest('main');
       const padOf = main
@@ -532,7 +536,7 @@ export function Funnel() {
           el.getBoundingClientRect().top + window.scrollY,
         );
         // max(): на очень маленьком экране доска не схлопнется в полоску
-        const next = `max(240px, calc(100svh - ${fromTop + padOf + 4}px))`;
+        const next = `max(240px, calc(100dvh - ${fromTop + padOf + 4}px))`;
         setBoardHeight((prev) => (prev === next ? prev : next));
         return;
       }
@@ -606,38 +610,45 @@ export function Funnel() {
   }, [data]);
 
   /*
-   * Свайп, начатый у самого края экрана, двигает доску, а не уводит назад.
+   * Листание доски пальцем ведём сами — по всей её ширине.
    *
-   * Полосу шириной с палец вдоль обоих краёв браузер держит под свой жест
-   * «назад»/«вперёд», и странице такое движение не достаётся вовсе: доска
-   * стояла на месте. Именно оттуда жалоба «не получается вернуться к началу
-   * воронки» — к первым этапам тянут от левого края, и как раз этот жест
-   * пропадал. Ни одна настройка CSS такое не отменяет, поэтому в краевой
-   * полосе ведём прокрутку сами.
+   * Раньше жест доставался браузеру, и с ним было две беды. Полосу вдоль
+   * краёв экрана он держит под своё «назад», и движение к началу воронки
+   * пропадало целиком. А в середине доски он на каждом жесте заново решал,
+   * кому тот достанется — колонке с карточками или доске, — и при малейшем
+   * наклоне пальца доска не двигалась вовсе: «воронка не реагирует на свайпы».
    *
-   * Вмешиваемся ТОЛЬКО у краёв: в середине доски родное листание лучше —
-   * у него есть инерция, которую руками не повторить.
-   *
-   * Направление выбирается один раз за жест и по первому же заметному
-   * движению: горизонталь забираем себе, вертикаль оставляем колонке с
-   * карточками, иначе список внутри этапа перестал бы листаться. Пока палец
-   * стоит на месте, не мешаем вовсе — нажатие на карточку должно открывать
-   * заказ, как и раньше.
+   * Теперь правило простое и одинаковое везде: направление выбирается один
+   * раз, по первому заметному движению. Горизонталь — доске, вертикаль —
+   * колонке с карточками. Пока палец стоит на месте, не вмешиваемся вовсе,
+   * поэтому нажатие открывает карточку заказа, как и раньше.
    */
   useEffect(() => {
     const box = boardRef.current;
     if (!box) return;
     if (!window.matchMedia?.('(max-width: 639.98px)').matches) return;
 
-    /** Ширина краевой полосы, которую забирает себе браузер */
-    const EDGE = 44;
     /** Насколько палец должен сдвинуться, чтобы стало ясно направление */
     const SLOP = 8;
+    /** Скорость, с которой движение считается «перелистнуть», px/мс */
+    const FLICK = 0.25;
+    /** Доля этапа, после которой доска переходит к соседнему, а не откатывается */
+    const ENOUGH = 0.25;
 
     let startX = 0;
     let startY = 0;
     let fromLeft = 0;
-    let mode: 'idle' | 'board' | 'column' = 'idle';
+    let lastX = 0;
+    let lastAt = 0;
+    let speed = 0;
+    let mode: 'idle' | 'choosing' | 'board' = 'idle';
+
+    /** Ширина одного этапа вместе с промежутком — шаг листания */
+    const stepOf = () => {
+      const first = box.firstElementChild as HTMLElement | null;
+      const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
+      return first ? first.getBoundingClientRect().width + gap : 0;
+    };
 
     const onStart = (e: TouchEvent) => {
       mode = 'idle';
@@ -650,21 +661,20 @@ export function Funnel() {
        */
       if (document.body.style.overflow === 'hidden') return;
       const t = e.touches[0];
-      const nearEdge = t.clientX <= EDGE || t.clientX >= window.innerWidth - EDGE;
-      if (!nearEdge) return; // середина доски — пусть листает сам браузер
       /*
        * По вертикали касание должно попадать в доску, по горизонтали — не
        * обязательно: у раздела есть боковой отступ, и палец у самого края
-       * экрана ложится РЯДОМ с доской, а не на неё. Раньше слушали саму
-       * доску, и такое касание до неё просто не доходило — то самое
-       * «свайп влево не работает».
+       * экрана ложится РЯДОМ с доской, а не на неё. Слушали бы саму доску —
+       * такое касание до неё не дошло бы, с этого и начиналась жалоба.
        */
       const r = box.getBoundingClientRect();
       if (t.clientY < r.top || t.clientY > r.bottom) return;
-      startX = t.clientX;
+      startX = lastX = t.clientX;
       startY = t.clientY;
       fromLeft = box.scrollLeft;
-      mode = 'column'; // направление ещё не выбрано, см. onMove
+      lastAt = performance.now();
+      speed = 0;
+      mode = 'choosing';
     };
 
     const onMove = (e: TouchEvent) => {
@@ -672,7 +682,7 @@ export function Funnel() {
       const t = e.touches[0];
       const dx = t.clientX - startX;
       const dy = t.clientY - startY;
-      if (mode === 'column') {
+      if (mode === 'choosing') {
         if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
         if (Math.abs(dy) >= Math.abs(dx)) {
           mode = 'idle'; // это прокрутка карточек — не наше дело
@@ -682,6 +692,18 @@ export function Funnel() {
       }
       // отменяем жест браузера и двигаем доску ровно за пальцем
       e.preventDefault();
+      /*
+       * Часы берём свои, а не из события: у события время бывает нулевым
+       * (так приходят касания из средств проверки и части встроенных
+       * браузеров), и тогда скорость всегда выходила нулевой — быстрый
+       * короткий флик не отличался от медленного движения и откатывался
+       * назад вместо перелистывания.
+       */
+      const now = performance.now();
+      const passed = now - lastAt;
+      if (passed > 0) speed = (t.clientX - lastX) / passed;
+      lastX = t.clientX;
+      lastAt = now;
       box.scrollLeft = fromLeft - dx;
     };
 
@@ -691,18 +713,43 @@ export function Funnel() {
         return;
       }
       mode = 'idle';
-      /*
-       * Мягко подводим к ближайшему этапу: палец останавливается где угодно,
-       * а колонка должна встать ровно — иначе на экране всегда половинки
-       * двух этапов. Родное прилипание здесь не срабатывает: прокрутку вёл
-       * не браузер, а мы.
-       */
-      const first = box.firstElementChild as HTMLElement | null;
-      const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
-      const step = first ? first.getBoundingClientRect().width + gap : 0;
+      const step = stepOf();
       if (step <= 0) return;
-      const target = Math.round(box.scrollLeft / step) * step;
-      box.scrollTo({ left: target, behavior: 'smooth' });
+      /*
+       * Куда встать, когда палец отпустили.
+       *
+       * Проехали меньше этапа — решаем, засчитать переход или вернуть назад.
+       * Засчитываем щедро: хватает либо заметного движения (четверть ширины
+       * этапа), либо скорости. Строгая мерка «больше половины» и была тем
+       * самым «доска не реагирует»: человек уверенно ведёт палец, отпускает —
+       * и всё откатывается на место.
+       *
+       * Проехали больше этапа — просто встаём на ближайший: палец уже сам
+       * показал, где остановиться. Родное прилипание тут не поможет, прокрутку
+       * вёл не браузер, а мы.
+       */
+      const moved = box.scrollLeft - fromLeft;
+      const nearest = Math.round(box.scrollLeft / step) * step;
+      let target = nearest;
+      if (Math.abs(moved) < step) {
+        const enough = Math.abs(moved) > step * ENOUGH || Math.abs(speed) > FLICK;
+        if (enough) {
+          const dir = moved > 0 ? 1 : -1;
+          target =
+            dir > 0
+              ? Math.ceil(box.scrollLeft / step) * step
+              : Math.floor(box.scrollLeft / step) * step;
+          if (Math.abs(target - box.scrollLeft) < 1) target += dir * step;
+        } else {
+          // движение не в счёт — возвращаемся туда, откуда начали
+          target = Math.round(fromLeft / step) * step;
+        }
+      }
+      const max = box.scrollWidth - box.clientWidth;
+      box.scrollTo({
+        left: Math.max(0, Math.min(max, target)),
+        behavior: 'smooth',
+      });
     };
 
     /*
@@ -1150,7 +1197,7 @@ export function Funnel() {
           <div
             ref={boardRef}
             style={boardHeight ? { height: boardHeight } : undefined}
-            className="board-scroll flex h-[calc(100svh-7.5rem)] snap-x snap-proximity gap-3 pr-4 sm:h-auto sm:snap-none sm:gap-4 sm:pr-0"
+            className="board-scroll flex h-[calc(100dvh-7.5rem)] gap-3 pr-4 sm:h-auto sm:gap-4 sm:pr-0"
           >
             {board.map((col) => {
               /*
