@@ -23,7 +23,7 @@ import { escapeHtml } from '../telegram/telegram.util';
 import { buildCrmClientMessage } from '../telegram/crm-client-message';
 import {
   AuthUser,
-  seesAll,
+  seesWholeBase,
 } from '../common/decorators/current-user.decorator';
 import { seesFinance } from '../common/permissions';
 import { guestsOf } from '../common/order-guests';
@@ -218,7 +218,7 @@ export class OrdersService {
   }
 
   private scopeWhere(user: AuthUser): Prisma.OrderWhereInput {
-    return seesAll(user) ? { ...NOT_DELETED } : { ...NOT_DELETED, managerId: user.id };
+    return seesWholeBase(user) ? { ...NOT_DELETED } : { ...NOT_DELETED, managerId: user.id };
   }
 
   private titleOf(order: {
@@ -458,7 +458,7 @@ export class OrdersService {
      * Душанбе, поэтому границы разворачиваем в местные сутки целиком.
      */
     if (q.from || q.to) where.createdAt = momentRange(q.from, q.to);
-    if (seesAll(user) && q.managerId) where.managerId = q.managerId;
+    if (seesWholeBase(user) && q.managerId) where.managerId = q.managerId;
     if (q.search) {
       const term = q.search.trim();
       const isPhoneQuery = /^[\d\s+\-()]+$/.test(term);
@@ -670,7 +670,7 @@ export class OrdersService {
       include: orderDetailInclude,
     });
     if (!order) throw new NotFoundException('Заказ не найден');
-    if (!seesAll(user) && order.managerId !== user.id) {
+    if (!seesWholeBase(user) && order.managerId !== user.id) {
       // тот же текст, что и «не найден» — чтобы нельзя было перебором
       // узнать, какие идентификаторы заказов существуют
       throw new NotFoundException('Заказ не найден');
@@ -698,7 +698,7 @@ export class OrdersService {
       select: { id: true, managerId: true, fullName: true },
     });
     if (!client) throw new NotFoundException('Клиент не найден');
-    if (!seesAll(user) && client.managerId !== user.id) {
+    if (!seesWholeBase(user) && client.managerId !== user.id) {
       throw new NotFoundException('Клиент не найден');
     }
 
@@ -985,7 +985,16 @@ export class OrdersService {
         }
       }
     }
-    if (dto.managerId && seesAll(user)) data.managerId = dto.managerId;
+    /*
+     * Ответственного за заказ меняет любой сотрудник (решение владельца):
+     * база общая, и передать сделку коллеге — обычная рабочая операция.
+     * Идентификатор проверяем тем же помощником, что и при оформлении: битый
+     * или уволенный доходил бы до Prisma и падал пятисотой вместо понятного
+     * отказа, а заказ повисал бы на том, кто его не ведёт.
+     */
+    if (dto.managerId !== undefined) {
+      data.managerId = await resolveManager(this.prisma, user, dto.managerId);
+    }
     /*
      * Причина отказа у заказа, который УЖЕ в «Отказе»: этап не меняется,
      * changeStage не вызывается, а причину поправить надо — иначе она

@@ -39,7 +39,7 @@ import {
 } from '../lib/labels';
 import { formatPhone } from '../lib/contact';
 import { formatDateTz, formatDateTimeTz, rangeOf } from '../lib/date';
-import { userManagesCatalogs, userSeesAll } from '../types';
+import { userManagesCatalogs, userSeesWholeBase } from '../types';
 import type {
   Client,
   Order,
@@ -233,7 +233,8 @@ function ProposalsTab() {
   const navigate = useNavigate();
   const toast = useToast();
   const dialog = useDialog();
-  const seesAll = userSeesAll(user);
+  // КП идут за клиентами: база общая, значит и предложения компании видны всем
+  const seesAll = userSeesWholeBase(user);
 
   const [period, setPeriod] = useState<Period>(rangeOf('all'));
   const [status, setStatus] = useState<ProposalStatus | ''>('');

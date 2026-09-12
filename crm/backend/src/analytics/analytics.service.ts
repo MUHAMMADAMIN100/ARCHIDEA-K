@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   AuthUser,
   seesAll,
+  seesWholeBase,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
 import { guestsOf } from '../common/order-guests';
@@ -107,6 +108,21 @@ export class AnalyticsService {
   }
 
   /**
+   * Область данных для дашборда — вся компания (решение владельца).
+   *
+   * Дашборд считает не «мою работу», а положение дел сейчас: сколько новых
+   * заявок, сколько в работе, сколько клиентов в базе. База общая, и эти
+   * цифры обязаны сходиться с воронкой и разделом «Клиенты» — иначе на
+   * дашборде «Клиентов в базе: 3», а в списке их полсотни, и человек решает,
+   * что система врёт. Разрезы по менеджерам в «Аналитике» остаются на scope().
+   */
+  private boardScope(user: AuthUser): Prisma.OrderWhereInput {
+    return seesWholeBase(user)
+      ? { ...NOT_DELETED }
+      : { ...NOT_DELETED, managerId: user.id };
+  }
+
+  /**
    * Границы периода по Душанбе (UTC+5).
    * Раньше считалось по времени сервера (UTC), из-за чего «сегодня» на дашборде
    * начиналось в 05:00 по местному времени, а заказ, оплаченный 1-го числа
@@ -138,7 +154,8 @@ export class AnalyticsService {
 
   /** Сводка для дашборда */
   async summary(user: AuthUser) {
-    const scope = this.scope(user);
+    // цифры дашборда — по всей компании, как воронка и список клиентов
+    const scope = this.boardScope(user);
     const month = this.rangeOf('month');
 
     const [newLeads, inProgress, doneThisMonth, totalClients] =
@@ -151,7 +168,7 @@ export class AnalyticsService {
           where: { ...scope, stage: FunnelStage.PAID, closedAt: month },
         }),
         this.prisma.client.count({
-          where: seesAll(user)
+          where: seesWholeBase(user)
             ? { ...NOT_DELETED }
             : { ...NOT_DELETED, managerId: user.id },
         }),
@@ -891,11 +908,12 @@ export class AnalyticsService {
        * покажет меньше заказов, чем написано на карточке.
        */
       case 'stageNow':
-        where = { ...scope, stage: key as FunnelStage };
+        // расшифровка обязана сходиться с плиткой: та считает всю компанию
+        where = { ...this.boardScope(user), stage: key as FunnelStage };
         break;
       case 'paidThisMonth':
         where = {
-          ...scope,
+          ...this.boardScope(user),
           stage: FunnelStage.PAID,
           closedAt: this.rangeOf('month'),
         };

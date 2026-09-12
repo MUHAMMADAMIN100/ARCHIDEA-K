@@ -42,7 +42,7 @@ import {
   orderTotal,
 } from '../lib/labels';
 import { nowISO, tempId } from '../lib/util';
-import { userSeesAll } from '../types';
+import { userSeesWholeBase } from '../types';
 import type { BoardColumn, ClientTag, FunnelStage, Order } from '../types';
 
 // основной конвейер этапов (без «Отказа» — он отдельной кнопкой на мобильном)
@@ -392,8 +392,11 @@ export function Funnel() {
   const { user } = useAuth();
   // ведомости и всё, что о них напоминает, — не для менеджера
   const seesReports = userSeesReports(user);
-  // фильтр по менеджеру — только для тех, кто видит всю компанию
-  const canFilter = userSeesAll(user);
+  /*
+   * Фильтр по менеджеру — всем: доска показывает заказы всей компании
+   * (решение владельца), и без отбора «чьё это» в ней тонут свои сделки.
+   */
+  const canFilter = userSeesWholeBase(user);
   const [managerFilter, setManagerFilter] = useState<string>('ALL');
   // отбор карточек по клиенту: статус (VIP и т.д.) и свободный тег
   const [tagFilter, setTagFilter] = useState<ClientTag | 'ALL'>('ALL');

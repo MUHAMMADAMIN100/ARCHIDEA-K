@@ -11,7 +11,7 @@ import { TelegramService } from '../telegram/telegram.service';
 import { buildCrmClientMessage } from '../telegram/crm-client-message';
 import {
   AuthUser,
-  seesAll,
+  seesWholeBase,
 } from '../common/decorators/current-user.decorator';
 import { momentRange } from '../common/time/dushanbe';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
@@ -64,7 +64,7 @@ export class ClientsService {
     const where: Prisma.ClientWhereInput = { ...NOT_DELETED };
     // период — по дате появления клиента в базе (когда его завели)
     if (q.from || q.to) where.createdAt = momentRange(q.from, q.to);
-    if (!seesAll(user)) where.managerId = user.id;
+    if (!seesWholeBase(user)) where.managerId = user.id;
     else if (q.managerId) where.managerId = q.managerId;
 
     if (q.tag) where.tags = { has: q.tag };
@@ -135,7 +135,7 @@ export class ClientsService {
       },
     });
     if (!client) throw new NotFoundException('Клиент не найден');
-    if (!seesAll(user) && client.managerId !== user.id) {
+    if (!seesWholeBase(user) && client.managerId !== user.id) {
       throw new NotFoundException('Клиент не найден');
     }
     return client;
@@ -363,8 +363,19 @@ export class ClientsService {
   async update(user: AuthUser, id: string, dto: UpdateClientDto) {
     const before = await this.getOne(user, id); // проверка доступа
     const data: Prisma.ClientUpdateInput = { ...dto } as any;
-    // переназначать менеджера может только тот, кто видит всю компанию
-    if (!seesAll(user)) delete (data as any).managerId;
+    /*
+     * Ответственного меняет любой сотрудник (решение владельца): база общая,
+     * и передать клиента коллеге — обычная рабочая операция. Сотрудник должен
+     * быть действующим, иначе клиент повиснет на уволенном и его заявки никто
+     * не будет вести; за проверку отвечает resolveManager.
+     */
+    if (dto.managerId !== undefined) {
+      (data as any).managerId = await resolveManager(
+        this.prisma,
+        user,
+        dto.managerId,
+      );
+    }
     if (dto.phone) (data as any).phone = normalizePhone(dto.phone);
 
     /*
@@ -544,7 +555,7 @@ export class ClientsService {
     return this.prisma.client.findMany({
       where: {
         ...NOT_DELETED,
-        ...(seesAll(user) ? {} : { managerId: user.id }),
+        ...(seesWholeBase(user) ? {} : { managerId: user.id }),
         callbackAt: from || to ? momentRange(from, to) : { not: null },
       },
       select: {
@@ -562,7 +573,7 @@ export class ClientsService {
   }
 
   async exportCsv(user: AuthUser): Promise<string> {
-    const where: Prisma.ClientWhereInput = seesAll(user)
+    const where: Prisma.ClientWhereInput = seesWholeBase(user)
       ? { ...NOT_DELETED }
       : { ...NOT_DELETED, managerId: user.id };
     const clients = await this.prisma.client.findMany({

@@ -18,7 +18,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   AuthUser,
-  seesAll,
+  seesWholeBase,
 } from '../common/decorators/current-user.decorator';
 import { can } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
@@ -95,7 +95,7 @@ export class ProposalsService {
   }
 
   private scopeWhere(user: AuthUser): Prisma.ProposalWhereInput {
-    return seesAll(user) ? {} : { client: { managerId: user.id } };
+    return seesWholeBase(user) ? {} : { client: { managerId: user.id } };
   }
 
   private titleOf(p: { number: number; clientName: string }): string {
@@ -341,7 +341,7 @@ export class ProposalsService {
     if (q.clientId) where.clientId = q.clientId;
     if (q.orderId) where.orderId = q.orderId;
     if (q.status) where.status = q.status;
-    if (seesAll(user) && q.managerId) where.client = { managerId: q.managerId };
+    if (seesWholeBase(user) && q.managerId) where.client = { managerId: q.managerId };
 
     /*
      * Период — по Душанбе, как во всех остальных списках. Раньше границы
@@ -363,7 +363,7 @@ export class ProposalsService {
       include: proposalInclude,
     });
     if (!proposal) throw new NotFoundException('КП не найдено');
-    if (!seesAll(user) && proposal.client.managerId !== user.id) {
+    if (!seesWholeBase(user) && proposal.client.managerId !== user.id) {
       throw new NotFoundException('КП не найдено');
     }
     return proposal;
@@ -374,7 +374,7 @@ export class ProposalsService {
       where: { id: dto.clientId, ...NOT_DELETED },
     });
     if (!client) throw new NotFoundException('Клиент не найден');
-    if (!seesAll(user) && client.managerId !== user.id) {
+    if (!seesWholeBase(user) && client.managerId !== user.id) {
       throw new NotFoundException('Клиент не найден');
     }
 

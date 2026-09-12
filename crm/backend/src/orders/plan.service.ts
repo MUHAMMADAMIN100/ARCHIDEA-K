@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthUser, seesAll } from '../common/decorators/current-user.decorator';
+import { AuthUser, seesWholeBase } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
 import { dayKey } from '../common/time/dushanbe';
 import { billableUnits } from './order-pricing';
@@ -72,7 +72,7 @@ export class PlanService {
       },
     });
     if (!order) throw new NotFoundException('Заказ не найден');
-    if (!seesAll(user) && order.managerId !== user.id) {
+    if (!seesWholeBase(user) && order.managerId !== user.id) {
       throw new NotFoundException('Заказ не найден');
     }
 

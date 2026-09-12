@@ -8,7 +8,7 @@ import { AuditAction, FunnelStage, PaymentMethod, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { FinanceService } from '../finance/finance.service';
-import { AuthUser, seesAll } from '../common/decorators/current-user.decorator';
+import { AuthUser, seesWholeBase } from '../common/decorators/current-user.decorator';
 import { seesFinance } from '../common/permissions';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { parseDate } from '../common/time/dushanbe';
@@ -104,7 +104,7 @@ export class PaymentsService {
       },
     });
     if (!order) throw new NotFoundException('Заказ не найден');
-    if (!seesAll(user) && order.managerId !== user.id) {
+    if (!seesWholeBase(user) && order.managerId !== user.id) {
       throw new NotFoundException('Заказ не найден');
     }
     return order;

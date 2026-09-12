@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import {
   AuthUser,
   seesAll,
+  seesWholeBase,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { dayKey, dayUTC } from '../common/time/dushanbe';
@@ -307,7 +308,12 @@ export class CleanersService {
       stage: { in: ['CONFIRMED', 'IN_PROGRESS'] },
       scheduledDate: { gte: start, lte: end },
     };
-    if (!seesAll(user)) where.managerId = user.id;
+    /*
+     * Задания на день — это заказы, а база заказов общая (решение владельца).
+     * Показывать здесь только свои значило бы противоречить воронке: там
+     * сотрудник видит весь день компании, а в «Команде» — половину его.
+     */
+    if (!seesWholeBase(user)) where.managerId = user.id;
 
     return this.prisma.order.findMany({
       where,

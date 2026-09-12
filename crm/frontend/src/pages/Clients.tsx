@@ -39,7 +39,7 @@ import { TimePicker } from '../components/TimePicker';
 import { tempId, nowISO, isTempId } from '../lib/util';
 import { isValidPhone } from '../lib/contact';
 import { NameInput, PhoneInput } from '../components/ContactFields';
-import { userSeesAll } from '../types';
+import { userSeesWholeBase } from '../types';
 import type {
   BoardColumn,
   CleaningType,
@@ -318,7 +318,11 @@ export function Clients() {
         </div>
       ),
     },
-    ...(userSeesAll(user)
+    /*
+     * Колонка «Менеджер» — всем: база общая, и в списке всей компании надо
+     * видеть, за кем клиент закреплён, иначе непонятно, кому звонить.
+     */
+    ...(userSeesWholeBase(user)
       ? [
           {
             key: 'manager',
@@ -478,7 +482,7 @@ export function Clients() {
         <AddClientModal
           onClose={() => setShowAdd(false)}
           onCreate={createClient}
-          isDirector={userSeesAll(user)}
+          isDirector={userSeesWholeBase(user)}
         />
       )}
 

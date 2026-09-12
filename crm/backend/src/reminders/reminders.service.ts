@@ -17,6 +17,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import {
   AuthUser,
   seesAll,
+  seesWholeBase,
 } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import {
@@ -118,16 +119,18 @@ export class RemindersService {
    */
   async create(user: AuthUser, dto: CreateReminderDto, source: ReminderSource = ReminderSource.MANUAL) {
     /*
-     * Менеджер ставит напоминания только по СВОИМ клиентам и заказам.
-     * Иначе через этот эндпоинт можно было перебором узнать чужую клиентскую
-     * базу: ответ отличал существующего клиента от несуществующего.
+     * Напоминание ставится по любому клиенту и заказу компании: база общая
+     * (решение владельца), и позвонить клиенту коллеги — обычная работа.
+     * Сам список напоминаний при этом остаётся личным — см. list() ниже:
+     * это ежедневник сотрудника, а не общая база.
+     *
      * Текст ошибки одинаковый — «не найден», как и в остальных модулях.
      */
     const client = await this.prisma.client.findFirst({
       where: {
         id: dto.clientId,
         ...NOT_DELETED,
-        ...(seesAll(user) ? {} : { managerId: user.id }),
+        ...(seesWholeBase(user) ? {} : { managerId: user.id }),
       },
       select: { id: true, fullName: true },
     });
@@ -139,7 +142,7 @@ export class RemindersService {
           id: dto.orderId,
           ...NOT_DELETED,
           clientId: client.id,
-          ...(seesAll(user) ? {} : { managerId: user.id }),
+          ...(seesWholeBase(user) ? {} : { managerId: user.id }),
         },
         select: { id: true },
       });

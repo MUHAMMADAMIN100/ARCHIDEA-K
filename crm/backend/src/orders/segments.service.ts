@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { AuditAction, FunnelStage, Prisma, SegmentKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { AuthUser, seesAll } from '../common/decorators/current-user.decorator';
+import { AuthUser, seesWholeBase } from '../common/decorators/current-user.decorator';
 import { NOT_DELETED } from '../common/soft-delete';
 import { BlockDto, ReplaceSegmentsDto } from './dto/segment.dto';
 
@@ -49,7 +49,7 @@ export class SegmentsService {
       select: { id: true, managerId: true, area: true, stage: true },
     });
     if (!order) throw new NotFoundException('Заказ не найден');
-    if (!seesAll(user) && order.managerId !== user.id) {
+    if (!seesWholeBase(user) && order.managerId !== user.id) {
       throw new NotFoundException('Заказ не найден');
     }
     return order;

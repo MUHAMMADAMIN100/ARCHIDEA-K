@@ -18,7 +18,7 @@ import {
   useFetch,
 } from '../api/hooks';
 import { useAuth } from '../auth/AuthContext';
-import { userSeesAll } from '../types';
+import { userSeesWholeBase } from '../types';
 import {
   Skeleton,
   PageHeader,
@@ -754,7 +754,8 @@ export function ClientCard() {
       />
       {showAddOrder && (
         <AddOrderModal
-          isDirector={userSeesAll(user)}
+          // ответственного за заказ назначает любой сотрудник: база общая
+          isDirector={userSeesWholeBase(user)}
           cleaners={cleaners ?? []}
           defaultAddress={data?.address ?? null}
           pastAddresses={(data?.orders ?? [])

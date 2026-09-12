@@ -10,7 +10,7 @@ import {
   seesFinance,
   seesReports,
 } from './permissions';
-import { seesAll } from './decorators/current-user.decorator';
+import { seesAll, seesWholeBase } from './decorators/current-user.decorator';
 
 /**
  * Права доступа — то место, где ошибка стоит дороже всего: либо сотрудник
@@ -176,6 +176,43 @@ describe('Корзина: только руководитель и только 
 
   it('руководитель без флага — доступа нет', () => {
     expect(can(director({ canSeeTrash: false }), 'trash:view')).toBe(false);
+  });
+});
+
+/**
+ * Клиентская база — общая (решение владельца, сентябрь 2026).
+ *
+ * Любой сотрудник ведёт любой заказ и любого клиента. Правило намеренно
+ * отделено от seesAll: сводные данные компании (аналитика по менеджерам,
+ * общая лента журнала, чужие профили) остались у руководства, а задачи
+ * по-прежнему личные. Если кто-то сведёт эти два правила в одно, тесты упадут.
+ */
+describe('Клиентская база компании — общая для всех', () => {
+  const everyone: [string, AuthUser][] = [
+    ['менеджер', manager()],
+    ['менеджер без единого флага', manager({ canManageOps: false })],
+    ['менеджер без доступа к финансам', manager({ noFinance: true })],
+    ['управляющий', supervisor()],
+    ['руководитель', director()],
+  ];
+
+  it.each(everyone)('%s видит заказы и клиентов всей компании', (_, u) => {
+    expect(seesWholeBase(u)).toBe(true);
+  });
+
+  it('общая база НЕ открывает сводные данные компании обычному менеджеру', () => {
+    expect(seesAll(manager())).toBe(false);
+  });
+
+  it('общая база НЕ открывает задачи компании', () => {
+    expect(seesAllTasks(manager())).toBe(false);
+  });
+
+  it('общая база НЕ открывает деньги, корзину и сотрудников', () => {
+    const u = manager();
+    expect(seesFinance(u)).toBe(false);
+    expect(can(u, 'trash:view')).toBe(false);
+    expect(can(u, 'users:manage')).toBe(false);
   });
 });
 
