@@ -20,6 +20,7 @@ import {
   formatDateTz,
   formatDateTimeTz,
   toDateTimeInput,
+  toISODate,
 } from '../lib/date';
 import { OrderChecklistCard } from './OrderChecklist';
 import { HistoryPanel } from './HistoryPanel';
@@ -528,9 +529,11 @@ export function OrderModal({
     if (!skip('request')) {
       setEditSource(o.source);
       setEditManagerId(o.managerId ?? null);
-      setEditCreatedAt(o.createdAt.slice(0, 10));
+      // день по Душанбе: по Гринвичу заказ, оформленный до пяти утра,
+      // показывался предыдущим числом
+      setEditCreatedAt(toISODate(o.createdAt));
       setEditEstimated(String(o.estimatedPrice ?? ''));
-      setEditPreferredDate(o.preferredDate?.slice(0, 10) ?? '');
+      setEditPreferredDate(o.preferredDate ? toISODate(o.preferredDate) : '');
       setEditPreferredTime(o.preferredTime ?? '');
       setEditComment(o.comment ?? '');
       setEditSourceDetail(o.sourceDetail ?? '');
@@ -765,6 +768,14 @@ export function OrderModal({
     };
     // cleaners подмешиваем в патч, только если реально трогали — иначе в кэш
     // доски попал бы пустой/неполный массив при незагруженном списке клинеров
+    /*
+     * Дата оформления в патче — обязательно: доска по ней решает, к какому
+     * месяцу заказ относится, и без неё карточка оставалась бы в текущем
+     * месяце до перезагрузки, хотя её только что перенесли в прошлый.
+     */
+    if (touched('request') && editCreatedAt) {
+      patch.createdAt = `${editCreatedAt}T00:00:00.000Z`;
+    }
     if (cleanersTouched) {
       patch.cleaners = selectedCleaners
         .map(resolveCleanerName)
@@ -1115,7 +1126,10 @@ export function OrderModal({
                     <select
                       className="input"
                       value={editSource}
-                      onChange={(e) => setEditSource(e.target.value as LeadSource)}
+                      onChange={(e) => {
+                        markTouched('request');
+                        setEditSource(e.target.value as LeadSource);
+                      }}
                     >
                       {SOURCE_ORDER.map((s) => (
                         <option key={s} value={s}>
@@ -1128,7 +1142,10 @@ export function OrderModal({
                       className="input mt-2"
                       value={editSourceDetail}
                       maxLength={120}
-                      onChange={(e) => setEditSourceDetail(e.target.value)}
+                      onChange={(e) => {
+                        markTouched('request');
+                        setEditSourceDetail(e.target.value);
+                      }}
                       placeholder="От кого — например: От Анисы"
                     />
                   </div>
@@ -1185,13 +1202,22 @@ export function OrderModal({
                     <label className="label">Ответственный менеджер</label>
                     <UserPicker
                       value={editManagerId}
-                      onChange={(v) => setEditManagerId(v)}
+                      onChange={(v) => {
+                        markTouched('request');
+                        setEditManagerId(v);
+                      }}
                       placeholder="не назначен"
                     />
                   </div>
                   <div>
                     <label className="label">Оформлена</label>
-                    <DatePicker value={editCreatedAt} onChange={setEditCreatedAt} />
+                    <DatePicker
+                      value={editCreatedAt}
+                      onChange={(v) => {
+                        markTouched('request');
+                        setEditCreatedAt(v);
+                      }}
+                    />
                   </div>
                   <div>
                     <label className="label">Расчёт с сайта, сомони</label>
@@ -1200,7 +1226,10 @@ export function OrderModal({
                       min={0}
                       className="input"
                       value={editEstimated}
-                      onChange={(e) => setEditEstimated(e.target.value)}
+                      onChange={(e) => {
+                        markTouched('request');
+                        setEditEstimated(e.target.value);
+                      }}
                     />
                   </div>
                   <div>
@@ -1208,7 +1237,10 @@ export function OrderModal({
                     <DatePicker
                       clearable
                       value={editPreferredDate}
-                      onChange={setEditPreferredDate}
+                      onChange={(v) => {
+                        markTouched('request');
+                        setEditPreferredDate(v);
+                      }}
                       placeholder="не указана"
                     />
                   </div>
@@ -1216,7 +1248,10 @@ export function OrderModal({
                     <label className="label">Клиент просил — время</label>
                     <TimePicker
                       value={editPreferredTime}
-                      onChange={setEditPreferredTime}
+                      onChange={(v) => {
+                        markTouched('request');
+                        setEditPreferredTime(v);
+                      }}
                       ariaLabel="Желаемое время клиента"
                     />
                   </div>
@@ -1227,7 +1262,10 @@ export function OrderModal({
                     rows={2}
                     className="input"
                     value={editComment}
-                    onChange={(e) => setEditComment(e.target.value)}
+                    onChange={(e) => {
+                      markTouched('request');
+                      setEditComment(e.target.value);
+                    }}
                     placeholder="что написал или сказал клиент при обращении"
                   />
                 </div>

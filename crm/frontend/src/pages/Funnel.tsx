@@ -15,7 +15,7 @@ import { useDialog } from '../components/Dialog';
 import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { PeriodFilter, type Period } from '../components/common';
-import { rangeOf } from '../lib/date';
+import { rangeOf, toISODate } from '../lib/date';
 import { OrderModal } from '../components/OrderModal';
 import { formatPhone } from '../lib/contact';
 import {
@@ -904,6 +904,36 @@ export function Funnel() {
 
   // Оптимистичное перемещение карточки между этапами (до ответа сервера)
   const applyPatch = (orderId: string, patch: Partial<Order>) => {
+    /*
+     * Дату оформления перенесли за пределы открытого периода — карточка
+     * уходит с доски сразу, а не после перезагрузки (решение владельца).
+     * Доска показывает заказы по дате оформления, и заказ, переписанный
+     * на 31 августа, сентябрьской доске больше не принадлежит: в августе он
+     * встанет на тот же этап. Человеку об этом говорим, иначе исчезновение
+     * карточки выглядит как потеря заказа.
+     */
+    if (patch.createdAt) {
+      const day = toISODate(patch.createdAt);
+      const outside =
+        (period.from && day < period.from) || (period.to && day > period.to);
+      if (outside) {
+        setData((cols) =>
+          cols
+            ? cols.map((c) => ({
+                ...c,
+                orders: c.orders.filter((o) => o.id !== orderId),
+              }))
+            : cols,
+        );
+        const month = new Date(`${day}T00:00:00Z`).toLocaleDateString('ru-RU', {
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'UTC',
+        });
+        toast.success(`Заказ перенесён на ${month.replace(' г.', '')}`);
+        return;
+      }
+    }
     setData((cols) => {
       if (!cols) return cols;
       let moved: Order | undefined;
