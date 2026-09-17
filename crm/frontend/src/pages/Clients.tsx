@@ -723,6 +723,20 @@ export function AddClientModal({
    * не существует — спрашивать их не о чем, и в сумму идут одни доп. услуги.
    */
   const noService = serviceKey === NO_SERVICE;
+  /*
+   * Услуга, стоявшая до галочки «Только доп. услуги». Сняли галочку — она
+   * возвращается вместе с площадью и ценой: человек мог нажать случайно, и
+   * терять набранное из-за одного касания нельзя.
+   */
+  const serviceBeforeRef = useRef<string>('GENERAL');
+  const toggleExtrasOnly = (on: boolean) => {
+    if (on) {
+      if (serviceKey !== NO_SERVICE) serviceBeforeRef.current = serviceKey;
+      setServiceKey(NO_SERVICE);
+    } else {
+      setServiceKey(serviceBeforeRef.current || 'GENERAL');
+    }
+  };
   const isFurniture = noService
     ? false
     : tariff
@@ -757,7 +771,8 @@ export function AddClientModal({
     : Math.round(Number(isFurniture ? seats : area)) || 0;
   const unitPrice = Math.round(Number(pricePerUnit)) || 0;
   // строки «ещё услуг»: цена из справочника по выбранной степени загрязнения
-  const moreRows = moreServices.map((r) => {
+  // только доп. услуги — основных нет вовсе, в том числе «ещё услуг»
+  const moreRows = (noService ? [] : moreServices).map((r) => {
     const t = serviceOptions.find((x) => x.key === r.key);
     const qty = Math.max(0, Math.round(Number(r.qty) || 0));
     const price = !t ? 0 : t.priceMedium || t.pricePerSqm;
@@ -1081,19 +1096,39 @@ export function AddClientModal({
               </div>
             )}
             <div>
+              {/*
+                «Только доп. услуги» (просьба владельца). Бывает заказ без
+                уборки по площади: мытьё окон, химчистка дивана, матрас. Раньше
+                этот режим был спрятан первым пунктом списка услуг — «без
+                основной услуги», — и его никто не находил. Теперь это галочка
+                на виду: поставил — основная услуга, степень загрязнения,
+                площадь и цена исчезают, сумма складывается из доп. услуг.
+              */}
+              <label className="mb-3 flex cursor-pointer items-center gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={noService}
+                  onChange={(e) => toggleExtrasOnly(e.target.checked)}
+                  className="h-4 w-4 accent-navy-500"
+                  aria-label="Только доп. услуги"
+                />
+                <span className="text-sm font-medium text-navy-800">
+                  Только доп. услуги
+                </span>
+              </label>
+              {noService && (
+                <p className="text-xs text-navy-600">
+                  Уборки по площади нет — сумма сложится из доп. услуг ниже
+                </p>
+              )}
+              {!noService && (
+              <>
               <label className="label">Услуга</label>
               <select
                 className="input"
                 value={serviceKey}
                 onChange={(e) => setServiceKey(e.target.value)}
               >
-                {/*
-                  Первым пунктом — «без основной услуги»: клиент может
-                  заказать только химчистку или мойку матраса, и уборки по
-                  площади у него нет вовсе. Раньше сказать это было нечем,
-                  и в воронке появлялась карточка «Генеральная уборка · 0 м²».
-                */}
-                <option value={NO_SERVICE}>— без основной услуги —</option>
                 {serviceOptions.length > 0
                   ? serviceOptions.map((t) => (
                       <option key={t.key} value={t.key}>{t.title}</option>
@@ -1102,11 +1137,6 @@ export function AddClientModal({
                       <option key={t} value={t}>{TYPE_LABEL[t]}</option>
                     ))}
               </select>
-              {noService && (
-                <p className="mt-1 text-xs text-navy-600">
-                  Уборки по площади нет — сумма сложится из доп. услуг ниже
-                </p>
-              )}
 
               {/* Ещё услуги в этой же заявке (ТЗ 1.3) */}
               {moreRows.map((r, i) => (
@@ -1186,6 +1216,8 @@ export function AddClientModal({
                 <span className="text-lg leading-none">+</span>
                 ещё услуга
               </button>
+              </>
+              )}
             </div>
             {hasLevels && (
               <div>

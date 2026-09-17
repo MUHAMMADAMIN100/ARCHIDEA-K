@@ -243,6 +243,7 @@ export function ClientCard() {
     seats?: number;
     estimatedPrice: number;
     address?: string;
+    customExtras?: { title: string; price: number; checked: boolean }[];
     managerId?: string;
     cleanerIds?: string[];
   }) => {
@@ -259,6 +260,8 @@ export function ClientCard() {
       stage: 'NEW',
       source: 'CALL',
       cleaningType: payload.cleaningType,
+      serviceKey: payload.serviceKey === '' ? null : payload.serviceKey,
+      customExtras: payload.customExtras,
       dirtLevel: payload.dirtLevel ?? null,
       area: payload.area,
       seats: payload.seats ?? null,
@@ -824,6 +827,8 @@ function AddOrderModal({
     seats?: number;
     estimatedPrice: number;
     address?: string;
+    /** Свои доп. услуги строками — в счёт идут отмеченные */
+    customExtras?: { title: string; price: number; checked: boolean }[];
     /** ТЗ 5 — цена за единицу и итог */
     pricePerSqm?: number;
     finalPrice?: number;
@@ -846,6 +851,20 @@ function AddOrderModal({
   const [moreServices, setMoreServices] = useState<
     { key: string; qty: string }[]
   >([]);
+  /*
+   * «Только доп. услуги» (просьба владельца): заказ без уборки по площади —
+   * окна, химчистка, матрас. В этой форме такого режима не было вовсе, как и
+   * самих доп. услуг: их дописывали потом, открывая созданный заказ заново.
+   */
+  const [extrasOnly, setExtrasOnly] = useState(false);
+  const [extraRows, setExtraRows] = useState<
+    { key: string; title: string; price: string; qty: string; checked: boolean }[]
+  >([]);
+  const addExtraRow = () =>
+    setExtraRows((prev) => [
+      ...prev,
+      { key: `e${Date.now()}${prev.length}`, title: '', price: '', qty: '1', checked: true },
+    ]);
   const { data: managers } = useFetch<Manager[]>(
     isDirector ? '/users/managers' : null,
   );
@@ -871,9 +890,12 @@ function AddOrderModal({
     if (!manualPrice) setPricePerUnit(String(suggestedUnitPrice || ''));
   }, [suggestedUnitPrice, manualPrice]);
 
-  const units = Math.round(Number(isFurniture ? seats : area)) || 0;
+  // без основной услуги объёма нет вовсе — работы в сумму не идут
+  const units = extrasOnly
+    ? 0
+    : Math.round(Number(isFurniture ? seats : area)) || 0;
   const unitPrice = Math.round(Number(pricePerUnit)) || 0;
-  const moreRows = moreServices.map((r) => {
+  const moreRows = (extrasOnly ? [] : moreServices).map((r) => {
     const t = serviceOptions.find((x) => x.key === r.key);
     const qty = Math.max(0, Math.round(Number(r.qty) || 0));
     const price = !t ? 0 : t.priceMedium || t.pricePerSqm;
@@ -889,7 +911,15 @@ function AddOrderModal({
   const moreSum = moreRows.reduce((sum, r) => sum + r.total, 0);
   // объект меньше порога — минимальная цена услуги, как на сервере
   const mainWork = workTotalOf(units, unitPrice, tariff);
-  const computed = mainWork.total + moreSum;
+  // доп. услуга: цена × количество; в счёт идут только отмеченные
+  const extraTotal = (r: { price: string; qty: string }) =>
+    Math.max(0, Math.round(Number(r.price) || 0)) *
+    Math.max(0, Math.round(Number(r.qty) || 0));
+  const extrasSum = extraRows.reduce(
+    (sum, r) => sum + (r.checked ? extraTotal(r) : 0),
+    0,
+  );
+  const computed = mainWork.total + moreSum + extrasSum;
 
   useEffect(() => {
     if (!manualPrice) setEstimatedPrice(computed ? String(computed) : '');
@@ -898,16 +928,27 @@ function AddOrderModal({
   const submit = () => {
     const toInt = (s: string) => Math.round(Number(s)) || 0; // бэкенд принимает только целые
     onCreate({
-      cleaningType: cleaningTypeForKey(serviceKey),
-      serviceKey,
+      cleaningType: cleaningTypeForKey(extrasOnly ? 'GENERAL' : serviceKey),
+      // пустая строка = «без основной услуги»: сервер не считает работы по площади
+      serviceKey: extrasOnly ? '' : serviceKey,
+      customExtras: extraRows
+        .filter((r) => r.title.trim() && extraTotal(r) > 0)
+        .map((r) => {
+          const qty = Math.max(0, Math.round(Number(r.qty) || 0));
+          return {
+            title: qty > 1 ? `${r.title.trim()} × ${qty}` : r.title.trim(),
+            price: extraTotal(r),
+            checked: r.checked,
+          };
+        }),
       additionalServices: moreRows
         .filter((r) => r.qtyN > 0)
         .map((r) => ({ key: r.key, qty: r.qtyN })),
-      dirtLevel: hasLevels ? dirtLevel : undefined,
-      area: isFurniture ? 0 : toInt(area),
-      seats: isFurniture ? toInt(seats) : undefined,
+      dirtLevel: !extrasOnly && hasLevels ? dirtLevel : undefined,
+      area: extrasOnly || isFurniture ? 0 : toInt(area),
+      seats: !extrasOnly && isFurniture ? toInt(seats) : undefined,
       estimatedPrice: toInt(estimatedPrice),
-      pricePerSqm: unitPrice || undefined,
+      pricePerSqm: extrasOnly ? undefined : unitPrice || undefined,
       /*
        * Итог НЕ отправляем: его считает сервер — только он знает про
        * постоянную скидку клиента. Своя цифра из формы съедала скидку и
@@ -924,6 +965,28 @@ function AddOrderModal({
   return (
     <Modal open onClose={onClose} title="Новый заказ" wide>
       <div className="space-y-3">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={extrasOnly}
+            onChange={(e) => {
+              setExtrasOnly(e.target.checked);
+              // без доп. услуг такой заказ пуст — сразу даём строку для первой
+              if (e.target.checked && extraRows.length === 0) addExtraRow();
+            }}
+            className="h-4 w-4 accent-navy-500"
+            aria-label="Только доп. услуги"
+          />
+          <span className="text-sm font-medium text-navy-800">
+            Только доп. услуги
+          </span>
+        </label>
+        {extrasOnly && (
+          <p className="text-xs text-navy-600">
+            Уборки по площади нет — сумма сложится из доп. услуг ниже
+          </p>
+        )}
+        {!extrasOnly && (
         <div>
           <label className="label">Услуга</label>
           <select
@@ -1013,7 +1076,8 @@ function AddOrderModal({
             ещё услуга
           </button>
         </div>
-        {hasLevels && (
+        )}
+        {!extrasOnly && hasLevels && (
           <div>
             <label className="label">Степень загрязнения</label>
             <div className="flex flex-wrap gap-2">
@@ -1034,6 +1098,7 @@ function AddOrderModal({
             </div>
           </div>
         )}
+        {!extrasOnly && (
         <div className="grid grid-cols-2 gap-3">
           {isFurniture ? (
             <div>
@@ -1057,6 +1122,110 @@ function AddOrderModal({
                 setManualPrice(false);
               }}
             />
+          </div>
+        </div>
+        )}
+
+        {/* Доп. услуги строками — тот же блок, что в форме нового клиента */}
+        <div className="rounded-xl border border-navy-100 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-navy-800">Доп. услуги</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-navy-600">
+                {extrasSum > 0 ? formatPrice(extrasSum) : 'не добавлены'}
+              </span>
+              <button
+                type="button"
+                onClick={addExtraRow}
+                className="press rounded-lg border border-navy-200 bg-white p-1.5 text-navy-600 hover:bg-navy-50"
+                aria-label="Добавить доп. услугу"
+                title="Добавить доп. услугу"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {extraRows.map((r, i) => (
+              <div
+                key={r.key}
+                className={`space-y-1.5 rounded-lg border px-2.5 py-2 ${
+                  r.checked ? 'border-brand-400 bg-brand-50/60' : 'border-navy-100'
+                }`}
+              >
+                <input
+                  className="input input-sm w-full"
+                  value={r.title}
+                  placeholder="Название услуги"
+                  maxLength={120}
+                  onChange={(ev) =>
+                    setExtraRows((prev) =>
+                      prev.map((x, j) => (j === i ? { ...x, title: ev.target.value } : x)),
+                    )
+                  }
+                  aria-label="Название доп. услуги"
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    className="input input-sm w-full min-w-0"
+                    value={r.price}
+                    placeholder="Цена"
+                    onChange={(ev) =>
+                      setExtraRows((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, price: ev.target.value } : x)),
+                      )
+                    }
+                    aria-label="Цена доп. услуги"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    className="input input-sm w-full min-w-0"
+                    value={r.qty}
+                    placeholder="Кол-во"
+                    onChange={(ev) =>
+                      setExtraRows((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, qty: ev.target.value } : x)),
+                      )
+                    }
+                    aria-label="Количество"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-xs font-semibold tabular-nums text-navy-700">
+                    {extraTotal(r) > 0 ? `= ${formatPrice(extraTotal(r))}` : '—'}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-navy-600">
+                      <input
+                        type="checkbox"
+                        checked={r.checked}
+                        onChange={(ev) =>
+                          setExtraRows((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, checked: ev.target.checked } : x,
+                            ),
+                          )
+                        }
+                        className="h-4 w-4 shrink-0 accent-brand-600"
+                        aria-label="Включить в сумму заказа"
+                      />
+                      В счёт
+                    </label>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-red-50 hover:text-red-600"
+                      aria-label="Удалить услугу"
+                      onClick={() => setExtraRows((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1107,6 +1276,8 @@ function AddOrderModal({
                       </span>
                     )}
                   </span>
+                ) : extrasOnly ? (
+                  'Добавьте доп. услуги — из них и сложится сумма'
                 ) : (
                   'Укажите объём и цену — сумма посчитается сама'
                 )}

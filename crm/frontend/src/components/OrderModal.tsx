@@ -337,7 +337,8 @@ export function OrderModal({
    * Дополнительные основные услуги (ТЗ 1.3): каждая строка — объём × цена.
    * Цена подставляется из справочника, менеджер может её поправить.
    */
-  const addRows = addServices.map((r) => {
+  // только доп. услуги — основных нет вовсе, в том числе «ещё услуг»
+  const addRows = (noService ? [] : addServices).map((r) => {
     const t = serviceOptions.find((x) => x.key === r.key);
     const qty = Math.max(0, Math.round(Number(r.qty) || 0));
     const price = Math.max(0, Math.round(Number(r.pricePerUnit) || 0));
@@ -614,6 +615,49 @@ export function OrderModal({
    */
   const applyUnitPrice = (rawPrice: string, _units: number) => {
     setPricePerSqm(rawPrice);
+  };
+
+  /*
+   * Галочка «Только доп. услуги» (просьба владельца).
+   *
+   * Поставили — основной услуги нет: ни объёма, ни цены за единицу, ни
+   * степени загрязнения, ни «ещё услуг». Прежние значения запоминаем: сняли
+   * галочку — они возвращаются, человек мог нажать случайно, и терять
+   * набранное из-за одного касания нельзя.
+   */
+  const beforeExtrasOnlyRef = useRef<{
+    key: string;
+    dirt: DirtLevel | '';
+    area: string;
+    seats: string;
+    price: string;
+  } | null>(null);
+  const toggleExtrasOnly = (on: boolean) => {
+    // «ещё услуги» уходят и приходят вместе с основной — сервер должен узнать
+    markTouched('addServices');
+    if (on) {
+      if (serviceKey !== NO_SERVICE) {
+        beforeExtrasOnlyRef.current = {
+          key: serviceKey,
+          dirt: editDirt,
+          area: editArea,
+          seats: editSeats,
+          price: pricePerSqm,
+        };
+      }
+      onServiceChange(NO_SERVICE);
+      return;
+    }
+    const was = beforeExtrasOnlyRef.current;
+    const key =
+      was?.key || order?.serviceKey || serviceOptions[0]?.key || 'GENERAL';
+    onServiceChange(key);
+    if (was) {
+      setEditDirt(was.dirt);
+      setEditArea(was.area);
+      setEditSeats(was.seats);
+      if (was.price) setPricePerSqm(was.price);
+    }
   };
 
   const onServiceChange = (key: string) => {
@@ -1275,8 +1319,25 @@ export function OrderModal({
               <div className="grid gap-4 sm:grid-cols-3">
                 {/* Услуга — на всю строку: длинные названия должны быть видны целиком */}
                 <div className="sm:col-span-3">
-                  <label className="label">Услуга</label>
-                  {tariffsQuery.error && !tariffsQuery.data ? (
+                  {/*
+                    «Только доп. услуги»: заказ без уборки по площади — окна,
+                    химчистка, матрас. Раньше режим был спрятан первым пунктом
+                    списка услуг, и его не находили.
+                  */}
+                  <label className="mb-3 flex cursor-pointer items-center gap-2.5 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={noService}
+                      onChange={(e) => toggleExtrasOnly(e.target.checked)}
+                      className="h-4 w-4 accent-navy-500"
+                      aria-label="Только доп. услуги"
+                    />
+                    <span className="text-sm font-medium text-navy-800">
+                      Только доп. услуги
+                    </span>
+                  </label>
+                  {!noService && <label className="label">Услуга</label>}
+                  {noService ? null : tariffsQuery.error && !tariffsQuery.data ? (
                     <button
                       type="button"
                       className="btn-ghost w-full justify-start text-sm"
@@ -1291,13 +1352,6 @@ export function OrderModal({
                       onChange={(e) => onServiceChange(e.target.value)}
                     >
                       {serviceOptions.length === 0 && <option value={serviceKey}>Загрузка…</option>}
-                      {/*
-                        Заказ может состоять из одних доп. услуг: клиент
-                        заказал химчистку мебели, уборки по площади нет. Пока
-                        этого пункта не было, в воронке висела карточка
-                        «Генеральная уборка · 0 м²» — то, чего не заказывали.
-                      */}
-                      <option value={NO_SERVICE}>— без основной услуги —</option>
                       {serviceOptions.map((t) => (
                         <option key={t.key} value={t.key}>
                           {t.title}
@@ -1590,7 +1644,8 @@ export function OrderModal({
                 </div>
               </div>
 
-              {/* Несколько услуг в одной заявке (ТЗ 1.3) */}
+              {/* Несколько услуг в одной заявке (ТЗ 1.3); без основной услуги их нет */}
+              {!noService && (
               <div className="space-y-2 rounded-xl border border-navy-100 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-navy-800">
@@ -1719,6 +1774,7 @@ export function OrderModal({
                   + ещё услуга
                 </button>
               </div>
+              )}
 
               {/*
                 Дополнительные услуги и скидка.
