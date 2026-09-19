@@ -530,7 +530,7 @@ export class ShiftGroupsService {
       const visit = existing[индекс];
       if (!visit) {
         // дней стало больше — новый выезд на добавленный день
-        await tx.shiftGroup.create({
+        const новый = await tx.shiftGroup.create({
           data: {
             date: dayUTC(день),
             address: order.address?.trim() || 'Адрес не указан',
@@ -552,8 +552,18 @@ export class ShiftGroupsService {
             createdById: user.id,
             members: { create: this.dayMembers(team, order.dayTeams, индекс, индекс === деньГостей) },
           },
+          include: { members: true },
         });
         created += 1;
+        /*
+         * Заказ уже оплачен, а «Оплачено» значит «смены закрыты»: добавленный
+         * день закрываем сразу, иначе он висел бы открытым без смен —
+         * карточка считала бы два дня, а аналитика (только закрытые
+         * выезды) один. Пустой день закрывать нельзя: некому начислять.
+         */
+        if (order.stage === FunnelStage.PAID && новый.members.length > 0) {
+          await this.closeInTx(tx, новый, user, {});
+        }
         continue;
       }
       if (visit.status === ShiftGroupStatus.CLOSED) {
@@ -583,6 +593,7 @@ export class ShiftGroupsService {
           tx,
           visit,
           this.dayMembers(team, order.dayTeams, индекс, индекс === деньГостейЗакрытого),
+          dayUTC(день),
           order.stage,
           user,
         );
@@ -660,10 +671,34 @@ export class ShiftGroupsService {
         updated += 1;
       }
     }
-    // дней стало меньше — лишние АВТОМАТИЧЕСКИЕ открытые выезды в корзину
+    // дней стало меньше — лишние АВТОМАТИЧЕСКИЕ выезды в корзину
     for (const extra of existing.slice(дни.length)) {
-      if (extra.status === ShiftGroupStatus.CLOSED) continue;
       if (!(extra.note ?? '').startsWith('Создан автоматически')) continue;
+      if (extra.status === ShiftGroupStatus.CLOSED) {
+        /*
+         * Закрытый лишний день у ОПЛАЧЕННОГО заказа: карточка говорит, что
+         * этого дня не было, — снимаем его смены и убираем выезд, иначе
+         * зарплата за несуществующий день осталась бы в выплатах. У
+         * неоплаченного заказа закрытый выезд — чужая ручная работа, его
+         * не трогаем.
+         */
+        if (order.stage !== FunnelStage.PAID) continue;
+        const removed = await tx.shift.deleteMany({ where: { groupId: extra.id } });
+        await tx.shiftGroup.update({
+          where: { id: extra.id },
+          data: softDeleteData(user, 'Дней уборки в заказе стало меньше'),
+        });
+        await this.audit.log(tx, {
+          user,
+          entity: 'SHIFT_GROUP',
+          entityId: extra.id,
+          entityTitle: this.titleOf(extra),
+          action: AuditAction.DELETE,
+          summary: `Заказ оплачен — день уборки убран из карточки: выезд в корзину, снято смен: ${removed.count}`,
+        });
+        updated += 1;
+        continue;
+      }
       await tx.shift.updateMany({ where: { groupId: extra.id }, data: { groupId: null } });
       await tx.shiftGroup.update({
         where: { id: extra.id },
@@ -708,6 +743,7 @@ export class ShiftGroupsService {
       }[];
     },
     wanted: VisitMember[],
+    wantedDate: Date,
     orderStage: FunnelStage | null | undefined,
     user: AuthUser,
   ): Promise<boolean> {
@@ -716,8 +752,20 @@ export class ShiftGroupsService {
     const repriced = diff.kept.filter(
       (p) => p.have.isGuest && p.have.rate !== p.want.rate,
     );
-    if (!diff.toAdd.length && !diff.toRemove.length && !repriced.length) {
+    /*
+     * Дату уборки в карточке поправили — закрытый выезд и его смены переезжают
+     * на новый день: иначе в «Сменах» и выплатах день остался бы старым, а в
+     * карточке новым. Смены пересоздаются на новую дату (одна на человека в
+     * день — если там уже есть чужая, это отмечается в журнале).
+     */
+    const dateChanged = visit.date.getTime() !== wantedDate.getTime();
+    if (!diff.toAdd.length && !diff.toRemove.length && !repriced.length && !dateChanged) {
       return false;
+    }
+
+    if (dateChanged) {
+      await tx.shift.deleteMany({ where: { groupId: visit.id } });
+      await tx.shiftGroup.update({ where: { id: visit.id }, data: { date: wantedDate } });
     }
 
     if (diff.toRemove.length) {
@@ -736,31 +784,10 @@ export class ShiftGroupsService {
       }
     }
 
-    const skipped: { fullName: string }[] = [];
     if (diff.toAdd.length) {
       await tx.shiftGroupMember.createMany({
         data: diff.toAdd.map((m) => ({ ...m, groupId: visit.id })),
       });
-      for (const m of diff.toAdd) {
-        if (!m.cleanerId) continue;
-        const already = await tx.shift.findUnique({
-          where: { cleanerId_date: { cleanerId: m.cleanerId, date: visit.date } },
-          select: { id: true, groupId: true },
-        });
-        if (already) {
-          if (already.groupId !== visit.id) skipped.push({ fullName: m.fullName });
-          continue;
-        }
-        await tx.shift.create({
-          data: {
-            date: visit.date,
-            cleanerId: m.cleanerId,
-            rate: m.rate,
-            note: visit.address,
-            groupId: visit.id,
-          },
-        });
-      }
     }
 
     for (const p of repriced) {
@@ -770,11 +797,43 @@ export class ShiftGroupsService {
       });
     }
 
-    // слепок обязан отражать то, за что реально начислено
     const after = await tx.shiftGroup.findUniqueOrThrow({
       where: { id: visit.id },
       include: { members: { orderBy: { fullName: 'asc' } } },
     });
+
+    /*
+     * Смены штатным: добавленным — новые; при переносе даты — всем заново.
+     * Смена одна на человека в день: если на этот день у него уже есть
+     * смена с другого объекта, вторая не создаётся — и это записывается.
+     */
+    const skipped: { fullName: string }[] = [];
+    const addedIds = new Set(diff.toAdd.map((m) => m.cleanerId).filter(Boolean));
+    const ensureShifts = after.members.filter(
+      (m) => m.cleanerId && (dateChanged || addedIds.has(m.cleanerId)),
+    );
+    for (const m of ensureShifts) {
+      const cleanerId = m.cleanerId as string;
+      const already = await tx.shift.findUnique({
+        where: { cleanerId_date: { cleanerId, date: wantedDate } },
+        select: { id: true, groupId: true },
+      });
+      if (already) {
+        if (already.groupId !== visit.id) skipped.push({ fullName: m.fullName });
+        continue;
+      }
+      await tx.shift.create({
+        data: {
+          date: wantedDate,
+          cleanerId,
+          rate: m.rate,
+          note: visit.address,
+          groupId: visit.id,
+        },
+      });
+    }
+
+    // слепок обязан отражать то, за что реально начислено
     const prevSnapshot =
       visit.closedSnapshot && typeof visit.closedSnapshot === 'object' && !Array.isArray(visit.closedSnapshot)
         ? (visit.closedSnapshot as Record<string, unknown>)
@@ -784,6 +843,7 @@ export class ShiftGroupsService {
       data: {
         closedSnapshot: {
           ...prevSnapshot,
+          date: wantedDate,
           members: after.members.map((m) => ({
             cleanerId: m.cleanerId,
             fullName: m.fullName,
@@ -809,20 +869,29 @@ export class ShiftGroupsService {
       entityId: visit.id,
       entityTitle: this.titleOf(visit),
       action: AuditAction.UPDATE,
-      summary: `${head}: ${describeClosedChanges({
-        added: diff.toAdd,
-        removed: diff.toRemove,
-        repriced: repriced.map((p) => ({
-          fullName: p.have.fullName,
-          before: p.have.rate,
-          after: p.want.rate,
-        })),
-        skipped,
-      })}`,
-      changes:
-        was !== now
+      summary: `${head}: ${[
+        dateChanged ? `дата ${formatDate(visit.date)} → ${formatDate(wantedDate)}, смены перенесены` : '',
+        describeClosedChanges({
+          added: diff.toAdd,
+          removed: diff.toRemove,
+          repriced: repriced.map((p) => ({
+            fullName: p.have.fullName,
+            before: p.have.rate,
+            after: p.want.rate,
+          })),
+          skipped,
+        }),
+      ]
+        .filter(Boolean)
+        .join('; ')}`,
+      changes: [
+        ...(dateChanged
+          ? [{ field: 'date', label: 'Дата', before: formatDate(visit.date), after: formatDate(wantedDate) }]
+          : []),
+        ...(was !== now
           ? [{ field: 'members', label: 'Состав группы', before: was, after: now }]
-          : undefined,
+          : []),
+      ],
     });
     return true;
   }
