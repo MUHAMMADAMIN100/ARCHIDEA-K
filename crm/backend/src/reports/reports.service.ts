@@ -13,10 +13,13 @@ import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { seesFinance } from '../common/permissions';
 import {
   OrderForReport,
+  brigadierFromOrder,
   orderForReportInclude,
+  planWorkerSync,
   reportDataFromOrder,
   workersFromOrder,
 } from './report-from-order';
+import { dayKey } from '../common/time/dushanbe';
 
 /** Целое неотрицательное число (сомони/дни) из произвольного ввода, с потолком (ниже int32) */
 const int = (v: unknown, def = 0) => {
@@ -293,6 +296,120 @@ export class ReportsService {
       },
       include: reportInclude,
     });
+  }
+
+  /**
+   * Ведомость следует за карточкой заказа (решение владельца, сентябрь 2026:
+   * цифры везде одинаковые).
+   *
+   * Раньше ведомость была снимком на момент «Оплачено» и дальше жила своей
+   * жизнью: в карточку «Фархунды» дописали Гулнамо, выезд и аналитика стали
+   * 1 480, а принятая ведомость так и осталась с пятью работниками на 1 250.
+   *
+   * Что сводится с заказом: состав работников (штатные по идентификатору,
+   * разовые по имени), дни у штатных (по датам уборки), сумма разовых (из
+   * карточки), даты работ, адрес, бригадир. Что НЕ трогается: ставки и роли
+   * уже записанных штатных (снапшот), штрафы и доп. услуги в строках,
+   * расходы — это ручная работа управляющего, её карточка не знает.
+   *
+   * Принятую ведомость тоже правим — иначе документ у основателя врал бы про
+   * начисленное. Но такая правка называется своим именем в журнале и уходит
+   * уведомлением руководству: смены добавленному уже начислил выезд, а
+   * бумага должна это отражать.
+   */
+  async syncFromOrder(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    user: AuthUser,
+  ): Promise<boolean> {
+    const report = await tx.report.findFirst({
+      where: { orderId, ...NOT_DELETED },
+      include: { workers: true },
+    });
+    if (!report) return false;
+    const order = (await tx.order.findFirst({
+      where: { id: orderId, ...NOT_DELETED },
+      include: orderForReportInclude,
+    })) as OrderForReport | null;
+    if (!order) return false;
+
+    const wanted = workersFromOrder(order);
+    const diff = planWorkerSync(report.workers, wanted);
+    const rowUpdates = diff.updates;
+
+    const head: Prisma.ReportUncheckedUpdateInput = {};
+    const headNotes: string[] = [];
+    const workDate = order.scheduledDate ? dayUTC(dayKey(order.scheduledDate)) : null;
+    const workEndDate =
+      order.scheduledEndDate && order.scheduledDate ? dayUTC(dayKey(order.scheduledEndDate)) : null;
+    if (workDate && report.workDate?.getTime() !== workDate.getTime()) {
+      head.workDate = workDate;
+      headNotes.push('дата работ');
+    }
+    if ((report.workEndDate?.getTime() ?? null) !== (workEndDate?.getTime() ?? null) && order.scheduledDate) {
+      head.workEndDate = workEndDate;
+      headNotes.push('дата завершения');
+    }
+    const brigadier = brigadierFromOrder(order);
+    if (brigadier && brigadier !== report.brigadierName) {
+      head.brigadierName = brigadier;
+      headNotes.push('бригадир');
+    }
+    if (order.address && order.address !== report.address) {
+      head.address = order.address;
+      headNotes.push('адрес');
+    }
+
+    if (!diff.toAdd.length && !diff.toRemove.length && !rowUpdates.length && !headNotes.length) {
+      return false;
+    }
+
+    if (diff.toRemove.length) {
+      await tx.reportWorker.deleteMany({ where: { id: { in: diff.toRemove.map((w) => w.id) } } });
+    }
+    if (diff.toAdd.length) {
+      await tx.reportWorker.createMany({
+        data: diff.toAdd.map((w) => ({ ...w, reportId: report.id })),
+      });
+    }
+    for (const u of rowUpdates) {
+      await tx.reportWorker.update({ where: { id: u.id }, data: u.data });
+    }
+    if (headNotes.length) {
+      await tx.report.update({ where: { id: report.id }, data: head });
+    }
+
+    const money = (w: { fullName: string; rate: number; days?: number }) =>
+      `${w.fullName} (${w.rate}${(w.days ?? 1) > 1 ? ` × ${w.days} дн.` : ''})`;
+    const bits: string[] = [];
+    if (diff.toAdd.length) bits.push(`добавлены: ${diff.toAdd.map(money).join(', ')}`);
+    if (diff.toRemove.length) bits.push(`убраны: ${diff.toRemove.map(money).join(', ')}`);
+    if (rowUpdates.length) bits.push(`изменено: ${rowUpdates.map((u) => u.note).join(', ')}`);
+    if (headNotes.length) bits.push(`обновлены: ${headNotes.join(', ')}`);
+    const accepted = report.status === ReportStatus.ACCEPTED;
+    const summary = `${
+      accepted
+        ? 'Ведомость ПРИНЯТА — приведена к карточке заказа после принятия'
+        : 'Ведомость приведена к карточке заказа'
+    }: ${bits.join('; ')}`;
+    await this.audit.log(tx, {
+      user,
+      entity: 'REPORT',
+      entityId: report.id,
+      entityTitle: `Ведомость — ${report.clientName}`,
+      action: AuditAction.UPDATE,
+      summary,
+    });
+    if (accepted) {
+      // основатель принял один документ, а теперь он другой — сказать об этом обязательно
+      await this.notifications.notifyDirectors({
+        type: NotificationType.REPORT_SENT,
+        title: 'Принятая ведомость изменена по карточке заказа',
+        message: `${report.clientName} — ${bits.join('; ')}`,
+        orderId,
+      });
+    }
+    return true;
   }
 
   async create(user: AuthUser, dto: ReportInput) {

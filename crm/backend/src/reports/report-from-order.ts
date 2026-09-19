@@ -133,6 +133,55 @@ export function workersFromOrder(order: OrderForReport) {
 }
 
 /**
+ * Что поменять в строках ведомости, чтобы они совпали с карточкой заказа.
+ *
+ * Правило одно и оно чистое, чтобы его можно было проверить без базы:
+ *  - кого нет в карточке — убрать; кого нет в ведомости — добавить;
+ *  - у штатного дни следуют за датами уборки, ставка и роль — снапшот;
+ *  - у разового сумма на руки следует за карточкой;
+ *  - штрафы и доп. услуги в строке не трогаются — их вписал управляющий.
+ */
+export interface ReportWorkerRow {
+  id: string;
+  cleanerId: string | null;
+  fullName: string;
+  rate: number;
+  role: string;
+  days: number;
+}
+
+export function planWorkerSync<H extends ReportWorkerRow>(
+  existing: H[],
+  wanted: ReturnType<typeof workersFromOrder>,
+): {
+  toAdd: ReturnType<typeof workersFromOrder>;
+  toRemove: H[];
+  updates: { id: string; fullName: string; data: { days?: number; rate?: number }; note: string }[];
+} {
+  const key = (m: { cleanerId: string | null; fullName: string }) =>
+    m.cleanerId ?? `гость:${m.fullName.trim().toLowerCase()}`;
+  const wantedByKey = new Map(wanted.map((w) => [key(w), w]));
+  const haveByKey = new Map(existing.map((w) => [key(w), w]));
+  const updates: { id: string; fullName: string; data: { days?: number; rate?: number }; note: string }[] = [];
+  for (const have of existing) {
+    const want = wantedByKey.get(key(have));
+    if (!want) continue;
+    if (have.cleanerId) {
+      if (have.days !== want.days) {
+        updates.push({ id: have.id, fullName: have.fullName, data: { days: want.days }, note: `${have.fullName} дней ${have.days} → ${want.days}` });
+      }
+    } else if (have.rate !== want.rate) {
+      updates.push({ id: have.id, fullName: have.fullName, data: { rate: want.rate }, note: `${have.fullName} ${have.rate} → ${want.rate}` });
+    }
+  }
+  return {
+    toAdd: wanted.filter((w) => !haveByKey.has(key(w))),
+    toRemove: existing.filter((w) => !wantedByKey.has(key(w))),
+    updates,
+  };
+}
+
+/**
  * Данные ведомости по заказу.
  *
  * managerName — снапшот ответственного ЗА ЗАКАЗ, а не того, кто нажал кнопку.

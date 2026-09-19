@@ -1,5 +1,6 @@
 import { CleaningType } from '@prisma/client';
 import {
+  planWorkerSync,
   reportDataFromOrder,
   shiftsOfOrder,
   workersFromOrder,
@@ -152,5 +153,68 @@ describe('Строки работников ведомости', () => {
     const rows = workersFromOrder({ ...заказ, cleaners: [] });
     expect(rows).toHaveLength(3);
     expect(rows.reduce((s, r) => s + r.days * r.rate, 0)).toBe(1140);
+  });
+});
+
+describe('planWorkerSync — ведомость следует за карточкой заказа', () => {
+  const staff = (id: string, fullName: string, rate = 230, leader = false) => ({
+    id, fullName, rate, leaderOf: leader ? { id: 'b' } : null,
+  });
+  const row = (id: string, cleanerId: string | null, fullName: string, rate: number, days = 1, role = 'Клинер') => ({
+    id, cleanerId, fullName, rate, role, days,
+  });
+  const orderOf = (cleaners: ReturnType<typeof staff>[], guests: { fullName: string; rate: number }[] = [], end: Date | null = null) =>
+    ({
+      id: 'o', address: null, area: 100, seats: null, cleaningType: CleaningType.GENERAL,
+      pricePerSqm: 27, finalPrice: 2700, estimatedPrice: 2700,
+      scheduledDate: new Date('2026-09-07T03:00:00Z'), scheduledEndDate: end,
+      closedAt: null, createdAt: new Date('2026-09-03T00:00:00Z'), managerId: null,
+      client: null, manager: null, discount: 0, cleaners, guestCleaners: guests,
+    }) as unknown as import('./report-from-order').OrderForReport;
+
+  it('случай «Фархунда»: принятая ведомость с пятью, в карточке шестая — добавить одну строку', () => {
+    const existing = [
+      row('r1', 'k', 'Кибриё', 330, 1, 'Бригадир'), row('r2', 'z', 'Замира', 230), row('r3', 'm', 'Мафтуна', 230),
+      row('r4', 'r', 'Рафоат', 230), row('r5', 't', 'Тамано', 230),
+    ];
+    const wanted = workersFromOrder(orderOf([
+      staff('k', 'Кибриё', 330, true), staff('z', 'Замира'), staff('m', 'Мафтуна'), staff('r', 'Рафоат'), staff('t', 'Тамано'), staff('g', 'Гулнамо'),
+    ]));
+    const plan = planWorkerSync(existing, wanted);
+    expect(plan.toAdd.map((w) => [w.fullName, w.rate, w.days])).toEqual([['Гулнамо', 230, 1]]);
+    expect(plan.toRemove).toEqual([]);
+    expect(plan.updates).toEqual([]);
+  });
+
+  it('человека убрали из карточки — его строка уходит; ставка оставшихся не трогается', () => {
+    const existing = [row('r1', 'a', 'А', 230), row('r2', 'b', 'Б', 230)];
+    // в справочнике ставку А подняли до 250 — в ведомости остаётся снапшот 230
+    const plan = planWorkerSync(existing, workersFromOrder(orderOf([staff('a', 'А', 250)])));
+    expect(plan.toRemove.map((w) => w.fullName)).toEqual(['Б']);
+    expect(plan.updates).toEqual([]);
+  });
+
+  it('уборка стала двухдневной — у штатных дни 1 → 2, у разового остаётся 1', () => {
+    const existing = [row('r1', 'a', 'А', 230, 1), row('g1', null, 'Курбон', 200, 1, 'Разовый')];
+    const plan = planWorkerSync(
+      existing,
+      workersFromOrder(orderOf([staff('a', 'А')], [{ fullName: 'Курбон', rate: 200 }], new Date('2026-09-08T03:00:00Z'))),
+    );
+    expect(plan.updates.map((u) => u.note)).toEqual(['А дней 1 → 2']);
+    expect(plan.toAdd).toEqual([]);
+  });
+
+  it('разовому поменяли сумму в карточке — ведомость повторяет, строка не дублируется', () => {
+    const existing = [row('g1', null, 'Курбон', 250, 1, 'Разовый')];
+    const plan = planWorkerSync(existing, workersFromOrder(orderOf([], [{ fullName: 'курбон', rate: 230 }])));
+    expect(plan.toAdd).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+    expect(plan.updates.map((u) => u.note)).toEqual(['Курбон 250 → 230']);
+  });
+
+  it('всё совпадает — план пустой', () => {
+    const existing = [row('r1', 'a', 'А', 230)];
+    const plan = planWorkerSync(existing, workersFromOrder(orderOf([staff('a', 'А')])));
+    expect([plan.toAdd.length, plan.toRemove.length, plan.updates.length]).toEqual([0, 0, 0]);
   });
 });

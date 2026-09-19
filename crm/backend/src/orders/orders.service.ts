@@ -1326,6 +1326,8 @@ export class OrdersService {
        */
       if (touchesVisits(dto as Record<string, unknown>)) {
         await this.shiftGroups.syncFromOrder(tx, updated.id, user);
+        // и платёжная ведомость по заказу — те же люди, те же дни, та же сумма
+        await this.reports.syncFromOrder(tx, updated.id, user);
       }
 
       await this.audit.log(tx, {
@@ -1668,6 +1670,8 @@ export class OrdersService {
        */
       if (dto.stage === FunnelStage.PAID) {
         draftReport = await this.reports.createFromOrder(tx, res.id, user.id);
+        // ведомость уже была (собрали раньше вручную) — сверяем её с карточкой
+        if (!draftReport) await this.reports.syncFromOrder(tx, res.id, user);
       }
 
       /*
@@ -1799,8 +1803,9 @@ export class OrdersService {
         include: orderDetailInclude,
       });
 
-      // состав выезда в «Сменах» всегда равен команде в карточке
+      // состав выезда в «Сменах» и ведомость всегда равны команде в карточке
       await this.shiftGroups.syncFromOrder(tx, res.id, user);
+      await this.reports.syncFromOrder(tx, res.id, user);
 
       const wasNames = before.cleaners.map((c) => c.fullName).join(', ') || '—';
       const nowNames = res.cleaners.map((c) => c.fullName).join(', ') || '—';
