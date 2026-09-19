@@ -192,6 +192,7 @@ export function EntriesDrillModal({
   from,
   to,
   categories,
+  excludeCategories,
   summary,
   onClose,
 }: {
@@ -201,8 +202,20 @@ export function EntriesDrillModal({
   to?: string;
   /** только эти статьи (например, Зарплата и Премии) */
   categories?: string[];
-  /** арифметика чистого дохода — сверху окна */
-  summary?: { revenue: number; expenses: number; cleaners?: number; net: number };
+  /** все статьи, кроме этих («Все расходы» — без зарплаты и премий) */
+  excludeCategories?: string[];
+  /**
+   * Арифметика чистого дохода — сверху окна. Четыре слагаемых, те же, что
+   * плитками на странице: ЗП клинеров (по выездам), ЗП и премии сотрудников
+   * (статьи книги), остальные расходы книги.
+   */
+  summary?: {
+    revenue: number;
+    expenses: number;
+    cleaners?: number;
+    staff?: number;
+    net: number;
+  };
   onClose: () => void;
 }) {
   const q = new URLSearchParams({ kind: 'EXPENSE', take: '500' });
@@ -213,13 +226,15 @@ export function EntriesDrillModal({
     { deps: [from, to] },
   );
   const rows = (data?.rows ?? []).filter(
-    (e) => !categories || categories.includes(e.category),
+    (e) =>
+      (!categories || categories.includes(e.category)) &&
+      (!excludeCategories || !excludeCategories.includes(e.category)),
   );
   const sum = rows.reduce((s, e) => s + e.amount, 0);
   const stats = summary
     ? [
         { label: 'Выручка', value: formatPrice(summary.revenue), tone: 'success' as const },
-        // ЗП клинеров начисляется по сменам, в книге её нет — отдельной строкой
+        // ЗП клинеров начисляется по выездам, в книге её нет — отдельной строкой
         ...(summary.cleaners
           ? [
               {
@@ -229,7 +244,21 @@ export function EntriesDrillModal({
               },
             ]
           : []),
-        { label: 'Расходы', value: `−${formatPrice(summary.expenses)}`, tone: 'danger' as const },
+        // зарплата и премии сотрудников — своя плитка, поэтому и здесь своя строка
+        ...(summary.staff != null
+          ? [
+              {
+                label: 'ЗП и премии сотрудников',
+                value: `−${formatPrice(summary.staff)}`,
+                tone: 'danger' as const,
+              },
+            ]
+          : []),
+        {
+          label: summary.staff != null ? 'Остальные расходы' : 'Расходы',
+          value: `−${formatPrice(summary.expenses)}`,
+          tone: 'danger' as const,
+        },
         {
           label: 'Чистый доход',
           value: formatPrice(summary.net),

@@ -83,6 +83,8 @@ interface Drill {
   mode?: 'orders' | 'visits' | 'shifts' | 'entries';
   /** только эти статьи книги (например, Зарплата и Премии) */
   categories?: string[];
+  /** все статьи книги, КРОМЕ этих (плитка «Все расходы» — без зарплаты и премий) */
+  excludeCategories?: string[];
   /** показать сверху арифметику чистого дохода */
   net?: boolean;
 }
@@ -392,9 +394,10 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 }
               />
               {/*
-                Чистый доход: выручка минус ЗП клинеров (по сменам) минус все
-                расходы из книги за период. Зарплату сотрудников отдельно не
-                вычитаем — она уже внутри расходов книги. Рисуется только
+                Чистый доход: выручка минус ЗП клинеров (по выездам) минус
+                ЗП и премии сотрудников минус остальные расходы книги. Четыре
+                слагаемых названы по отдельности — те же, что стоят плитками
+                рядом, и подпись сходится с ними до сомони. Рисуется только
                 когда сервер уже отдаёт цифру — сайт и сервер выкатываются
                 порознь.
               */}
@@ -409,10 +412,14 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                     data.payroll
                       ? `выручка − ЗП клинеров ${formatPrice(
                           data.payroll.cleanersAccrued,
+                        )} − ЗП и премии ${formatPrice(
+                          data.payroll.staffPay,
                         )} − расходы ${formatPrice(data.revenue.expenses)}`
-                      : `выручка − расходы ${formatPrice(data.revenue.expenses)}`
+                      : `выручка − расходы ${formatPrice(
+                          data.revenue.expensesTotal ?? data.revenue.expenses,
+                        )}`
                   }
-                  title="Выручка минус расходы: из чего сложился чистый доход"
+                  title="Выручка минус ЗП клинеров, ЗП и премии сотрудников и остальные расходы: из чего сложился чистый доход"
                   testId="плитка-чистый"
                   onClick={() =>
                     setDrill({
@@ -466,21 +473,28 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   }
                 />
               )}
+              {/*
+                «Все расходы» — книга БЕЗ зарплаты и премий (решение владельца):
+                они стоят своей плиткой слева, и раньше одни и те же 7 090
+                входили в обе цифры. Теперь две плитки не пересекаются и в
+                сумме дают всю книгу за период.
+              */}
               <StatTile
                 label="Все расходы"
                 number={data.revenue.expenses}
                 format={formatPrice}
                 icon={ArrowDownRight}
                 accent="red"
-                hint="из книги за период"
-                title="Все расходы книги за период — они вычитаются в чистом доходе"
+                hint="из книги, без зарплаты и премий"
+                title="Расходы книги за период кроме зарплаты и премий сотрудников — материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее"
                 testId="плитка-расходы"
                 onClick={() =>
                   setDrill({
-                    title: 'Все расходы за период',
+                    title: 'Все расходы за период — без зарплаты и премий',
                     subtitle: rangeLabel,
                     metric: 'expenses',
                     mode: 'entries',
+                    excludeCategories: ['SALARY', 'BONUS'],
                   })
                 }
               />
@@ -1269,12 +1283,15 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
             from={period.from}
             to={period.to}
             categories={drill.categories}
+            excludeCategories={drill.excludeCategories}
             summary={
               drill.net && data?.revenue
                 ? {
                     revenue: data.revenue.period,
-                    expenses: data.revenue.expenses,
+                    // четыре слагаемых — те же, что плитками рядом
                     cleaners: data.payroll?.cleanersAccrued,
+                    staff: data.payroll?.staffPay,
+                    expenses: data.revenue.expenses,
                     net: data.revenue.net,
                   }
                 : undefined
