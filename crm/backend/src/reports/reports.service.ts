@@ -527,8 +527,39 @@ export class ReportsService {
       throw new BadRequestException('Отчёт уже принят');
     }
 
+    /*
+     * День смен — день РАБОТ, а не день приёма.
+     *
+     * Раньше при пустой дате работ смены ставились на «сегодня». Ведомость
+     * «Шер» приняли через восемь дней после уборки — и двенадцать человек
+     * получили по второй смене на день приёма: смены выезда стояли 11.09,
+     * смены ведомости 19.09, и защита от дублей (одна смена на человека в
+     * день) их не увидела. Дата берётся из ведомости, иначе из заказа, и
+     * только в самом крайнем случае — сегодня.
+     */
     const start =
-      report.workDate ?? dayUTC(todayDushanbe()) ?? new Date();
+      report.workDate ??
+      (report.order?.scheduledDate ? dayUTC(dayKey(report.order.scheduledDate)) : null) ??
+      dayUTC(todayDushanbe()) ??
+      new Date();
+
+    /*
+     * Смены по заказу с закрытыми выездами уже начислены выездами
+     * («Оплачено» = смены закрыты). Приём ведомости по такому заказу второй
+     * раз тех же людей не начисляет — иначе один объект оплачивался дважды.
+     * Ведомости без заказа и по старым заказам без выездов начисляют, как
+     * и раньше: для них ведомость — единственный источник смен.
+     */
+    const accruedByVisits = new Set<string>(
+      report.orderId
+        ? (
+            await this.prisma.shift.findMany({
+              where: { group: { orderId: report.orderId, deletedAt: null } },
+              select: { cleanerId: true },
+            })
+          ).map((s) => s.cleanerId)
+        : [],
+    );
 
     const shiftRows: {
       date: Date;
@@ -546,6 +577,19 @@ export class ReportsService {
 
     for (const w of report.workers) {
       if (!w.cleanerId) continue; // работник без привязки к клинеру — только в ведомости
+      if (accruedByVisits.has(w.cleanerId)) {
+        // смены этому человеку уже дал закрытый выезд заказа — штраф всё равно учитываем ниже
+        if (w.fine > 0) {
+          fineRows.push({
+            cleanerId: w.cleanerId,
+            amount: w.fine,
+            reason: `По ведомости — ${report.clientName}`,
+            date: start,
+            createdById: user.id,
+          });
+        }
+        continue;
+      }
       const days = Math.min(MAX_DAYS, w.days); // защита от битых старых строк
       for (let i = 0; i < days; i++) {
         shiftRows.push({
