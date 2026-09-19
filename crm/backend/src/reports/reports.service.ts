@@ -322,17 +322,39 @@ export class ReportsService {
     orderId: string,
     user: AuthUser,
   ): Promise<boolean> {
-    const report = await tx.report.findFirst({
+    /*
+     * ВСЕ ведомости заказа, а не первая попавшаяся. По заказу «Фархунда» их
+     * оказалось две — невидимый чужой черновик и принятая; сверка первой
+     * (черновика) оставила принятую с прежними строками, и цифры снова
+     * разошлись. Все документы по одному объекту описывают одну работу и
+     * обязаны совпадать.
+     */
+    const reports = await tx.report.findMany({
       where: { orderId, ...NOT_DELETED },
       include: { workers: true },
+      orderBy: { createdAt: 'asc' },
     });
-    if (!report) return false;
+    if (!reports.length) return false;
     const order = (await tx.order.findFirst({
       where: { id: orderId, ...NOT_DELETED },
       include: orderForReportInclude,
     })) as OrderForReport | null;
     if (!order) return false;
 
+    let changedAny = false;
+    for (const report of reports) {
+      if (await this.syncOneReport(tx, report, order, user)) changedAny = true;
+    }
+    return changedAny;
+  }
+
+  private async syncOneReport(
+    tx: Prisma.TransactionClient,
+    report: Prisma.ReportGetPayload<{ include: { workers: true } }>,
+    order: OrderForReport,
+    user: AuthUser,
+  ): Promise<boolean> {
+    const orderId = order.id;
     const wanted = workersFromOrder(order);
     const diff = planWorkerSync(report.workers, wanted);
     const rowUpdates = diff.updates;
