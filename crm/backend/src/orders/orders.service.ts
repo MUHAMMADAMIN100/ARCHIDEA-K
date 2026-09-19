@@ -1239,6 +1239,29 @@ export class OrdersService {
       );
     }
 
+    /*
+     * У оплаченного заказа состав менять можно — закрытый выезд и смены
+     * последуют за карточкой (решение владельца). Но убрать ВСЕХ нельзя:
+     * зарплата по заказу снялась бы целиком одним движением. Кому нужно
+     * именно это — возвращает заказ в работу.
+     */
+    if (
+      before.stage === FunnelStage.PAID &&
+      !stageRequested &&
+      (cleanerIds !== undefined || dto.guestCleaners !== undefined)
+    ) {
+      const штатных =
+        cleanerIds !== undefined ? cleanerIds.length : (before.cleaners?.length ?? 0);
+      const разовых = guestsOf(
+        dto.guestCleaners !== undefined ? dto.guestCleaners : before.guestCleaners,
+      ).length;
+      if (штатных + разовых === 0) {
+        throw new BadRequestException(
+          'Заказ оплачен: укажите, кто делал уборку — без людей зарплата по заказу снимется целиком. Чтобы убрать всех, верните заказ в работу',
+        );
+      }
+    }
+
     // команда заказа — тем же запросом и той же транзакцией, что и поля
     if (cleanerIds !== undefined) {
       (data as Prisma.OrderUpdateInput).cleaners = {
@@ -1759,6 +1782,15 @@ export class OrdersService {
   async assignCleaners(user: AuthUser, id: string, dto: AssignCleanersDto) {
     const before = await this.getOne(user, id);
     const cleanerIds = await this.resolveCleaners(dto.cleanerIds);
+    // то же правило, что в update(): у оплаченного заказа нельзя убрать всех
+    if (
+      before.stage === FunnelStage.PAID &&
+      cleanerIds.length + guestsOf(before.guestCleaners).length === 0
+    ) {
+      throw new BadRequestException(
+        'Заказ оплачен: укажите, кто делал уборку — без людей зарплата по заказу снимется целиком. Чтобы убрать всех, верните заказ в работу',
+      );
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.order.update({

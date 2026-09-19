@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditAction, Prisma, ShiftGroupStatus } from '@prisma/client';
+import { AuditAction, FunnelStage, Prisma, ShiftGroupStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -11,6 +11,7 @@ import { AuthUser } from '../common/decorators/current-user.decorator';
 import { guestsOf } from '../common/order-guests';
 import { NOT_DELETED, softDeleteData } from '../common/soft-delete';
 import { dayKey, dayUTC, formatDate, rangeUTC } from '../common/time/dushanbe';
+import { describeClosedChanges, diffMembers } from './visit-members';
 import {
   CloseShiftGroupDto,
   CreateShiftGroupDto,
@@ -265,6 +266,9 @@ export class ShiftGroupsService {
       where: { id: orderId, ...NOT_DELETED },
       select: {
         id: true,
+        // этап нужен журналу: «заказ оплачен — доначислено» звучит иначе,
+        // чем правка открытого заказа
+        stage: true,
         address: true,
         scheduledDate: true,
         scheduledEndDate: true,
@@ -488,10 +492,11 @@ export class ShiftGroupsService {
    * подтягиваются к карточке, а если выездов ещё нет и команда выбрана —
    * они создаются, по одному на каждый день уборки.
    *
-   * Что не трогаем: закрытые выезды (они архив), разовых клинеров в составе
-   * (их нет в карточке заказа) и ставки уже добавленных участников (снапшот
-   * на день выезда). Лишние автоматические выезды, если дней стало меньше,
-   * уходят в корзину — заведённые руками остаются.
+   * Закрытые выезды тоже следуют за карточкой — вместе со сменами (см.
+   * reconcileClosedVisit): у них не трогаются только ставки и роли уже
+   * записанных штатных — это слепок на день закрытия. Лишние автоматические
+   * выезды, если дней стало меньше, уходят в корзину — заведённые руками
+   * остаются.
    */
   async syncFromOrder(
     tx: Prisma.TransactionClient,
@@ -553,68 +558,59 @@ export class ShiftGroupsService {
       }
       if (visit.status === ShiftGroupStatus.CLOSED) {
         /*
-         * Закрытый выезд: штат и начисленные смены не трогаем — они уже в
-         * архиве и в выплатах. Но разовых вписывают и ПОСЛЕ оплаты, а
-         * карточка заказа и аналитика считают их из карточки; чтобы
-         * «Смены и выезды» показывали те же цифры, разовых на закрытом
-         * выезде обновляем по карточке (решение владельца: цифры везде
-         * одинаковые). Только на дне, который несёт гостей.
-         */
-        /*
-         * guestDayIndex для закрытых выездов отвечает −1 («не трогать»), поэтому
-         * день гостей здесь свой: тот закрытый выезд, где разовые уже были,
-         * иначе — первый выезд заказа.
+         * Закрытый выезд ТОЖЕ следует за карточкой (решение владельца,
+         * сентябрь 2026: цифры везде одинаковые).
+         *
+         * Раньше закрытый выезд был архивом: команду в оплаченном заказе
+         * править можно было, а смены оставались прежними. Так вышло с
+         * заказами «Мужчина» и «Фархунда»: заказ закрыли, на следующий день
+         * дописали в команду забытого человека — карточка показывала 1 480,
+         * аналитика 1 250, а смена человеку так и не начислилась.
+         *
+         * Теперь добавленному штатному начисляется смена, убранному —
+         * снимается, разовым сумма берётся из карточки; слепок обновляется,
+         * а в журнал пишется, кому и сколько доначислено или снято.
+         *
+         * Разовые живут в одном дне: том закрытом выезде, где они уже были,
+         * иначе — в первом. guestDayIndex для закрытых отвечает −1, поэтому
+         * день гостей здесь свой.
          */
         const несётЗакрытый = existing.findIndex((v) =>
           v.members.some((m) => !m.cleanerId),
         );
-        if (индекс === (несётЗакрытый >= 0 ? несётЗакрытый : 0)) {
-          await tx.shiftGroupMember.deleteMany({
-            where: { groupId: visit.id, isGuest: true },
-          });
-          if (team.guests.length) {
-            await tx.shiftGroupMember.createMany({
-              data: team.guests.map((m) => ({ ...m, groupId: visit.id })),
-            });
-          }
-        }
+        const деньГостейЗакрытого = несётЗакрытый >= 0 ? несётЗакрытый : 0;
+        const changed = await this.reconcileClosedVisit(
+          tx,
+          visit,
+          this.dayMembers(team, order.dayTeams, индекс, индекс === деньГостейЗакрытого),
+          order.stage,
+          user,
+        );
+        if (changed) updated += 1;
         continue;
       }
 
       /*
-       * Состав приводим к карточке заказа.
-       *
-       * Штатные сводятся по идентификатору клинера, разовые — ПО ИМЕНИ:
-       * у них нет карточки в базе, и ключа кроме имени не существует.
-       * Сводить их тем же способом, что штатных, нельзя: у всех разовых
-       * cleanerId равен null, они никогда бы не нашлись среди уже
-       * записанных — и каждая синхронизация добавляла бы их заново, пока
-       * в выезде не окажется десять «Убайдов».
+       * Состав приводим к карточке заказа. Правило сведения (штатные по
+       * идентификатору, разовые по имени) — в visit-members.ts, одно на
+       * открытые и закрытые выезды.
        */
-      const ключ = (m: { cleanerId: string | null; fullName: string }) =>
-        m.cleanerId ?? `гость:${m.fullName.trim().toLowerCase()}`;
-
       const members = this.dayMembers(team, order.dayTeams, индекс, индекс === деньГостей);
       const деньЛидер =
         leader && members.some((m) => m.cleanerId === leader.id) ? leader : null;
-      const wanted = new Set(members.map(ключ));
-      const have = new Map(visit.members.map((m) => [ключ(m), m]));
-      const toRemove = visit.members.filter((m) => !wanted.has(ключ(m)));
-      const toAdd = members.filter((m) => !have.has(ключ(m)));
-      if (toRemove.length) {
+      const diff = diffMembers(visit.members, members);
+      if (diff.toRemove.length) {
         await tx.shiftGroupMember.deleteMany({
-          where: { id: { in: toRemove.map((m) => m.id) } },
+          where: { id: { in: diff.toRemove.map((m) => m.id) } },
         });
       }
-      if (toAdd.length) {
+      if (diff.toAdd.length) {
         await tx.shiftGroupMember.createMany({
-          data: toAdd.map((m) => ({ ...m, groupId: visit.id })),
+          data: diff.toAdd.map((m) => ({ ...m, groupId: visit.id })),
         });
       }
       // роль бригадира и сумма разового могли смениться — держим в актуальном виде
-      for (const m of members) {
-        const cur = have.get(ключ(m));
-        if (!cur) continue;
+      for (const { have: cur, want: m } of diff.kept) {
         if (cur.role !== m.role || cur.rate !== m.rate) {
           await tx.shiftGroupMember.update({
             where: { id: cur.id },
@@ -675,6 +671,160 @@ export class ShiftGroupsService {
       });
     }
     return { created, updated };
+  }
+
+  /**
+   * Закрытый выезд приводится к карточке заказа — вместе с деньгами.
+   *
+   * Что меняется:
+   *  - добавленный штатный появляется в составе, и ему СОЗДАЁТСЯ СМЕНА по его
+   *    ставке на сегодня (другой у нас нет: слепок его не знал);
+   *  - убранный штатный уходит из состава, и его смена по этому выезду
+   *    СНИМАЕТСЯ;
+   *  - разовые сводятся по имени, сумма берётся из карточки — там она и живёт;
+   *  - ставки и роли ОСТАВШИХСЯ штатных не трогаем: это слепок на день
+   *    закрытия, и пересчитывать уже начисленное задним числом нельзя.
+   *
+   * Смена — одна на клинера в день (@@unique). Если у добавленного уже есть
+   * смена за этот день с другого объекта, вторая не начисляется — и это
+   * прямо записывается в журнал, чтобы не искать потом, куда делись 230.
+   *
+   * Возвращает true, если что-то поменялось.
+   */
+  private async reconcileClosedVisit(
+    tx: Prisma.TransactionClient,
+    visit: {
+      id: string;
+      date: Date;
+      address: string;
+      closedSnapshot: Prisma.JsonValue;
+      members: {
+        id: string;
+        cleanerId: string | null;
+        isGuest: boolean;
+        fullName: string;
+        rate: number;
+        role: string;
+      }[];
+    },
+    wanted: VisitMember[],
+    orderStage: FunnelStage | null | undefined,
+    user: AuthUser,
+  ): Promise<boolean> {
+    const diff = diffMembers(visit.members, wanted);
+    // сумму разового правят в карточке — она следует за ней; штатных не переоцениваем
+    const repriced = diff.kept.filter(
+      (p) => p.have.isGuest && p.have.rate !== p.want.rate,
+    );
+    if (!diff.toAdd.length && !diff.toRemove.length && !repriced.length) {
+      return false;
+    }
+
+    if (diff.toRemove.length) {
+      await tx.shiftGroupMember.deleteMany({
+        where: { id: { in: diff.toRemove.map((m) => m.id) } },
+      });
+      const staffIds = diff.toRemove
+        .map((m) => m.cleanerId)
+        .filter((id): id is string => !!id);
+      if (staffIds.length) {
+        // снимаем ТОЛЬКО смены этого выезда: смена с другого объекта в тот же
+        // день — чужая, её не трогаем
+        await tx.shift.deleteMany({
+          where: { groupId: visit.id, cleanerId: { in: staffIds } },
+        });
+      }
+    }
+
+    const skipped: { fullName: string }[] = [];
+    if (diff.toAdd.length) {
+      await tx.shiftGroupMember.createMany({
+        data: diff.toAdd.map((m) => ({ ...m, groupId: visit.id })),
+      });
+      for (const m of diff.toAdd) {
+        if (!m.cleanerId) continue;
+        const already = await tx.shift.findUnique({
+          where: { cleanerId_date: { cleanerId: m.cleanerId, date: visit.date } },
+          select: { id: true, groupId: true },
+        });
+        if (already) {
+          if (already.groupId !== visit.id) skipped.push({ fullName: m.fullName });
+          continue;
+        }
+        await tx.shift.create({
+          data: {
+            date: visit.date,
+            cleanerId: m.cleanerId,
+            rate: m.rate,
+            note: visit.address,
+            groupId: visit.id,
+          },
+        });
+      }
+    }
+
+    for (const p of repriced) {
+      await tx.shiftGroupMember.update({
+        where: { id: p.have.id },
+        data: { rate: p.want.rate },
+      });
+    }
+
+    // слепок обязан отражать то, за что реально начислено
+    const after = await tx.shiftGroup.findUniqueOrThrow({
+      where: { id: visit.id },
+      include: { members: { orderBy: { fullName: 'asc' } } },
+    });
+    const prevSnapshot =
+      visit.closedSnapshot && typeof visit.closedSnapshot === 'object' && !Array.isArray(visit.closedSnapshot)
+        ? (visit.closedSnapshot as Record<string, unknown>)
+        : {};
+    await tx.shiftGroup.update({
+      where: { id: visit.id },
+      data: {
+        closedSnapshot: {
+          ...prevSnapshot,
+          members: after.members.map((m) => ({
+            cleanerId: m.cleanerId,
+            fullName: m.fullName,
+            role: m.role,
+            rate: m.rate,
+          })),
+          // след правки задним числом: когда и кем состав закрытого выезда менялся
+          revisedAt: new Date().toISOString(),
+          revisedByName: user.fullName,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const was = visit.members.map((m) => m.fullName).join(', ') || '—';
+    const now = after.members.map((m) => m.fullName).join(', ') || '—';
+    const head =
+      orderStage === FunnelStage.PAID
+        ? 'Заказ оплачен — состав закрытого выезда приведён к карточке'
+        : 'Состав закрытого выезда приведён к карточке заказа';
+    await this.audit.log(tx, {
+      user,
+      entity: 'SHIFT_GROUP',
+      entityId: visit.id,
+      entityTitle: this.titleOf(visit),
+      action: AuditAction.UPDATE,
+      summary: `${head}: ${describeClosedChanges({
+        added: diff.toAdd,
+        removed: diff.toRemove,
+        repriced: repriced.map((p) => ({
+          fullName: p.have.fullName,
+          before: p.have.rate,
+          after: p.want.rate,
+        })),
+        skipped,
+      })}`,
+      changes:
+        was !== now
+          ? [{ field: 'members', label: 'Состав группы', before: was, after: now }]
+          : undefined,
+    });
+    return true;
   }
 
   /**
