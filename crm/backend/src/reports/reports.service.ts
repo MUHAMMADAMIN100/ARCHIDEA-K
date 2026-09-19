@@ -226,7 +226,13 @@ export class ReportsService {
       throw new BadRequestException('Укажите клиента / объект');
     }
     return {
-      orderId: idOrNull(dto.orderId),
+      /*
+       * Поле не прислали — связь с заказом НЕ трогаем (undefined для Prisma
+       * значит «оставить как есть»). Раньше правка любого поля без orderId
+       * молча отвязывала ведомость от заказа, и она переставала следовать за
+       * карточкой, а приём снова начислял смены на день приёма.
+       */
+      orderId: dto.orderId === undefined ? undefined : idOrNull(dto.orderId),
       clientName: str(dto.clientName),
       clientPhone: str(dto.clientPhone) || null,
       address: str(dto.address) || null,
@@ -540,6 +546,9 @@ export class ReportsService {
     const start =
       report.workDate ??
       (report.order?.scheduledDate ? dayUTC(dayKey(report.order.scheduledDate)) : null) ??
+      // ведомость без заказа и без даты: день, когда её составили, ближе к
+      // работе, чем день, когда до неё дошли руки принять
+      dayUTC(dayKey(report.createdAt)) ??
       dayUTC(todayDushanbe()) ??
       new Date();
 
