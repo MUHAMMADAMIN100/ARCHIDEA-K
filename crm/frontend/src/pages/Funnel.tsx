@@ -15,7 +15,7 @@ import { useDialog } from '../components/Dialog';
 import { Skeleton, PageHeader, Badge, ErrorState } from '../components/ui';
 import { DrillValue, DetailModal, DetailStats, DetailTable } from '../components/Drilldown';
 import { PeriodFilter, type Period } from '../components/common';
-import { rangeOf, toISODate } from '../lib/date';
+import { monthRange, rangeOf, toISODate } from '../lib/date';
 import { OrderModal } from '../components/OrderModal';
 import { formatPhone } from '../lib/contact';
 import {
@@ -894,12 +894,59 @@ export function Funnel() {
     }
     setParams({}, { replace: true });
   }, [wantedStage, data]);
+  /*
+   * Заказ по ссылке (?order=…) открывается из ЛЮБОГО месяца.
+   *
+   * Доска держит только открытый период, и ссылка на августовский заказ с
+   * сентябрьской доски раньше давала «Заказ не найден» — из уведомления, с
+   * дашборда, из расшифровки выездов в аналитике. Теперь, если заказа нет на
+   * доске, спрашиваем его у сервера и переключаем период на месяц его
+   * оформления: карточка открывается, а после закрытия заказ стоит на доске
+   * среди соседей по месяцу (решение владельца). Если и там его нет (папка
+   * «Архив» закрытого этапа держит не больше двадцати), открываем карточку
+   * прямо из ответа сервера.
+   */
+  const fetchedWantedRef = useRef<Order | null>(null);
   useEffect(() => {
     if (!wantedOrderId || !data) return;
     const found = data.flatMap((c) => c.orders).find((o) => o.id === wantedOrderId);
-    if (found) setOpenOrder(found);
-    else toast.error('Заказ не найден — возможно, он удалён');
-    setParams({}, { replace: true });
+    if (found) {
+      fetchedWantedRef.current = null;
+      setOpenOrder(found);
+      setParams({}, { replace: true });
+      return;
+    }
+    const fetched = fetchedWantedRef.current;
+    if (fetched && fetched.id === wantedOrderId) {
+      // период уже переключён, а на доске заказа всё равно нет — он в папке «Архив»
+      fetchedWantedRef.current = null;
+      setOpenOrder(fetched);
+      setParams({}, { replace: true });
+      return;
+    }
+    let cancelled = false;
+    api
+      .get<Order>(`/orders/${wantedOrderId}`)
+      .then(({ data: order }) => {
+        if (cancelled) return;
+        const month = monthRange(toISODate(order.createdAt));
+        if (month.from === period.from && month.to === period.to) {
+          // месяц тот же, а на доске нет — папка «Архив»: открываем сразу
+          setOpenOrder(order);
+          setParams({}, { replace: true });
+          return;
+        }
+        fetchedWantedRef.current = order;
+        setPeriod(month); // доска перечитается, и этот эффект найдёт заказ
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast.error('Заказ не найден — возможно, он удалён');
+        setParams({}, { replace: true });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [wantedOrderId, data]);
 
   // Оптимистичное перемещение карточки между этапами (до ответа сервера)

@@ -832,6 +832,8 @@ export class AnalyticsService {
       const итогПоВыезду = new Map(groups.map((g) => [g.id, начислениеВыезда(g, гостиУчтены)]));
       groups.reverse(); // показываем от свежих к старым, как раньше
       const клиент = (g: (typeof groups)[number]) => ({
+        // по заказу строка открывает его карточку в воронке (просьба владельца)
+        orderId: g.orderId ?? null,
         clientName: g.order?.client?.fullName ?? null,
         clientPhone: g.order?.client?.phone ?? null,
         orderPrice: showMoney && g.order ? priceOf(g.order) : null,

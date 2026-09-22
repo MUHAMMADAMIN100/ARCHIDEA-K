@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -1470,6 +1471,8 @@ interface WorkDrillRow {
   role?: string | null;
   rate?: number | null;
   accrued?: number | null;
+  /** заказ, по которому был выезд — по нему строка открывает карточку в воронке */
+  orderId?: string | null;
   /** от какого клиента выезд: имя, телефон, сумма заказа */
   clientName?: string | null;
   clientPhone?: string | null;
@@ -1510,6 +1513,7 @@ function WorkDrillModal({
 
   const rows = data?.rows ?? [];
   const isVisits = drill.mode === 'visits';
+  const navigate = useNavigate();
   const accruedTotal = rows.reduce(
     (sum, r) => sum + (isVisits ? (r.accrued ?? 0) : (r.rate ?? 0)),
     0,
@@ -1544,10 +1548,21 @@ function WorkDrillModal({
             ]}
           />
 
+          {/*
+            Строка — вход в заказ (просьба владельца): нажал на выезд — в
+            воронке открылась карточка того заказа, по которому ездили.
+            Выезд без заказа (заведён руками) открывать нечего — он остаётся
+            обычной строкой, а подпись под адресом говорит об этом.
+          */}
           <DetailTable
             rows={rows}
             loading={loading}
             rowKey={(r: WorkDrillRow) => r.id}
+            onRowClick={(r: WorkDrillRow) => {
+              if (!r.orderId) return;
+              onClose();
+              navigate(`/funnel?order=${r.orderId}`);
+            }}
             emptyText={isVisits ? 'Выездов за период нет' : 'Смен за период нет'}
             columns={[
               {
@@ -1589,6 +1604,7 @@ function WorkDrillModal({
                       {SHIFT_GROUP_STATUS_LABEL[r.status] ?? r.status}
                       {isVisits && r.managerName ? ` · ${r.managerName}` : ''}
                       {!isVisits && r.brigadeName ? ` · ${r.brigadeName}` : ''}
+                      {!r.orderId ? ' · без заказа' : ''}
                     </div>
                   </div>
                 ),
