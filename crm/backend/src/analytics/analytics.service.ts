@@ -287,18 +287,29 @@ export class AnalyticsService {
 
     // Выручка — только руководителю
     if (seesFinance(user)) {
-      const [day, week, month, quarter, current, revenueSeries, expenses, staffPay] =
-        await Promise.all([
-          this.revenueInRange(scope, this.rangeOf('day')),
-          this.revenueInRange(scope, this.rangeOf('week')),
-          this.revenueInRange(scope, this.rangeOf('month')),
-          this.revenueInRange(scope, this.rangeOf('quarter')),
-          this.revenueInRange(scope, range),
-          this.revenueSeries(scope, 14),
-          this.expensesInRange(range),
-          // зарплата и премии сотрудников — статьи книги за тот же период
-          this.expensesInRange(range, [FinanceCategory.SALARY, FinanceCategory.BONUS]),
-        ]);
+      const [
+        day,
+        week,
+        month,
+        quarter,
+        current,
+        revenueSeries,
+        expenses,
+        staffPay,
+        cleanersBook,
+      ] = await Promise.all([
+        this.revenueInRange(scope, this.rangeOf('day')),
+        this.revenueInRange(scope, this.rangeOf('week')),
+        this.revenueInRange(scope, this.rangeOf('month')),
+        this.revenueInRange(scope, this.rangeOf('quarter')),
+        this.revenueInRange(scope, range),
+        this.revenueSeries(scope, 14),
+        this.expensesInRange(range),
+        // зарплата и премии сотрудников — статьи книги за тот же период
+        this.expensesInRange(range, [FinanceCategory.SALARY, FinanceCategory.BONUS]),
+        // выплаты клинерам по книге — часть плитки «ЗП клинеров»
+        this.expensesInRange(range, [FinanceCategory.CLEANERS_SALARY]),
+      ]);
 
       /*
        * Чистый доход (решение владельца): выручка периода минус ЗП клинеров
@@ -307,35 +318,38 @@ export class AnalyticsService {
        * зарплату в книгу не заносят — она из выездов, поэтому дважды не
        * списывается.
        *
-       * Книга на экране показывается ДВУМЯ плитками, которые не пересекаются
+       * Книга на экране показывается плитками, которые не пересекаются
        * (решение владельца, сентябрь 2026): «ЗП и премии сотрудников» —
-       * статьи «Зарплата» и «Премии»; «Все расходы» — всё остальное:
-       * материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее.
-       * Раньше «Все расходы» включали и зарплату, и плитки пересекались:
-       * 19 938 показывало книгу целиком, а 7 090 рядом — её же часть.
-       * В сумме две плитки дают всю книгу, чистый доход от разбиения не
-       * меняется.
+       * статьи «Зарплата» и «Премии»; статья «ЗП клинеров» — на плитке
+       * «ЗП клинеров» вместе с начислениями по сменам; «Все расходы» — всё
+       * остальное: материалы, транспорт, аренда, коммуналка, реклама,
+       * налоги, прочее. Раньше «Все расходы» включали и зарплату, и плитки
+       * пересекались: 19 938 показывало книгу целиком, а 7 090 рядом — её
+       * же часть. В сумме плитки дают всю книгу, чистый доход от разбиения
+       * не меняется.
        */
       const expensesTotal = expenses;
-      const expensesOther = Math.max(0, expensesTotal - staffPay);
+      const expensesOther = Math.max(0, expensesTotal - staffPay - cleanersBook);
       result.revenue = {
         day: day.revenue,
         week: week.revenue,
         month: month.revenue,
         quarter: quarter.revenue,
         period: current.revenue,
-        // расходы БЕЗ зарплаты и премий — то, что стоит на плитке «Все расходы»
+        // расходы БЕЗ зарплат и премий — то, что стоит на плитке «Все расходы»
         expenses: expensesOther,
-        // вся книга за период — для сверки: «ЗП и премии» + «Все расходы»
+        // вся книга за период — для сверки: «ЗП клинеров» по книге + «ЗП и премии» + «Все расходы»
         expensesTotal,
         net: current.revenue - expensesTotal,
       };
       /*
        * Зарплаты — первое, на что смотрит руководитель (решение владельца):
-       * начислено клинерам по сменам и выплаты сотрудникам по книге.
-       * Начисления клинерам считаются ниже, вместе с разрезами.
+       * начислено клинерам по сменам, выплаты клинерам по книге (статья
+       * «ЗП клинеров» — просьба владельца, сентябрь 2026) и выплаты
+       * сотрудникам по книге. Начисления по сменам считаются ниже, вместе
+       * с разрезами. Плитка «ЗП клинеров» показывает сумму двух первых.
        */
-      result.payroll = { cleanersAccrued: 0, staffPay };
+      result.payroll = { cleanersAccrued: 0, cleanersBook, staffPay };
       result.revenueSeries = revenueSeries;
       // сверка: расхождения видны сразу, а не «теряются» в цифрах
       result.reconciliation = {
@@ -1167,13 +1181,18 @@ export class AnalyticsService {
 
     // расходы по дням — из книги, по дате операции (тоже по Душанбе)
     const spent = new Map<string, number>();
+    const начислено = new Map<string, number>();
     const entries = await this.prisma.financeEntry.findMany({
       where: { ...NOT_DELETED, kind: FinanceKind.EXPENSE, date: { gte: start } },
-      select: { amount: true, date: true },
+      select: { amount: true, date: true, category: true },
     });
     for (const e of entries) {
       const key = dayKey(e.date);
-      if (buckets.has(key)) spent.set(key, (spent.get(key) ?? 0) + e.amount);
+      if (!buckets.has(key)) continue;
+      // статья «ЗП клинеров» — на графике в зарплате клинеров, а не в расходах,
+      // как и на плитках над ним
+      const bucket = e.category === FinanceCategory.CLEANERS_SALARY ? начислено : spent;
+      bucket.set(key, (bucket.get(key) ?? 0) + e.amount);
     }
 
     /*
@@ -1181,7 +1200,6 @@ export class AnalyticsService {
      * «Чистый доход» и «ЗП клинеров». Без этого график показывал чистый
      * доход без зарплаты бригад и не сходился с плиткой над ним.
      */
-    const начислено = new Map<string, number>();
     const выезды = await this.prisma.shiftGroup.findMany({
       where: {
         ...NOT_DELETED,

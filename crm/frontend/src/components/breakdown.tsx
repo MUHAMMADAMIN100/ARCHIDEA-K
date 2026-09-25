@@ -317,9 +317,21 @@ export function EntriesDrillModal({
           },
         ]}
         footer={
-          <span className="font-semibold text-rose-700" data-testid="итог-расходов">
-            −{formatPrice(sum)}
-          </span>
+          // подвал — строка таблицы: голый span внутри tfoot вставал слева,
+          // не под столбцом «Сумма»
+          rows.length > 0 ? (
+            <tr className="border-t border-navy-100 font-bold text-navy-900">
+              <td className="px-3 py-2" colSpan={2}>
+                Итого
+              </td>
+              <td
+                className="px-3 py-2 text-right tabular-nums text-rose-700"
+                data-testid="итог-расходов"
+              >
+                −{formatPrice(sum)}
+              </td>
+            </tr>
+          ) : undefined
         }
       />
     </DetailModal>

@@ -5,6 +5,8 @@ export const CATEGORY_META: Record<FinanceCategory, { label: string; kind: Finan
   ORDER_PAYMENT: { label: 'Оплата заказа', kind: FinanceKind.INCOME },
   OTHER_INCOME: { label: 'Прочий доход', kind: FinanceKind.INCOME },
   SALARY: { label: 'Зарплата', kind: FinanceKind.EXPENSE },
+  // выплаты клинерам по книге — считаются на плитке «ЗП клинеров» вместе со сменами
+  CLEANERS_SALARY: { label: 'ЗП клинеров', kind: FinanceKind.EXPENSE },
   BONUS: { label: 'Премии', kind: FinanceKind.EXPENSE },
   SUPPLIES: { label: 'Расходные материалы', kind: FinanceKind.EXPENSE },
   TRANSPORT: { label: 'Транспорт', kind: FinanceKind.EXPENSE },

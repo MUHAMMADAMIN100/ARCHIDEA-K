@@ -61,17 +61,25 @@ import {
   DrillValue,
 } from '../components/Drilldown';
 import { OrdersDrilldownModal } from '../components/OrdersDrilldown';
-import { formatPrice, SHIFT_GROUP_STATUS_LABEL } from '../lib/labels';
+import { formatPrice, FINANCE_CATEGORY_LABEL, SHIFT_GROUP_STATUS_LABEL } from '../lib/labels';
 import { formatDateTz, monthRange } from '../lib/date';
 import { formatPhone } from '../lib/contact';
 import { userSeesAll } from '../types';
-import type { AnalyticsFull, ShiftGroupStatus } from '../types';
+import type { AnalyticsFull, FinanceEntry, ShiftGroupStatus } from '../types';
 
 
 /** Подпись у каждой диаграммы: цифры кликабельны, это не очевидно само по себе */
 const HINT = 'Нажмите на столбик или сектор — покажем заказы, из которых он сложился.';
 
 /** Что именно расшифровываем: срез (metric+key) и как назвать модалку */
+/** Статьи книги, которые стоят своими плитками и не входят в «Все расходы» */
+const PAYROLL_CATEGORIES = ['SALARY', 'BONUS', 'CLEANERS_SALARY'];
+
+/** Плитка «ЗП клинеров»: начислено по сменам + выплаты по книге */
+function cleanersPay(p: { cleanersAccrued: number; cleanersBook?: number }): number {
+  return p.cleanersAccrued + (p.cleanersBook ?? 0);
+}
+
 interface Drill {
   title: string;
   subtitle?: string;
@@ -412,7 +420,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   hint={
                     data.payroll
                       ? `выручка − ЗП клинеров ${formatPrice(
-                          data.payroll.cleanersAccrued,
+                          cleanersPay(data.payroll),
                         )} − ЗП и премии ${formatPrice(
                           data.payroll.staffPay,
                         )} − расходы ${formatPrice(data.revenue.expenses)}`
@@ -433,15 +441,28 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   }
                 />
               )}
+              {/*
+                «ЗП клинеров» = начислено по сменам + записи книги по статье
+                «ЗП клинеров» (просьба владельца, сентябрь 2026): выплаты
+                бригадам, которые заносят в книгу руками, считаются здесь, а
+                не в «Все расходы». Подпись показывает обе части, пока есть
+                что показывать.
+              */}
               {data.payroll && (
                 <StatTile
                   label="ЗП клинеров"
-                  number={data.payroll.cleanersAccrued}
+                  number={cleanersPay(data.payroll)}
                   format={formatPrice}
                   icon={HardHat}
                   accent="amber"
-                  hint="начислено по сменам"
-                  title="Выезды периода: кто работал и сколько начислено"
+                  hint={
+                    data.payroll.cleanersBook
+                      ? `по сменам ${formatPrice(data.payroll.cleanersAccrued)} · по книге ${formatPrice(
+                          data.payroll.cleanersBook,
+                        )}`
+                      : 'начислено по сменам'
+                  }
+                  title="Выезды периода: кто работал и сколько начислено, плюс записи книги по статье «ЗП клинеров»"
                   testId="плитка-зп-клинеров"
                   onClick={() =>
                     setDrill({
@@ -475,10 +496,11 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 />
               )}
               {/*
-                «Все расходы» — книга БЕЗ зарплаты и премий (решение владельца):
-                они стоят своей плиткой слева, и раньше одни и те же 7 090
-                входили в обе цифры. Теперь две плитки не пересекаются и в
-                сумме дают всю книгу за период.
+                «Все расходы» — книга БЕЗ зарплат и премий (решение владельца):
+                они стоят своими плитками слева, и раньше одни и те же 7 090
+                входили в обе цифры. Статья «ЗП клинеров» — тоже слева, на
+                плитке «ЗП клинеров». Плитки не пересекаются и в сумме дают
+                всю книгу за период.
               */}
               <StatTile
                 label="Все расходы"
@@ -486,16 +508,16 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 format={formatPrice}
                 icon={ArrowDownRight}
                 accent="red"
-                hint="из книги, без зарплаты и премий"
-                title="Расходы книги за период кроме зарплаты и премий сотрудников — материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее"
+                hint="из книги, без зарплат и премий"
+                title="Расходы книги за период кроме зарплат и премий — материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее"
                 testId="плитка-расходы"
                 onClick={() =>
                   setDrill({
-                    title: 'Все расходы за период — без зарплаты и премий',
+                    title: 'Все расходы за период — без зарплат и премий',
                     subtitle: rangeLabel,
                     metric: 'expenses',
                     mode: 'entries',
-                    excludeCategories: ['SALARY', 'BONUS'],
+                    excludeCategories: PAYROLL_CATEGORIES,
                   })
                 }
               />
@@ -1290,7 +1312,7 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 ? {
                     revenue: data.revenue.period,
                     // четыре слагаемых — те же, что плитками рядом
-                    cleaners: data.payroll?.cleanersAccrued,
+                    cleaners: data.payroll ? cleanersPay(data.payroll) : undefined,
                     staff: data.payroll?.staffPay,
                     expenses: data.revenue.expenses,
                     net: data.revenue.net,
@@ -1519,6 +1541,27 @@ function WorkDrillModal({
     0,
   );
 
+  /*
+   * За плиткой «ЗП клинеров» (все выезды, без ключа) — ещё и записи книги по
+   * статье «ЗП клинеров» за тот же период (решение владельца): выплаты
+   * бригадам, занесённые руками, видны рядом с выездами, а итог окна сходится
+   * с плиткой. Расшифровка смен одного клинера книгу не трогает.
+   */
+  const withBook = showMoney && drill.metric === 'brigadeVisits' && !drill.key;
+  const bookQuery = new URLSearchParams({
+    kind: 'EXPENSE',
+    category: 'CLEANERS_SALARY',
+    take: '500',
+  });
+  if (from) bookQuery.set('from', from);
+  if (to) bookQuery.set('to', to);
+  const book = useFetch<{ rows: FinanceEntry[]; total: number }>(
+    withBook ? `/finance?${bookQuery.toString()}` : null,
+    { deps: [withBook, from, to] },
+  );
+  const bookRows = book.data?.rows ?? [];
+  const bookTotal = bookRows.reduce((sum, e) => sum + e.amount, 0);
+
   return (
     <DetailModal title={drill.title} subtitle={drill.subtitle} onClose={onClose}>
       {error ? (
@@ -1539,8 +1582,22 @@ function WorkDrillModal({
               ...(showMoney
                 ? [
                     {
-                      label: 'Начислено',
+                      label: withBook ? 'По сменам' : 'Начислено',
                       value: formatPrice(accruedTotal),
+                      tone: 'success' as const,
+                    },
+                  ]
+                : []),
+              ...(withBook
+                ? [
+                    {
+                      label: 'По книге',
+                      value: book.data ? formatPrice(bookTotal) : '…',
+                      tone: 'danger' as const,
+                    },
+                    {
+                      label: 'Всего',
+                      value: book.data ? formatPrice(accruedTotal + bookTotal) : '…',
                       tone: 'success' as const,
                     },
                   ]
@@ -1639,6 +1696,67 @@ function WorkDrillModal({
                 : []),
             ]}
           />
+
+          {withBook && (
+            <div className="mt-5" data-testid="зп-клинеров-по-книге">
+              <h4 className="mb-2 text-sm font-bold text-navy-900">
+                Записи книги по статье «ЗП клинеров»
+              </h4>
+              <DetailTable
+                rows={bookRows}
+                loading={book.loading}
+                rowKey={(e: FinanceEntry) => e.id}
+                emptyText="Записей по статье «ЗП клинеров» за период нет"
+                columns={[
+                  {
+                    key: 'date',
+                    header: 'Дата',
+                    cell: (e: FinanceEntry) => (
+                      <span className="whitespace-nowrap font-medium text-navy-900">
+                        {formatDateTz(e.date)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'title',
+                    header: 'Операция',
+                    cell: (e: FinanceEntry) => (
+                      <div>
+                        <div className="font-medium text-navy-900">{e.title}</div>
+                        <div className="text-xs text-navy-600">
+                          {FINANCE_CATEGORY_LABEL[e.category]}
+                          {e.createdByName ? ` · ${e.createdByName}` : ''}
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'amount',
+                    header: 'Сумма',
+                    align: 'right',
+                    cell: (e: FinanceEntry) => (
+                      <span className="font-semibold text-rose-700">−{formatPrice(e.amount)}</span>
+                    ),
+                  },
+                ]}
+                footer={
+                  bookRows.length > 0 ? (
+                    <tr className="border-t border-navy-100 font-bold text-navy-900">
+                      <td className="px-3 py-2" colSpan={2}>
+                        Итого по книге
+                      </td>
+                      <td
+                        className="px-3 py-2 text-right tabular-nums text-rose-700"
+                        data-testid="итог-по-книге"
+                      >
+                        −{formatPrice(bookTotal)}
+                      </td>
+                    </tr>
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
         </>
       )}
     </DetailModal>

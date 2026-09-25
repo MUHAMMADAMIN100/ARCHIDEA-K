@@ -364,6 +364,7 @@ export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
   ORDER_PAYMENT: 'Оплата заказа',
   OTHER_INCOME: 'Прочий доход',
   SALARY: 'Зарплата',
+  CLEANERS_SALARY: 'ЗП клинеров',
   BONUS: 'Премии',
   SUPPLIES: 'Расходные материалы',
   TRANSPORT: 'Транспорт',
@@ -380,6 +381,9 @@ export const CATEGORIES_BY_KIND: Record<FinanceKind, FinanceCategory[]> = {
   INCOME: ['ORDER_PAYMENT', 'OTHER_INCOME'],
   EXPENSE: [
     'SALARY',
+    // сразу после «Зарплаты» (решение владельца): зарплатные статьи рядом,
+    // статья по умолчанию для нового расхода не меняется
+    'CLEANERS_SALARY',
     'BONUS',
     'SUPPLIES',
     'TRANSPORT',

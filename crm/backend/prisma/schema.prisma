@@ -161,6 +161,7 @@ enum FinanceCategory {
   OTHER_INCOME // прочий доход
   SALARY // выплаты сотрудникам
   BONUS // премии
+  CLEANERS_SALARY // зарплата клинеров — выплаты бригадам, записанные в книгу
   SUPPLIES // расходные материалы и инвентарь
   TRANSPORT // транспорт
   RENT // аренда

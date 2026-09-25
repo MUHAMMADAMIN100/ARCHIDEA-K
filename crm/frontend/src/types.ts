@@ -642,9 +642,22 @@ export interface Analytics {
     net: number;
   };
   /** date — подпись оси («07-28»), day — полная дата для расшифровки столбика */
-  revenueSeries?: { date: string; day: string; revenue: number; expense: number; net: number }[];
-  /** зарплаты за период — только тем, кому открыты финансы */
-  payroll?: { cleanersAccrued: number; staffPay: number };
+  revenueSeries?: {
+    date: string;
+    day: string;
+    revenue: number;
+    expense: number;
+    /** ЗП клинеров за день: по сменам и по книге */
+    cleaners?: number;
+    net: number;
+  }[];
+  /**
+   * Зарплаты за период — только тем, кому открыты финансы.
+   * cleanersAccrued — начислено клинерам по сменам; cleanersBook — выплаты
+   * клинерам по книге (статья «ЗП клинеров»); плитка показывает их сумму.
+   * cleanersBook необязателен: сайт выкатывается раньше сервера.
+   */
+  payroll?: { cleanersAccrued: number; cleanersBook?: number; staffPay: number };
   managerWorkload?: { id: string; name: string; active: number; paid: number }[];
   /** KPI по каждому менеджеру за выбранный период */
   managerKpi?: {
@@ -765,6 +778,7 @@ export type FinanceCategory =
   | 'ORDER_PAYMENT'
   | 'OTHER_INCOME'
   | 'SALARY'
+  | 'CLEANERS_SALARY'
   | 'BONUS'
   | 'SUPPLIES'
   | 'TRANSPORT'
