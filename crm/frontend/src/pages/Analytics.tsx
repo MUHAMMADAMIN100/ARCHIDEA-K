@@ -46,6 +46,7 @@ import {
   Inbox,
   Percent,
   Receipt,
+  UserRound,
   Sparkles,
   TrendingUp,
   Users,
@@ -73,7 +74,7 @@ const HINT = 'Нажмите на столбик или сектор — пок�
 
 /** Что именно расшифровываем: срез (metric+key) и как назвать модалку */
 /** Статьи книги, которые стоят своими плитками и не входят в «Все расходы» */
-const PAYROLL_CATEGORIES = ['SALARY', 'BONUS', 'CLEANERS_SALARY'];
+const OWN_TILE_CATEGORIES = ['SALARY', 'BONUS', 'CLEANERS_SALARY', 'OWNER_EXPENSE'];
 
 /** Плитка «ЗП клинеров»: начислено по сменам + выплаты по книге */
 function cleanersPay(p: { cleanersAccrued: number; cleanersBook?: number }): number {
@@ -421,14 +422,16 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                     data.payroll
                       ? `выручка − ЗП клинеров ${formatPrice(
                           cleanersPay(data.payroll),
-                        )} − ЗП и премии ${formatPrice(
-                          data.payroll.staffPay,
-                        )} − расходы ${formatPrice(data.revenue.expenses)}`
+                        )} − ЗП и премии ${formatPrice(data.payroll.staffPay)}${
+                          data.revenue.ownerExpenses != null
+                            ? ` − расходы Анисы ${formatPrice(data.revenue.ownerExpenses)}`
+                            : ''
+                        } − расходы ${formatPrice(data.revenue.expenses)}`
                       : `выручка − расходы ${formatPrice(
                           data.revenue.expensesTotal ?? data.revenue.expenses,
                         )}`
                   }
-                  title="Выручка минус ЗП клинеров, ЗП и премии сотрудников и остальные расходы: из чего сложился чистый доход"
+                  title="Выручка минус ЗП клинеров, ЗП и премии сотрудников, расходы Анисы и остальные расходы: из чего сложился чистый доход"
                   testId="плитка-чистый"
                   onClick={() =>
                     setDrill({
@@ -496,10 +499,10 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 />
               )}
               {/*
-                «Все расходы» — книга БЕЗ зарплат и премий (решение владельца):
-                они стоят своими плитками слева, и раньше одни и те же 7 090
-                входили в обе цифры. Статья «ЗП клинеров» — тоже слева, на
-                плитке «ЗП клинеров». Плитки не пересекаются и в сумме дают
+                «Все расходы» — книга БЕЗ зарплат, премий и расходов Анисы
+                (решение владельца): они стоят своими плитками рядом, и раньше
+                одни и те же 7 090 входили в обе цифры. Статья «ЗП клинеров» —
+                на плитке «ЗП клинеров». Плитки не пересекаются и в сумме дают
                 всю книгу за период.
               */}
               <StatTile
@@ -508,41 +511,59 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 format={formatPrice}
                 icon={ArrowDownRight}
                 accent="red"
-                hint="из книги, без зарплат и премий"
-                title="Расходы книги за период кроме зарплат и премий — материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее"
+                hint="из книги, без зарплат, премий и расходов Анисы"
+                title="Расходы книги за период кроме зарплат, премий и расходов Анисы — материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее"
                 testId="плитка-расходы"
                 onClick={() =>
                   setDrill({
-                    title: 'Все расходы за период — без зарплат и премий',
+                    title: 'Все расходы за период — без зарплат, премий и расходов Анисы',
                     subtitle: rangeLabel,
                     metric: 'expenses',
                     mode: 'entries',
-                    excludeCategories: PAYROLL_CATEGORIES,
+                    excludeCategories: OWN_TILE_CATEGORIES,
                   })
                 }
               />
-              <StatTile
-                label="Средний чек"
-                number={bd?.totals.average ?? 0}
-                format={formatPrice}
-                icon={Receipt}
-                accent="brand"
-                hint="выручка ÷ оплаченные заказы"
-                title="Из каких заказов сложился средний чек"
-                testId="плитка-средний-чек"
-                onClick={() =>
-                  setDrill({
-                    title: 'Средний чек — из чего сложился',
-                    subtitle: rangeLabel,
-                    metric: 'revenuePeriod',
-                  })
-                }
-              />
+              {/*
+                «Расходы Анисы» — статья книги «Расход Анисы» за период
+                (просьба владельца, сентябрь 2026). Из чистого дохода
+                вычитается, в «Все расходы» не входит. Рисуется, когда сервер
+                уже отдаёт цифру: сайт выкатывается раньше сервера.
+              */}
+              {data.revenue.ownerExpenses != null && (
+                <StatTile
+                  label="Расходы Анисы"
+                  number={data.revenue.ownerExpenses}
+                  format={formatPrice}
+                  icon={UserRound}
+                  accent="red"
+                  hint="статья «Расход Анисы» в книге"
+                  title="Операции по статье «Расход Анисы» за период"
+                  testId="плитка-расходы-анисы"
+                  onClick={() =>
+                    setDrill({
+                      title: 'Расходы Анисы',
+                      subtitle: rangeLabel,
+                      metric: 'expenses',
+                      mode: 'entries',
+                      categories: ['OWNER_EXPENSE'],
+                    })
+                  }
+                />
+              )}
             </div>
           )}
 
-          {/* Второй ряд: счётчики — компактные плитки */}
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {/*
+            Второй ряд: счётчики — компактные плитки. «Средний чек» переехал
+            сюда из первого ряда (решение владельца): наверху его место заняла
+            плитка «Расходы Анисы», и все деньги стоят одной линией.
+          */}
+          <div
+            className={`mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 ${
+              data.revenue ? '2xl:grid-cols-6' : ''
+            }`}
+          >
             {bd && (
               <StatTile
                 size="sm"
@@ -555,6 +576,25 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 onClick={() =>
                   setDrill({
                     title: 'Оплаченные заказы',
+                    subtitle: rangeLabel,
+                    metric: 'revenuePeriod',
+                  })
+                }
+              />
+            )}
+            {data.revenue && bd && (
+              <StatTile
+                size="sm"
+                label="Средний чек"
+                number={bd.totals.average ?? 0}
+                format={formatPrice}
+                icon={Receipt}
+                accent="brand"
+                title="Средний чек = выручка ÷ оплаченные заказы. Из каких заказов он сложился"
+                testId="плитка-средний-чек"
+                onClick={() =>
+                  setDrill({
+                    title: 'Средний чек — из чего сложился',
                     subtitle: rangeLabel,
                     metric: 'revenuePeriod',
                   })
@@ -1311,9 +1351,10 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
               drill.net && data?.revenue
                 ? {
                     revenue: data.revenue.period,
-                    // четыре слагаемых — те же, что плитками рядом
+                    // слагаемые — те же, что плитками рядом
                     cleaners: data.payroll ? cleanersPay(data.payroll) : undefined,
                     staff: data.payroll?.staffPay,
+                    owner: data.revenue.ownerExpenses,
                     expenses: data.revenue.expenses,
                     net: data.revenue.net,
                   }

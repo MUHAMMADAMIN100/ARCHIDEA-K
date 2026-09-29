@@ -297,6 +297,7 @@ export class AnalyticsService {
         expenses,
         staffPay,
         cleanersBook,
+        ownerExpenses,
       ] = await Promise.all([
         this.revenueInRange(scope, this.rangeOf('day')),
         this.revenueInRange(scope, this.rangeOf('week')),
@@ -309,6 +310,8 @@ export class AnalyticsService {
         this.expensesInRange(range, [FinanceCategory.SALARY, FinanceCategory.BONUS]),
         // выплаты клинерам по книге — часть плитки «ЗП клинеров»
         this.expensesInRange(range, [FinanceCategory.CLEANERS_SALARY]),
+        // статья «Расход Анисы» — своя плитка «Расходы Анисы»
+        this.expensesInRange(range, [FinanceCategory.OWNER_EXPENSE]),
       ]);
 
       /*
@@ -321,23 +324,30 @@ export class AnalyticsService {
        * Книга на экране показывается плитками, которые не пересекаются
        * (решение владельца, сентябрь 2026): «ЗП и премии сотрудников» —
        * статьи «Зарплата» и «Премии»; статья «ЗП клинеров» — на плитке
-       * «ЗП клинеров» вместе с начислениями по сменам; «Все расходы» — всё
-       * остальное: материалы, транспорт, аренда, коммуналка, реклама,
-       * налоги, прочее. Раньше «Все расходы» включали и зарплату, и плитки
+       * «ЗП клинеров» вместе с начислениями по сменам; статья «Расход
+       * Анисы» — плитка «Расходы Анисы» (просьба владельца, сентябрь 2026);
+       * «Все расходы» — всё остальное: материалы, транспорт, аренда,
+       * коммуналка, реклама, налоги, прочее. Раньше «Все расходы» включали и зарплату, и плитки
        * пересекались: 19 938 показывало книгу целиком, а 7 090 рядом — её
        * же часть. В сумме плитки дают всю книгу, чистый доход от разбиения
        * не меняется.
        */
       const expensesTotal = expenses;
-      const expensesOther = Math.max(0, expensesTotal - staffPay - cleanersBook);
+      const expensesOther = Math.max(
+        0,
+        expensesTotal - staffPay - cleanersBook - ownerExpenses,
+      );
       result.revenue = {
         day: day.revenue,
         week: week.revenue,
         month: month.revenue,
         quarter: quarter.revenue,
         period: current.revenue,
-        // расходы БЕЗ зарплат и премий — то, что стоит на плитке «Все расходы»
+        // расходы БЕЗ зарплат, премий и расходов Анисы — плитка «Все расходы»
         expenses: expensesOther,
+        // статья «Расход Анисы» — плитка «Расходы Анисы»; в чистом доходе
+        // вычитается один раз, в составе всей книги (expensesTotal)
+        ownerExpenses,
         // вся книга за период — для сверки: «ЗП клинеров» по книге + «ЗП и премии» + «Все расходы»
         expensesTotal,
         net: current.revenue - expensesTotal,

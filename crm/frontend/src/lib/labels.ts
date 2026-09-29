@@ -366,6 +366,7 @@ export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
   SALARY: 'Зарплата',
   CLEANERS_SALARY: 'ЗП клинеров',
   BONUS: 'Премии',
+  OWNER_EXPENSE: 'Расход Анисы',
   SUPPLIES: 'Расходные материалы',
   TRANSPORT: 'Транспорт',
   RENT: 'Аренда',
@@ -385,6 +386,8 @@ export const CATEGORIES_BY_KIND: Record<FinanceKind, FinanceCategory[]> = {
     // статья по умолчанию для нового расхода не меняется
     'CLEANERS_SALARY',
     'BONUS',
+    // траты владельца — после «Премий» (решение владельца)
+    'OWNER_EXPENSE',
     'SUPPLIES',
     'TRANSPORT',
     'RENT',

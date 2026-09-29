@@ -214,6 +214,8 @@ export function EntriesDrillModal({
     expenses: number;
     cleaners?: number;
     staff?: number;
+    /** статья «Расход Анисы» — своя плитка, поэтому и здесь своя строка */
+    owner?: number;
     net: number;
   };
   onClose: () => void;
@@ -250,6 +252,15 @@ export function EntriesDrillModal({
               {
                 label: 'ЗП и премии сотрудников',
                 value: `−${formatPrice(summary.staff)}`,
+                tone: 'danger' as const,
+              },
+            ]
+          : []),
+        ...(summary.owner != null
+          ? [
+              {
+                label: 'Расходы Анисы',
+                value: `−${formatPrice(summary.owner)}`,
                 tone: 'danger' as const,
               },
             ]

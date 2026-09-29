@@ -8,6 +8,8 @@ export const CATEGORY_META: Record<FinanceCategory, { label: string; kind: Finan
   // выплаты клинерам по книге — считаются на плитке «ЗП клинеров» вместе со сменами
   CLEANERS_SALARY: { label: 'ЗП клинеров', kind: FinanceKind.EXPENSE },
   BONUS: { label: 'Премии', kind: FinanceKind.EXPENSE },
+  // траты владельца — своя плитка «Расходы Анисы», в «Все расходы» не входят
+  OWNER_EXPENSE: { label: 'Расход Анисы', kind: FinanceKind.EXPENSE },
   SUPPLIES: { label: 'Расходные материалы', kind: FinanceKind.EXPENSE },
   TRANSPORT: { label: 'Транспорт', kind: FinanceKind.EXPENSE },
   RENT: { label: 'Аренда', kind: FinanceKind.EXPENSE },
