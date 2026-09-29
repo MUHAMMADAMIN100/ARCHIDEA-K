@@ -392,7 +392,6 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 format={formatPrice}
                 icon={Wallet}
                 accent="green"
-                hint={rangeLabel}
                 title="Из каких заказов сложилась выручка периода"
                 testId="плитка-выручка"
                 onClick={() =>
@@ -404,12 +403,13 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 }
               />
               {/*
-                Чистый доход: выручка минус ЗП клинеров (по выездам) минус
-                ЗП и премии сотрудников минус остальные расходы книги. Четыре
-                слагаемых названы по отдельности — те же, что стоят плитками
-                рядом, и подпись сходится с ними до сомони. Рисуется только
-                когда сервер уже отдаёт цифру — сайт и сервер выкатываются
-                порознь.
+                Чистый доход: выручка минус ЗП клинеров, ЗП и премии
+                сотрудников, расходы Анисы и остальные расходы книги.
+                Подписей под цифрами в этом ряду нет (решение владельца,
+                сентябрь 2026): из-за текста разной длины цифры стояли на
+                разной высоте. Арифметика слагаемых — в окне по клику.
+                Рисуется только когда сервер уже отдаёт цифру — сайт и сервер
+                выкатываются порознь.
               */}
               {data.revenue.net != null && (
                 <StatTile
@@ -418,25 +418,12 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   format={formatPrice}
                   icon={TrendingUp}
                   accent={data.revenue.net >= 0 ? 'green' : 'red'}
-                  hint={
-                    data.payroll
-                      ? `выручка − ЗП клинеров ${formatPrice(
-                          cleanersPay(data.payroll),
-                        )} − ЗП и премии ${formatPrice(data.payroll.staffPay)}${
-                          data.revenue.ownerExpenses != null
-                            ? ` − расходы Анисы ${formatPrice(data.revenue.ownerExpenses)}`
-                            : ''
-                        } − расходы ${formatPrice(data.revenue.expenses)}`
-                      : `выручка − расходы ${formatPrice(
-                          data.revenue.expensesTotal ?? data.revenue.expenses,
-                        )}`
-                  }
                   title="Выручка минус ЗП клинеров, ЗП и премии сотрудников, расходы Анисы и остальные расходы: из чего сложился чистый доход"
                   testId="плитка-чистый"
                   onClick={() =>
                     setDrill({
                       title: 'Чистый доход — из чего сложился',
-                      subtitle: rangeLabel,
+                      subtitle: `${rangeLabel} · выручка минус ЗП клинеров, ЗП и премии сотрудников, расходы Анисы и остальные расходы`,
                       metric: 'expenses',
                       mode: 'entries',
                       net: true,
@@ -458,19 +445,12 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   format={formatPrice}
                   icon={HardHat}
                   accent="amber"
-                  hint={
-                    data.payroll.cleanersBook
-                      ? `по сменам ${formatPrice(data.payroll.cleanersAccrued)} · по книге ${formatPrice(
-                          data.payroll.cleanersBook,
-                        )}`
-                      : 'начислено по сменам'
-                  }
                   title="Выезды периода: кто работал и сколько начислено, плюс записи книги по статье «ЗП клинеров»"
                   testId="плитка-зп-клинеров"
                   onClick={() =>
                     setDrill({
                       title: 'ЗП клинеров — выезды за период',
-                      subtitle: rangeLabel,
+                      subtitle: `${rangeLabel} · начислено по сменам и записи книги по статье «ЗП клинеров»`,
                       metric: 'brigadeVisits',
                       mode: 'visits',
                     })
@@ -484,13 +464,12 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   format={formatPrice}
                   icon={Users}
                   accent="violet"
-                  hint="статьи «Зарплата» и «Премии» в книге"
                   title="Операции по статьям «Зарплата» и «Премии» за период"
                   testId="плитка-зп-сотрудников"
                   onClick={() =>
                     setDrill({
                       title: 'ЗП и премии сотрудников',
-                      subtitle: rangeLabel,
+                      subtitle: `${rangeLabel} · статьи «Зарплата» и «Премии» в книге`,
                       metric: 'expenses',
                       mode: 'entries',
                       categories: ['SALARY', 'BONUS'],
@@ -511,13 +490,12 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                 format={formatPrice}
                 icon={ArrowDownRight}
                 accent="red"
-                hint="из книги, без зарплат, премий и расходов Анисы"
                 title="Расходы книги за период кроме зарплат, премий и расходов Анисы — материалы, транспорт, аренда, коммуналка, реклама, налоги, прочее"
                 testId="плитка-расходы"
                 onClick={() =>
                   setDrill({
-                    title: 'Все расходы за период — без зарплат, премий и расходов Анисы',
-                    subtitle: rangeLabel,
+                    title: 'Все расходы за период',
+                    subtitle: `${rangeLabel} · из книги, без зарплат, премий и расходов Анисы`,
                     metric: 'expenses',
                     mode: 'entries',
                     excludeCategories: OWN_TILE_CATEGORIES,
@@ -537,13 +515,12 @@ export function Analytics({ embedded = false }: { embedded?: boolean } = {}) {
                   format={formatPrice}
                   icon={UserRound}
                   accent="red"
-                  hint="статья «Расход Анисы» в книге"
                   title="Операции по статье «Расход Анисы» за период"
                   testId="плитка-расходы-анисы"
                   onClick={() =>
                     setDrill({
                       title: 'Расходы Анисы',
-                      subtitle: rangeLabel,
+                      subtitle: `${rangeLabel} · статья «Расход Анисы» в книге`,
                       metric: 'expenses',
                       mode: 'entries',
                       categories: ['OWNER_EXPENSE'],

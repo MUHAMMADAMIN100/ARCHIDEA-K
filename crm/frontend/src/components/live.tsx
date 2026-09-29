@@ -137,7 +137,13 @@ export function StatTile({
       type="button"
       onClick={onClick}
       title={title ?? 'Показать подробности'}
-      className={`press ${base} text-left transition-[box-shadow,transform,border-color] duration-160 ease-out hover:-translate-y-[3px] hover:border-navy-200 hover:shadow-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300`}
+      /*
+       * flex-col + justify-start: кнопка по умолчанию ставит содержимое по
+       * центру высоты, и в ряду плиток с разным текстом цифры «прыгали» —
+       * стояли на разной высоте (жалоба владельца). Теперь, как у обычной
+       * плитки, всё начинается сверху, и цифры ряда стоят одной линией.
+       */
+      className={`press ${base} flex flex-col items-stretch justify-start text-left transition-[box-shadow,transform,border-color] duration-160 ease-out hover:-translate-y-[3px] hover:border-navy-200 hover:shadow-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-300`}
     >
       {body}
     </button>
