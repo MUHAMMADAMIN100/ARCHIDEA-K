@@ -606,6 +606,8 @@ export interface Report {
     seats?: number | null;
     scheduledDate?: string | null;
     scheduledEndDate?: string | null;
+    /** когда заказ оформлен — в шапке ведомости рядом с датой приёма */
+    createdAt?: string;
     /** назначенная на заказ команда — по ней видно, кого нет в ведомости */
     cleaners?: {
       id: string;

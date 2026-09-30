@@ -26,6 +26,7 @@ import {
   formatPrice,
   formatDate,
 } from '../lib/labels';
+import { formatDateTz } from '../lib/date';
 import type { Report } from '../types';
 
 const workerSum = (w: { days: number; rate: number; fine: number; extra: number }) =>
@@ -203,9 +204,23 @@ export function ReportView() {
             {REPORT_STATUS_LABEL[r.status]}
           </Badge>
         </div>
-        {r.acceptedAt && (
-          <div className="mb-3 text-xs text-green-700">
-            ✓ Принят основателем {formatDate(r.acceptedAt)}
+        {/*
+          Дата оформления заказа — рядом с датой приёма (просьба владельца):
+          «Принят основателем 01.09» у августовского заказа читали как «работа
+          была в сентябре». Теперь видно обе даты: когда заказ оформили и когда
+          ведомость приняли. Дата заказа — по Душанбе, как в его карточке.
+        */}
+        {(r.order?.createdAt || r.acceptedAt) && (
+          <div className="mb-3 text-xs" data-testid="даты-ведомости">
+            {r.order?.createdAt && (
+              <span className="text-navy-600">
+                Заказ оформлен {formatDateTz(r.order.createdAt)}
+              </span>
+            )}
+            {r.order?.createdAt && r.acceptedAt && <span className="text-navy-400"> · </span>}
+            {r.acceptedAt && (
+              <span className="text-green-700">✓ Принят основателем {formatDate(r.acceptedAt)}</span>
+            )}
           </div>
         )}
 

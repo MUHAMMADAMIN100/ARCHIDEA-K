@@ -18,6 +18,7 @@ import {
   formatPrice,
   formatDate,
 } from '../lib/labels';
+import { formatDateTz } from '../lib/date';
 import type { Report, ReportStatus } from '../types';
 
 /** Сумма выплат работникам по ведомости */
@@ -149,6 +150,8 @@ export function Reports() {
                 </div>
                 <div className="no-vertical-text mt-0.5 text-xs text-navy-600">
                   {r.workDate ? formatDate(r.workDate) : formatDate(r.createdAt)}
+                  {/* дата оформления заказа — чтобы не путать с датой приёма */}
+                  {r.order?.createdAt && ` · заказ от ${formatDateTz(r.order.createdAt)}`}
                   {r.address && ` · ${r.address}`}
                   {isDirector && r.managerName && ` · ${r.managerName}`}
                 </div>
@@ -250,6 +253,7 @@ function ReportBreakdownModal({
       title={report.clientName}
       subtitle={[
         report.workDate ? formatDate(report.workDate) : formatDate(report.createdAt),
+        report.order?.createdAt ? `заказ от ${formatDateTz(report.order.createdAt)}` : null,
         report.address,
         report.brigadierName ? `бригадир: ${report.brigadierName}` : null,
       ]
