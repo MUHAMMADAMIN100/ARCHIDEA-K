@@ -20,6 +20,7 @@ import {
   workersFromOrder,
 } from './report-from-order';
 import { dayKey } from '../common/time/dushanbe';
+import { byWorkDayDesc } from './report-sort';
 
 /** Целое неотрицательное число (сомони/дни) из произвольного ввода, с потолком (ниже int32) */
 const int = (v: unknown, def = 0) => {
@@ -162,12 +163,14 @@ export class ReportsService {
     };
   }
 
-  list(user: AuthUser) {
-    return this.prisma.report.findMany({
+  async list(user: AuthUser) {
+    const rows = await this.prisma.report.findMany({
       where: this.scope(user),
       include: reportInclude,
       orderBy: { createdAt: 'desc' },
     });
+    // по дням работ, новые сверху — как дата в строке списка (см. report-sort)
+    return rows.sort(byWorkDayDesc);
   }
 
   async getOne(user: AuthUser, id: string) {
