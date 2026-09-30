@@ -1,4 +1,5 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Pencil,
@@ -226,9 +227,34 @@ export function ReportView() {
 
         {/* Шапка */}
         <div className="mt-4 overflow-hidden rounded-xl border border-navy-200 text-sm">
-          {[
-            ['Клиент и контакты', `${r.clientName}${r.clientPhone ? ` · ${r.clientPhone}` : ''}`],
-            ['Адрес', r.address || '—'],
+          {(
+            [
+              /*
+               * Клиент — ссылка на карточку заказа в воронке (просьба
+               * владельца): из ведомости сразу видно, по какому заказу она
+               * составлена. Заказ другого месяца воронка откроет сама,
+               * переключив период. У ведомости без заказа открывать нечего —
+               * имя остаётся текстом. На печати ссылка выглядит как текст.
+               */
+              [
+                'Клиент и контакты',
+                <>
+                  {r.orderId ? (
+                    <Link
+                      to={`/funnel?order=${r.orderId}`}
+                      title="Открыть карточку заказа в воронке"
+                      data-testid="клиент-ведомости"
+                      className="font-medium text-navy-900 underline decoration-navy-300 decoration-dotted underline-offset-4 transition hover:text-brand-700 hover:decoration-solid print:no-underline"
+                    >
+                      {r.clientName}
+                    </Link>
+                  ) : (
+                    r.clientName
+                  )}
+                  {r.clientPhone ? ` · ${r.clientPhone}` : ''}
+                </>,
+              ],
+              ['Адрес', r.address || '—'],
             [
               'Дата начала и завершения работ',
               r.workDate
@@ -241,8 +267,9 @@ export function ReportView() {
             ['Итоговая стоимость', formatPrice(r.totalPrice)],
             ['Привёл', r.arrivedBy || '—'],
             ['Ответственный бригадир', r.brigadierName || '—'],
-            ['Ответственный менеджер', r.managerName || r.manager?.fullName || '—'],
-          ].map(([k, v], i) => (
+              ['Ответственный менеджер', r.managerName || r.manager?.fullName || '—'],
+            ] as [string, ReactNode][]
+          ).map(([k, v], i) => (
             <div
               key={k}
               className={`flex ${i > 0 ? 'border-t border-navy-100' : ''}`}
