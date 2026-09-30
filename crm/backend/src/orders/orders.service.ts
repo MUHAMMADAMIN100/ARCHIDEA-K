@@ -555,8 +555,20 @@ export class OrdersService {
        */
       const custom = !!(period?.from || period?.to);
       const closed = OrdersService.CLOSED_STAGES.includes(stage);
-      const shown =
-        closed && !custom ? this.splitClosed(inStage).shown : inStage;
+      /*
+       * Порядок карточек — по дате оформления, новые сверху, во всех
+       * колонках (просьба владельца). Раньше колонка шла по последней
+       * правке (updatedAt): любая мелочь в карточке поднимала её наверх, и
+       * даты внизу карточек стояли вразброс — 25, 26, 24, 29…
+       */
+      const shown = (
+        closed && !custom ? this.splitClosed(inStage).shown : inStage
+      )
+        .slice()
+        .sort(
+          (a, b) =>
+            b.createdAt.getTime() - a.createdAt.getTime() || (b.id > a.id ? 1 : -1),
+        );
 
       return {
         stage,

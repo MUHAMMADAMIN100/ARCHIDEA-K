@@ -1122,22 +1122,35 @@ export function Funnel() {
     return { list, hasNone };
   })();
 
-  // доска с учётом фильтра по менеджеру
+  /*
+   * Доска с учётом фильтров — и в порядке дат оформления, новые сверху
+   * (просьба владельца). Сервер отдаёт колонки уже так, но между опросами
+   * доска меняется на месте: перетащенная карточка раньше вставала
+   * наверх колонки, а карточка с исправленной датой оформления оставалась
+   * на старом месте. Сортируем здесь же, в том массиве, который рисуется:
+   * клон при перетаскивании берёт карточку по её номеру в этом списке.
+   */
   const filtered = data.map((col) => ({
     ...col,
-    orders: col.orders.filter((o) => {
-      if (canFilter && managerFilter !== 'ALL') {
-        const ok =
-          managerFilter === NO_MANAGER
-            ? !o.manager
-            : o.manager?.id === managerFilter;
-        if (!ok) return false;
-      }
-      if (tagFilter !== 'ALL' && !(o.client?.tags ?? []).includes(tagFilter)) {
-        return false;
-      }
-      return true;
-    }),
+    orders: col.orders
+      .filter((o) => {
+        if (canFilter && managerFilter !== 'ALL') {
+          const ok =
+            managerFilter === NO_MANAGER
+              ? !o.manager
+              : o.manager?.id === managerFilter;
+          if (!ok) return false;
+        }
+        if (tagFilter !== 'ALL' && !(o.client?.tags ?? []).includes(tagFilter)) {
+          return false;
+        }
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() ||
+          (b.id > a.id ? 1 : -1),
+      ),
   }));
 
   /*
